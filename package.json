@@ -16,5 +16,9 @@
   "packageManager": "pnpm@11.25.0",
   "engines": {
     "node": ">=24"
+  },
+  "dependencies": {
+    "@supabase/ssr": "^0.12.7",
+    "@supabase/supabase-js": "^2.117.2"
   }
 }
