@@ -28,15 +28,24 @@ export default function LoginPage() {
 
       if (error) throw error
 
-      localStorage.setItem('abshar_phone', formattedPhone)
-      localStorage.setItem('abshar_user_id', data.user?.id || '')
-      localStorage.setItem('abshar_logged_in', 'true')
+      if (data.user) {
+        localStorage.setItem('abshar_user_id', data.user.id)
+        localStorage.setItem('abshar_phone', formattedPhone)
+        localStorage.setItem('abshar_logged_in', 'true')
 
-      if (data.user?.user_metadata?.full_name) {
-        localStorage.setItem('abshar_name', data.user.user_metadata.full_name)
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('full_name')
+          .eq('id', data.user.id)
+          .single()
+
+        if (profile?.full_name) {
+          localStorage.setItem('abshar_name', profile.full_name)
+        }
       }
 
       router.push('/dashboard')
+      router.refresh()
     } catch (err) {
       setError('الحساب غير موجود. أنشئ حساباً جديداً.')
     } finally {

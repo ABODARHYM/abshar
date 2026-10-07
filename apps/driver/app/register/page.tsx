@@ -22,7 +22,7 @@ export default function RegisterPage() {
     try {
       const supabase = createClient()
 
-      const { error: signUpError } = await supabase.auth.signUp({
+      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
         email: fakeEmail,
         password: fakePassword,
         options: {
@@ -38,31 +38,25 @@ export default function RegisterPage() {
         throw signUpError
       }
 
-      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
-        email: fakeEmail,
-        password: fakePassword,
-      })
-
-      if (signInError) throw signInError
-
-      const userId = signInData.user?.id
-      if (!userId) throw new Error('فشل في إنشاء الحساب')
-
-      const { data: existingProfile } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('id', userId)
-        .single()
-
-      if (!existingProfile) {
-        await supabase.from('profiles').insert({
-          id: userId,
+      if (signUpData?.user) {
+        await supabase.from('profiles').upsert({
+          id: signUpData.user.id,
           full_name: form.name,
           phone: formattedPhone,
           role: 'driver',
           is_active: true,
         })
       }
+
+      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+        email: fakeEmail,
+        password: fakePassword,
+      })
+
+      if (signInError) throw signInError
+      if (!signInData.user) throw new Error('فشل الدخول')
+
+      const userId = signInData.user.id
 
       const { data: existingDriver } = await supabase
         .from('drivers')
@@ -90,26 +84,21 @@ export default function RegisterPage() {
           .select()
           .single()
 
-        if (driverError) {
-          console.error('Driver error:', driverError)
-          throw driverError
-        }
-
+        if (driverError) throw driverError
         driverId = driverData.id
       }
 
-      localStorage.setItem('driver_phone', formattedPhone)
-      localStorage.setItem('driver_id', driverId || '')
       localStorage.setItem('driver_user_id', userId)
+      localStorage.setItem('driver_id', driverId || '')
+      localStorage.setItem('driver_phone', formattedPhone)
       localStorage.setItem('driver_name', form.name)
       localStorage.setItem('driver_vehicle', form.vehicle)
       localStorage.setItem('driver_plate', form.plate)
       localStorage.setItem('driver_license', form.license)
       localStorage.setItem('driver_logged_in', 'true')
-      localStorage.setItem('driver_online', 'false')
-      localStorage.setItem('driver_wallet', '0')
 
       router.push('/dashboard')
+      router.refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'حدث خطأ')
     } finally {

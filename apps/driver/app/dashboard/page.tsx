@@ -2,35 +2,78 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { useAvailableOrders, acceptOrder } from '@/lib/hooks/useDriverOrders'
-import { formatPrice } from '@/lib/utils/pricing'
-import { ORDER_TYPE_ICONS, ORDER_TYPE_LABELS } from '@/lib/types/order'
 import { createClient } from '@/lib/supabase/client'
+import { formatPrice } from '@/lib/utils/pricing'
+import { ORDER_TYPE_ICONS, ORDER_TYPE_LABELS, type Order } from '@/lib/types/order'
 import BottomNav from '@/components/BottomNav'
 
 export default function DashboardPage() {
   const router = useRouter()
   const [user, setUser] = useState<{ name: string; phone: string } | null>(null)
   const [isOnline, setIsOnline] = useState(false)
+  const [orders, setOrders] = useState<Order[]>([])
+  const [loading, setLoading] = useState(true)
   const [accepting, setAccepting] = useState<string | null>(null)
-  const { orders, loading } = useAvailableOrders(8000)
+  const [wallet, setWallet] = useState(0)
+  const [driverId, setDriverId] = useState<string | null>(null)
 
   useEffect(() => {
-    if (typeof window === 'undefined') return
-    if (!localStorage.getItem('driver_logged_in')) { router.push('/login'); return }
-    setUser({
-      name: localStorage.getItem('driver_name') || 'مندوب',
-      phone: localStorage.getItem('driver_phone') || '',
-    })
-    setIsOnline(localStorage.getItem('driver_online') === 'true')
+    async function load() {
+      const supabase = createClient()
+      const { data: { user: authUser } } = await supabase.auth.getUser()
+      if (!authUser) { router.push('/login'); return }
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('full_name, phone')
+        .eq('id', authUser.id)
+        .single()
+
+      const { data: driver } = await supabase
+        .from('drivers')
+        .select('*')
+        .eq('user_id', authUser.id)
+        .single()
+
+      setUser({
+        name: profile?.full_name || 'مندوب',
+        phone: profile?.phone || '',
+      })
+      setIsOnline(driver?.is_online || false)
+      setWallet(Number(driver?.wallet_balance || 0))
+      setDriverId(driver?.id || null)
+      setLoading(false)
+    }
+    load()
   }, [router])
+
+  useEffect(() => {
+    if (!isOnline) return
+
+    const supabase = createClient()
+    const load = async () => {
+      const { data } = await supabase
+        .from('orders')
+        .select('*')
+        .eq('status', 'pending')
+        .is('driver_id', null)
+        .order('created_at', { ascending: false })
+      setOrders((data || []) as Order[])
+    }
+    load()
+
+    const channel = supabase
+      .channel('driver-available-orders')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, load)
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
+  }, [isOnline])
 
   async function toggleOnline() {
     const next = !isOnline
     setIsOnline(next)
-    localStorage.setItem('driver_online', next ? 'true' : 'false')
 
-    const driverId = localStorage.getItem('driver_id')
     if (driverId) {
       const supabase = createClient()
       await supabase.from('drivers').update({ is_online: next }).eq('id', driverId)
@@ -38,16 +81,31 @@ export default function DashboardPage() {
   }
 
   async function handleAccept(orderId: string) {
+    if (!driverId) { alert('خطأ في المندوب'); return }
     setAccepting(orderId)
+
     try {
-      const driverId = localStorage.getItem('driver_id') || 'driver-unknown'
-      await acceptOrder(orderId, driverId)
+      const supabase = createClient()
+      const { error } = await supabase
+        .from('orders')
+        .update({ driver_id: driverId, status: 'accepted' })
+        .eq('id', orderId)
+
+      if (error) throw error
       router.push(`/orders/${orderId}`)
-    } catch {
+    } catch (err) {
       alert('حدث خطأ')
     } finally {
       setAccepting(null)
     }
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-soft" dir="rtl">
+        <div className="w-20 h-20 rounded-4xl bg-gradient-primary animate-pulse-glow" />
+      </div>
+    )
   }
 
   if (!user) return null
@@ -75,7 +133,7 @@ export default function DashboardPage() {
               <p className="text-xs opacity-90 font-semibold">طلبات متاحة</p>
             </div>
             <div className="glass rounded-3xl p-4 border border-white/30">
-              <p className="text-xl font-black mb-1">{formatPrice(parseFloat(localStorage.getItem('driver_wallet') || '0'))}</p>
+              <p className="text-xl font-black mb-1">{formatPrice(wallet)}</p>
               <p className="text-xs opacity-90 font-semibold">الرصيد</p>
             </div>
           </div>
@@ -91,10 +149,6 @@ export default function DashboardPage() {
             <button onClick={toggleOnline} className="px-8 py-4 bg-gradient-primary text-white rounded-3xl font-black shadow-primary hover:scale-105 transition-all duration-300">
               🟢 تفعيل الاتصال
             </button>
-          </div>
-        ) : loading ? (
-          <div className="text-center py-20">
-            <div className="w-20 h-20 mx-auto rounded-4xl bg-gradient-primary animate-pulse-glow" />
           </div>
         ) : orders.length === 0 ? (
           <div className="bg-white p-12 rounded-3xl text-center shadow-soft">

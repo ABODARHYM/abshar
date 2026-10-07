@@ -22,7 +22,7 @@ export default function RegisterPage() {
     try {
       const supabase = createClient()
 
-      const { error: signUpError } = await supabase.auth.signUp({
+      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
         email: fakeEmail,
         password: fakePassword,
         options: {
@@ -38,6 +38,18 @@ export default function RegisterPage() {
         throw signUpError
       }
 
+      if (signUpData?.user) {
+        const { error: profileError } = await supabase.from('profiles').upsert({
+          id: signUpData.user.id,
+          full_name: form.name,
+          phone: formattedPhone,
+          role: 'customer',
+          is_active: true,
+        })
+
+        if (profileError) console.error(profileError)
+      }
+
       const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
         email: fakeEmail,
         password: fakePassword,
@@ -45,35 +57,15 @@ export default function RegisterPage() {
 
       if (signInError) throw signInError
 
-      const userId = signInData.user?.id
-      if (!userId) throw new Error('فشل في إنشاء الحساب')
-
-      const { data: existing } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('id', userId)
-        .single()
-
-      if (!existing) {
-        const { error: profileError } = await supabase.from('profiles').insert({
-          id: userId,
-          full_name: form.name,
-          phone: formattedPhone,
-          role: 'customer',
-          is_active: true,
-        })
-
-        if (profileError) {
-          console.error('Profile error:', profileError)
-        }
+      if (signInData.user) {
+        localStorage.setItem('abshar_user_id', signInData.user.id)
+        localStorage.setItem('abshar_name', form.name)
+        localStorage.setItem('abshar_phone', formattedPhone)
+        localStorage.setItem('abshar_logged_in', 'true')
       }
 
-      localStorage.setItem('abshar_phone', formattedPhone)
-      localStorage.setItem('abshar_name', form.name)
-      localStorage.setItem('abshar_user_id', userId)
-      localStorage.setItem('abshar_logged_in', 'true')
-
       router.push('/dashboard')
+      router.refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'حدث خطأ')
     } finally {

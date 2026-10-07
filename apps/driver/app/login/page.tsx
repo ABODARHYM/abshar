@@ -27,28 +27,32 @@ export default function LoginPage() {
       })
 
       if (error) throw error
-
-      const userId = data.user?.id
-      if (!userId) throw new Error('فشل الدخول')
+      if (!data.user) throw new Error('فشل الدخول')
 
       const { data: driverData } = await supabase
         .from('drivers')
         .select('*')
-        .eq('user_id', userId)
+        .eq('user_id', data.user.id)
         .single()
 
-      localStorage.setItem('driver_phone', formattedPhone)
-      localStorage.setItem('driver_user_id', userId)
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('full_name')
+        .eq('id', data.user.id)
+        .single()
+
+      localStorage.setItem('driver_user_id', data.user.id)
       localStorage.setItem('driver_id', driverData?.id || '')
-      localStorage.setItem('driver_name', data.user?.user_metadata?.full_name || 'مندوب')
+      localStorage.setItem('driver_phone', formattedPhone)
+      localStorage.setItem('driver_name', profileData?.full_name || 'مندوب')
       localStorage.setItem('driver_vehicle', driverData?.vehicle_type || 'motorcycle')
       localStorage.setItem('driver_plate', driverData?.vehicle_plate || '')
       localStorage.setItem('driver_license', driverData?.license_number || '')
       localStorage.setItem('driver_logged_in', 'true')
-      localStorage.setItem('driver_online', driverData?.is_online ? 'true' : 'false')
       localStorage.setItem('driver_wallet', String(driverData?.wallet_balance || 0))
 
       router.push('/dashboard')
+      router.refresh()
     } catch (err) {
       setError('الحساب غير موجود. أنشئ حساباً جديداً.')
     } finally {
