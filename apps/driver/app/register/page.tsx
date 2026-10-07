@@ -16,57 +16,55 @@ export default function RegisterPage() {
     setError('')
 
     const formattedPhone = form.phone.startsWith('+') ? form.phone : '+967' + form.phone.replace(/^0/, '')
-    const fakeEmail = 'driver-' + formattedPhone.replace('+', '') + '@abshar.local'
-    const fakePassword = 'abshar-driver-' + formattedPhone.replace('+', '')
 
     try {
       const supabase = createClient()
 
-      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-        email: fakeEmail,
-        password: fakePassword,
-        options: {
-          data: {
-            full_name: form.name,
-            phone: formattedPhone,
-            role: 'driver',
-          },
-        },
-      })
+      const { data: existingProfile } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('phone', formattedPhone)
+        .maybeSingle()
 
-      if (signUpError && !signUpError.message.includes('already')) {
-        throw signUpError
-      }
+      let userId: string
 
-      if (signUpData?.user) {
-        await supabase.from('profiles').upsert({
-          id: signUpData.user.id,
+      if (existingProfile) {
+        userId = existingProfile.id
+        await supabase.from('profiles').update({
+          full_name: form.name,
+          role: 'driver',
+          is_active: true,
+        }).eq('id', userId)
+      } else {
+        const newId = crypto.randomUUID()
+        const { error: insertError } = await supabase.from('profiles').insert({
+          id: newId,
           full_name: form.name,
           phone: formattedPhone,
           role: 'driver',
           is_active: true,
         })
+
+        if (insertError) throw insertError
+        userId = newId
       }
-
-      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
-        email: fakeEmail,
-        password: fakePassword,
-      })
-
-      if (signInError) throw signInError
-      if (!signInData.user) throw new Error('فشل الدخول')
-
-      const userId = signInData.user.id
 
       const { data: existingDriver } = await supabase
         .from('drivers')
         .select('id')
         .eq('user_id', userId)
-        .single()
+        .maybeSingle()
 
-      let driverId = existingDriver?.id
+      let driverId: string
 
-      if (!existingDriver) {
+      if (existingDriver) {
+        driverId = existingDriver.id
+        await supabase.from('drivers').update({
+          vehicle_type: form.vehicle,
+          vehicle_plate: form.plate,
+          license_number: form.license,
+        }).eq('id', driverId)
+      } else {
         const { data: driverData, error: driverError } = await supabase
           .from('drivers')
           .insert({
@@ -89,7 +87,7 @@ export default function RegisterPage() {
       }
 
       localStorage.setItem('driver_user_id', userId)
-      localStorage.setItem('driver_id', driverId || '')
+      localStorage.setItem('driver_id', driverId)
       localStorage.setItem('driver_phone', formattedPhone)
       localStorage.setItem('driver_name', form.name)
       localStorage.setItem('driver_vehicle', form.vehicle)
@@ -98,7 +96,6 @@ export default function RegisterPage() {
       localStorage.setItem('driver_logged_in', 'true')
 
       router.push('/dashboard')
-      router.refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'حدث خطأ')
     } finally {

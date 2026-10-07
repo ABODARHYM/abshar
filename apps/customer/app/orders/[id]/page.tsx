@@ -53,7 +53,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
           <div className="text-7xl mb-4">❌</div>
           <h2 className="font-black text-gray-900 mb-2 text-xl">لم يتم العثور على الطلب</h2>
           <button onClick={() => router.push('/orders')} className="mt-6 px-8 py-4 bg-gradient-primary text-white rounded-3xl font-black shadow-primary">
-            العودة للطلبات
+            العودة
           </button>
         </div>
       </div>
@@ -122,12 +122,6 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
             <p className="text-xs text-gray-500 mb-2 font-bold">🎯 التسليم</p>
             <p className="font-bold text-gray-800">{order.dropoff_address}</p>
           </div>
-          {order.notes && (
-            <div className="border-t border-gray-100 pt-5">
-              <p className="text-xs text-gray-500 mb-2 font-bold">📝 ملاحظات</p>
-              <p className="text-sm text-gray-700 font-semibold">{order.notes}</p>
-            </div>
-          )}
         </div>
       </section>
 

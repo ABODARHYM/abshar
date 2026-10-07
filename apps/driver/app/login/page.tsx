@@ -16,45 +16,40 @@ export default function LoginPage() {
     setError('')
 
     const formattedPhone = phone.startsWith('+') ? phone : '+967' + phone.replace(/^0/, '')
-    const fakeEmail = 'driver-' + formattedPhone.replace('+', '') + '@abshar.local'
-    const fakePassword = 'abshar-driver-' + formattedPhone.replace('+', '')
 
     try {
       const supabase = createClient()
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: fakeEmail,
-        password: fakePassword,
-      })
 
-      if (error) throw error
-      if (!data.user) throw new Error('فشل الدخول')
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('phone', formattedPhone)
+        .maybeSingle()
 
-      const { data: driverData } = await supabase
+      if (!profile) {
+        setError('الحساب غير موجود. أنشئ حساباً جديداً.')
+        setLoading(false)
+        return
+      }
+
+      const { data: driver } = await supabase
         .from('drivers')
         .select('*')
-        .eq('user_id', data.user.id)
-        .single()
+        .eq('user_id', profile.id)
+        .maybeSingle()
 
-      const { data: profileData } = await supabase
-        .from('profiles')
-        .select('full_name')
-        .eq('id', data.user.id)
-        .single()
-
-      localStorage.setItem('driver_user_id', data.user.id)
-      localStorage.setItem('driver_id', driverData?.id || '')
+      localStorage.setItem('driver_user_id', profile.id)
+      localStorage.setItem('driver_id', driver?.id || '')
       localStorage.setItem('driver_phone', formattedPhone)
-      localStorage.setItem('driver_name', profileData?.full_name || 'مندوب')
-      localStorage.setItem('driver_vehicle', driverData?.vehicle_type || 'motorcycle')
-      localStorage.setItem('driver_plate', driverData?.vehicle_plate || '')
-      localStorage.setItem('driver_license', driverData?.license_number || '')
+      localStorage.setItem('driver_name', profile.full_name || 'مندوب')
+      localStorage.setItem('driver_vehicle', driver?.vehicle_type || 'motorcycle')
+      localStorage.setItem('driver_plate', driver?.vehicle_plate || '')
+      localStorage.setItem('driver_license', driver?.license_number || '')
       localStorage.setItem('driver_logged_in', 'true')
-      localStorage.setItem('driver_wallet', String(driverData?.wallet_balance || 0))
 
       router.push('/dashboard')
-      router.refresh()
     } catch (err) {
-      setError('الحساب غير موجود. أنشئ حساباً جديداً.')
+      setError('حدث خطأ')
     } finally {
       setLoading(false)
     }

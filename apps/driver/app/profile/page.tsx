@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
 import BottomNav from '@/components/BottomNav'
 
 const VEHICLES: Record<string, string> = {
@@ -15,54 +14,23 @@ const VEHICLES: Record<string, string> = {
 export default function ProfilePage() {
   const router = useRouter()
   const [data, setData] = useState<any>(null)
-  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    async function load() {
-      const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { router.push('/login'); return }
-
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single()
-
-      const { data: driver } = await supabase
-        .from('drivers')
-        .select('*')
-        .eq('user_id', user.id)
-        .single()
-
-      setData({
-        name: profile?.full_name || 'مندوب',
-        phone: profile?.phone || '',
-        vehicle: driver?.vehicle_type || 'motorcycle',
-        plate: driver?.vehicle_plate || '',
-        license: driver?.license_number || '',
-        rating: Number(driver?.rating_avg || 5).toFixed(1),
-        totalOrders: driver?.total_orders || 0,
-      })
-      setLoading(false)
-    }
-    load()
+    if (typeof window === 'undefined') return
+    if (!localStorage.getItem('driver_logged_in')) { router.push('/login'); return }
+    setData({
+      name: localStorage.getItem('driver_name') || 'مندوب',
+      phone: localStorage.getItem('driver_phone') || '',
+      vehicle: localStorage.getItem('driver_vehicle') || 'motorcycle',
+      plate: localStorage.getItem('driver_plate') || '',
+      license: localStorage.getItem('driver_license') || '',
+    })
   }, [router])
 
-  async function handleLogout() {
-    const supabase = createClient()
-    await supabase.auth.signOut()
+  function handleLogout() {
+    if (typeof window === 'undefined') return
     localStorage.clear()
     router.push('/login')
-    router.refresh()
-  }
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-soft" dir="rtl">
-        <div className="w-20 h-20 rounded-4xl bg-gradient-primary animate-pulse-glow" />
-      </div>
-    )
   }
 
   if (!data) return null
@@ -77,16 +45,6 @@ export default function ProfilePage() {
           </div>
           <h1 className="text-2xl font-black">{data.name}</h1>
           <p className="text-sm opacity-90 mt-1 font-bold" dir="ltr">{data.phone}</p>
-          <div className="flex justify-center gap-6 mt-5">
-            <div className="text-center">
-              <p className="text-2xl font-black">{data.rating}</p>
-              <p className="text-xs opacity-80 font-bold">⭐ التقييم</p>
-            </div>
-            <div className="text-center">
-              <p className="text-2xl font-black">{data.totalOrders}</p>
-              <p className="text-xs opacity-80 font-bold">📦 الطلبات</p>
-            </div>
-          </div>
         </div>
       </header>
 

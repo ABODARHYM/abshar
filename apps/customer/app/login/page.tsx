@@ -16,38 +16,31 @@ export default function LoginPage() {
     setError('')
 
     const formattedPhone = phone.startsWith('+') ? phone : '+967' + phone.replace(/^0/, '')
-    const fakeEmail = formattedPhone.replace('+', '') + '@abshar.local'
-    const fakePassword = 'abshar-dev-' + formattedPhone.replace('+', '')
 
     try {
       const supabase = createClient()
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: fakeEmail,
-        password: fakePassword,
-      })
 
-      if (error) throw error
+      const { data: profile, error: fetchError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('phone', formattedPhone)
+        .maybeSingle()
 
-      if (data.user) {
-        localStorage.setItem('abshar_user_id', data.user.id)
-        localStorage.setItem('abshar_phone', formattedPhone)
-        localStorage.setItem('abshar_logged_in', 'true')
-
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('full_name')
-          .eq('id', data.user.id)
-          .single()
-
-        if (profile?.full_name) {
-          localStorage.setItem('abshar_name', profile.full_name)
-        }
+      if (fetchError) throw fetchError
+      if (!profile) {
+        setError('الحساب غير موجود. أنشئ حساباً جديداً.')
+        setLoading(false)
+        return
       }
 
+      localStorage.setItem('abshar_user_id', profile.id)
+      localStorage.setItem('abshar_name', profile.full_name || 'مستخدم')
+      localStorage.setItem('abshar_phone', profile.phone)
+      localStorage.setItem('abshar_logged_in', 'true')
+
       router.push('/dashboard')
-      router.refresh()
     } catch (err) {
-      setError('الحساب غير موجود. أنشئ حساباً جديداً.')
+      setError('حدث خطأ')
     } finally {
       setLoading(false)
     }

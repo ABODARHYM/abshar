@@ -16,56 +16,45 @@ export default function RegisterPage() {
     setError('')
 
     const formattedPhone = form.phone.startsWith('+') ? form.phone : '+967' + form.phone.replace(/^0/, '')
-    const fakeEmail = formattedPhone.replace('+', '') + '@abshar.local'
-    const fakePassword = 'abshar-dev-' + formattedPhone.replace('+', '')
 
     try {
       const supabase = createClient()
 
-      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-        email: fakeEmail,
-        password: fakePassword,
-        options: {
-          data: {
-            full_name: form.name,
-            phone: formattedPhone,
-            role: 'customer',
-          },
-        },
-      })
+      const { data: existing } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('phone', formattedPhone)
+        .maybeSingle()
 
-      if (signUpError && !signUpError.message.includes('already')) {
-        throw signUpError
-      }
+      let userId: string
 
-      if (signUpData?.user) {
-        const { error: profileError } = await supabase.from('profiles').upsert({
-          id: signUpData.user.id,
+      if (existing) {
+        userId = existing.id
+        await supabase.from('profiles').update({
+          full_name: form.name,
+          role: 'customer',
+          is_active: true,
+        }).eq('id', userId)
+      } else {
+        const newId = crypto.randomUUID()
+        const { error: insertError } = await supabase.from('profiles').insert({
+          id: newId,
           full_name: form.name,
           phone: formattedPhone,
           role: 'customer',
           is_active: true,
         })
 
-        if (profileError) console.error(profileError)
+        if (insertError) throw insertError
+        userId = newId
       }
 
-      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
-        email: fakeEmail,
-        password: fakePassword,
-      })
-
-      if (signInError) throw signInError
-
-      if (signInData.user) {
-        localStorage.setItem('abshar_user_id', signInData.user.id)
-        localStorage.setItem('abshar_name', form.name)
-        localStorage.setItem('abshar_phone', formattedPhone)
-        localStorage.setItem('abshar_logged_in', 'true')
-      }
+      localStorage.setItem('abshar_user_id', userId)
+      localStorage.setItem('abshar_name', form.name)
+      localStorage.setItem('abshar_phone', formattedPhone)
+      localStorage.setItem('abshar_logged_in', 'true')
 
       router.push('/dashboard')
-      router.refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'حدث خطأ')
     } finally {

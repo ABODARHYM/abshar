@@ -10,50 +10,39 @@ import NotificationBell from '@/components/NotificationBell'
 
 export default function DashboardPage() {
   const router = useRouter()
-  const [user, setUser] = useState<{ name: string; phone: string } | null>(null)
+  const [user, setUser] = useState<{ name: string; phone: string; id: string } | null>(null)
   const [isOnline, setIsOnline] = useState(false)
   const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
   const [accepting, setAccepting] = useState<string | null>(null)
   const [wallet, setWallet] = useState(0)
   const [driverId, setDriverId] = useState<string | null>(null)
-  const [driverUserId, setDriverUserId] = useState<string | null>(null)
 
   useEffect(() => {
-    async function load() {
-      const supabase = createClient()
-      const { data: { user: authUser } } = await supabase.auth.getUser()
-      if (!authUser) { router.push('/login'); return }
+    if (typeof window === 'undefined') return
+    const userId = localStorage.getItem('driver_user_id')
+    const dId = localStorage.getItem('driver_id')
+    if (!userId) { router.push('/login'); return }
 
-      setDriverUserId(authUser.id)
+    setDriverId(dId)
+    setUser({
+      name: localStorage.getItem('driver_name') || 'مندوب',
+      phone: localStorage.getItem('driver_phone') || '',
+      id: userId,
+    })
 
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('full_name, phone')
-        .eq('id', authUser.id)
-        .single()
-
-      const { data: driver } = await supabase
-        .from('drivers')
-        .select('*')
-        .eq('user_id', authUser.id)
-        .single()
-
-      setUser({
-        name: profile?.full_name || 'مندوب',
-        phone: profile?.phone || '',
-      })
-      setIsOnline(driver?.is_online || false)
-      setWallet(Number(driver?.wallet_balance || 0))
-      setDriverId(driver?.id || null)
+    const supabase = createClient()
+    supabase.from('drivers').select('*').eq('id', dId).single().then(({ data }) => {
+      if (data) {
+        setIsOnline(data.is_online)
+        setWallet(Number(data.wallet_balance || 0))
+      }
       setLoading(false)
-    }
-    load()
+    })
   }, [router])
 
   useEffect(() => {
     if (!isOnline) { setOrders([]); return }
-
     const supabase = createClient()
     const load = async () => {
       const { data } = await supabase
@@ -77,7 +66,6 @@ export default function DashboardPage() {
   async function toggleOnline() {
     const next = !isOnline
     setIsOnline(next)
-
     if (driverId) {
       const supabase = createClient()
       await supabase.from('drivers').update({ is_online: next }).eq('id', driverId)
@@ -85,25 +73,14 @@ export default function DashboardPage() {
   }
 
   async function handleAccept(orderId: string) {
-    if (!driverId) { alert('خطأ في المندوب'); return }
+    if (!driverId) { alert('خطأ'); return }
     setAccepting(orderId)
-
     try {
       const supabase = createClient()
-      const { data: order } = await supabase
-        .from('orders')
-        .select('*')
-        .eq('id', orderId)
-        .single()
-
-      const { error } = await supabase
-        .from('orders')
-        .update({ driver_id: driverId, status: 'accepted' })
-        .eq('id', orderId)
-
+      const { data: order } = await supabase.from('orders').select('*').eq('id', orderId).single()
+      const { error } = await supabase.from('orders').update({ driver_id: driverId, status: 'accepted' }).eq('id', orderId)
       if (error) throw error
 
-      // إشعار العميل
       if (order) {
         await supabase.from('notifications').insert({
           user_id: order.customer_id,
@@ -144,7 +121,7 @@ export default function DashboardPage() {
               <h1 className="text-2xl font-black">{user.name}</h1>
             </div>
             <div className="flex gap-2">
-              <NotificationBell />
+              <NotificationBell userId={user.id} />
               <button
                 onClick={toggleOnline}
                 className={`px-5 py-3 rounded-2xl font-bold text-sm transition backdrop-blur border border-white/20 ${isOnline ? 'bg-green-500 shadow-lg' : 'bg-white/20'}`}

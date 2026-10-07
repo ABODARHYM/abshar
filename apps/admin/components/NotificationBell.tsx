@@ -46,10 +46,7 @@ export default function NotificationBell() {
 
   return (
     <div className="relative">
-      <button
-        onClick={() => setOpen(!open)}
-        className="relative w-12 h-12 rounded-2xl bg-white hover:bg-gray-50 flex items-center justify-center text-xl transition shadow-soft border border-gray-100"
-      >
+      <button onClick={() => setOpen(!open)} className="relative w-12 h-12 rounded-2xl bg-white hover:bg-gray-50 flex items-center justify-center text-xl transition shadow-soft border border-gray-100">
         🔔
         {unreadCount > 0 && (
           <span className="absolute -top-1 -right-1 w-6 h-6 bg-red-500 text-white text-xs font-black rounded-full flex items-center justify-center">
@@ -65,7 +62,6 @@ export default function NotificationBell() {
             <div className="p-4 border-b border-gray-100">
               <h3 className="font-black text-gray-900">الإشعارات</h3>
             </div>
-
             <div className="max-h-96 overflow-y-auto">
               {notifications.length === 0 ? (
                 <div className="p-8 text-center">

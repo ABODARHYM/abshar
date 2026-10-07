@@ -42,15 +42,15 @@ export default function NewOrderPage() {
     setError('')
 
     try {
-      const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) throw new Error('يجب تسجيل الدخول')
+      const userId = localStorage.getItem('abshar_user_id')
+      if (!userId) throw new Error('يجب تسجيل الدخول')
 
+      const supabase = createClient()
       const orderNumber = 'ABS-' + Date.now().toString().slice(-8)
 
       const { data: orderData, error: insertError } = await supabase.from('orders').insert({
         order_number: orderNumber,
-        customer_id: user.id,
+        customer_id: userId,
         order_type: orderType,
         pickup_address: pickupAddress || 'موقع الاستلام',
         pickup_lat: pickup.lat,
@@ -71,7 +71,6 @@ export default function NewOrderPage() {
 
       if (insertError) throw insertError
 
-      // إشعار كل المندوبين المتصلين
       const { data: drivers } = await supabase
         .from('drivers')
         .select('user_id')
@@ -86,13 +85,11 @@ export default function NewOrderPage() {
           data: { order_id: orderData.id, order_number: orderNumber },
           is_read: false,
         }))
-
         await supabase.from('notifications').insert(notifications)
       }
 
-      // إشعار العميل بتأكيد الطلب
       await supabase.from('notifications').insert({
-        user_id: user.id,
+        user_id: userId,
         title: `تم استلام طلبك ${orderNumber}`,
         body: 'جاري البحث عن مندوب...',
         type: 'order',

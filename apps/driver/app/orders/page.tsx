@@ -14,29 +14,28 @@ export default function OrdersPage() {
   const [filter, setFilter] = useState<'active' | 'past'>('active')
 
   useEffect(() => {
-    async function load() {
-      const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { router.push('/login'); return }
+    if (typeof window === 'undefined') return
+    const driverId = localStorage.getItem('driver_id')
+    if (!driverId) { router.push('/login'); return }
 
-      const { data: driver } = await supabase
-        .from('drivers')
-        .select('id')
-        .eq('user_id', user.id)
-        .single()
-
-      if (!driver) { setLoading(false); return }
-
+    const supabase = createClient()
+    const load = async () => {
       const { data } = await supabase
         .from('orders')
         .select('*')
-        .eq('driver_id', driver.id)
+        .eq('driver_id', driverId)
         .order('created_at', { ascending: false })
-
       setOrders((data || []) as Order[])
       setLoading(false)
     }
     load()
+
+    const channel = supabase
+      .channel(`driver-orders-${driverId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders', filter: `driver_id=eq.${driverId}` }, load)
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
   }, [router])
 
   const active = orders.filter((o) => !['delivered', 'cancelled'].includes(o.status))

@@ -12,33 +12,24 @@ interface Notification {
   type: string
 }
 
-export default function NotificationBell() {
+export default function NotificationBell({ userId }: { userId: string }) {
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [open, setOpen] = useState(false)
-  const [userId, setUserId] = useState<string | null>(null)
-
-  useEffect(() => {
-    async function load() {
-      const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-      setUserId(user.id)
-
-      const { data } = await supabase
-        .from('notifications')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(20)
-
-      setNotifications((data || []) as Notification[])
-    }
-    load()
-  }, [])
 
   useEffect(() => {
     if (!userId) return
     const supabase = createClient()
+
+    const load = async () => {
+      const { data } = await supabase
+        .from('notifications')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(20)
+      setNotifications((data || []) as Notification[])
+    }
+    load()
 
     const channel = supabase
       .channel(`notifications-${userId}`)
@@ -59,22 +50,10 @@ export default function NotificationBell() {
     return () => { supabase.removeChannel(channel) }
   }, [userId])
 
-  async function markAsRead(id: string) {
-    const supabase = createClient()
-    await supabase.from('notifications').update({ is_read: true }).eq('id', id)
-    setNotifications((prev) =>
-      prev.map((n) => (n.id === id ? { ...n, is_read: true } : n))
-    )
-  }
-
   async function markAllAsRead() {
     if (!userId) return
     const supabase = createClient()
-    await supabase
-      .from('notifications')
-      .update({ is_read: true })
-      .eq('user_id', userId)
-      .eq('is_read', false)
+    await supabase.from('notifications').update({ is_read: true }).eq('user_id', userId)
     setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })))
   }
 
@@ -82,10 +61,7 @@ export default function NotificationBell() {
 
   return (
     <div className="relative">
-      <button
-        onClick={() => setOpen(!open)}
-        className="relative w-12 h-12 rounded-2xl bg-white/20 hover:bg-white/30 flex items-center justify-center text-xl transition backdrop-blur border border-white/20"
-      >
+      <button onClick={() => setOpen(!open)} className="relative w-12 h-12 rounded-2xl bg-white/20 hover:bg-white/30 flex items-center justify-center text-xl transition backdrop-blur border border-white/20">
         🔔
         {unreadCount > 0 && (
           <span className="absolute -top-1 -right-1 w-6 h-6 bg-red-500 text-white text-xs font-black rounded-full flex items-center justify-center">
@@ -101,15 +77,11 @@ export default function NotificationBell() {
             <div className="p-4 border-b border-gray-100 flex justify-between items-center">
               <h3 className="font-black text-gray-900">الإشعارات</h3>
               {unreadCount > 0 && (
-                <button
-                  onClick={markAllAsRead}
-                  className="text-xs text-primary-600 font-bold hover:underline"
-                >
+                <button onClick={markAllAsRead} className="text-xs text-primary-600 font-bold hover:underline">
                   قراءة الكل
                 </button>
               )}
             </div>
-
             <div className="max-h-96 overflow-y-auto">
               {notifications.length === 0 ? (
                 <div className="p-8 text-center">
@@ -118,16 +90,10 @@ export default function NotificationBell() {
                 </div>
               ) : (
                 notifications.map((notif) => (
-                  <div
-                    key={notif.id}
-                    onClick={() => markAsRead(notif.id)}
-                    className={`p-4 border-b border-gray-50 cursor-pointer hover:bg-gray-50 transition ${
-                      !notif.is_read ? 'bg-primary-50' : ''
-                    }`}
-                  >
+                  <div key={notif.id} className={`p-4 border-b border-gray-50 ${!notif.is_read ? 'bg-primary-50' : ''}`}>
                     <div className="flex items-start gap-3">
                       <div className="w-10 h-10 rounded-2xl bg-gradient-primary flex items-center justify-center text-xl flex-shrink-0">
-                        {notif.type === 'order' ? '📦' : notif.type === 'payment' ? '💰' : '🔔'}
+                        {notif.type === 'order' ? '📦' : '🔔'}
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="font-bold text-gray-900 text-sm">{notif.title}</p>
@@ -136,9 +102,6 @@ export default function NotificationBell() {
                           {new Date(notif.created_at).toLocaleString('ar-YE')}
                         </p>
                       </div>
-                      {!notif.is_read && (
-                        <div className="w-2 h-2 bg-primary-600 rounded-full mt-2 flex-shrink-0" />
-                      )}
                     </div>
                   </div>
                 ))

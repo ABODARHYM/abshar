@@ -22,29 +22,28 @@ export default function WalletPage() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    async function load() {
-      const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { router.push('/login'); return }
+    if (typeof window === 'undefined') return
+    const driverId = localStorage.getItem('driver_id')
+    if (!driverId) { router.push('/login'); return }
 
+    const supabase = createClient()
+    const load = async () => {
       const { data: driver } = await supabase
         .from('drivers')
-        .select('id, wallet_balance')
-        .eq('user_id', user.id)
+        .select('wallet_balance')
+        .eq('id', driverId)
         .single()
 
       setBalance(Number(driver?.wallet_balance || 0))
 
-      if (driver) {
-        const { data: txs } = await supabase
-          .from('wallet_transactions')
-          .select('*')
-          .eq('driver_id', driver.id)
-          .order('created_at', { ascending: false })
-          .limit(50)
+      const { data: txs } = await supabase
+        .from('wallet_transactions')
+        .select('*')
+        .eq('driver_id', driverId)
+        .order('created_at', { ascending: false })
+        .limit(50)
 
-        setTransactions((txs || []) as Transaction[])
-      }
+      setTransactions((txs || []) as Transaction[])
       setLoading(false)
     }
     load()

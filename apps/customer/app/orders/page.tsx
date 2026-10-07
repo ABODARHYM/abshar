@@ -14,21 +14,28 @@ export default function OrdersPage() {
   const [filter, setFilter] = useState<'active' | 'past'>('active')
 
   useEffect(() => {
-    async function load() {
-      const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { router.push('/login'); return }
+    if (typeof window === 'undefined') return
+    const userId = localStorage.getItem('abshar_user_id')
+    if (!userId) { router.push('/login'); return }
 
+    const supabase = createClient()
+    const load = async () => {
       const { data } = await supabase
         .from('orders')
         .select('*')
-        .eq('customer_id', user.id)
+        .eq('customer_id', userId)
         .order('created_at', { ascending: false })
-
       setOrders((data || []) as Order[])
       setLoading(false)
     }
     load()
+
+    const channel = supabase
+      .channel(`customer-orders-${userId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders', filter: `customer_id=eq.${userId}` }, load)
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
   }, [router])
 
   const active = orders.filter((o) => !['delivered', 'cancelled'].includes(o.status))
@@ -55,16 +62,13 @@ export default function OrdersPage() {
             <div className="w-20 h-20 mx-auto rounded-4xl bg-gradient-primary animate-pulse-glow" />
           </div>
         ) : displayed.length === 0 ? (
-          <div className="bg-white p-12 rounded-3xl text-center shadow-soft animate-fade-in">
+          <div className="bg-white p-12 rounded-3xl text-center shadow-soft">
             <div className="text-8xl mb-5">📭</div>
             <h3 className="font-black text-gray-900 mb-2 text-xl">
               {filter === 'active' ? 'لا توجد طلبات نشطة' : 'لا توجد طلبات سابقة'}
             </h3>
-            <p className="text-sm text-gray-500 mb-6 font-semibold">
-              {filter === 'active' ? 'ابدأ بطلب توصيل جديد' : 'طلباتك السابقة ستظهر هنا'}
-            </p>
             {filter === 'active' && (
-              <a href="/orders/new" className="inline-block px-8 py-4 bg-gradient-primary text-white rounded-3xl font-black shadow-primary hover:scale-105 transition-all duration-300">
+              <a href="/orders/new" className="inline-block mt-6 px-8 py-4 bg-gradient-primary text-white rounded-3xl font-black shadow-primary hover:scale-105 transition-all duration-300">
                 طلب جديد →
               </a>
             )}

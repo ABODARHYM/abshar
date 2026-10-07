@@ -69,7 +69,6 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
       const { error } = await supabase.from('orders').update(update).eq('id', order.id)
       if (error) throw error
 
-      // إشعار العميل
       await supabase.from('notifications').insert({
         user_id: order.customer_id,
         title: `تحديث الطلب ${order.order_number}`,
@@ -79,14 +78,13 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
         is_read: false,
       })
 
-      // إذا تم التسليم، أضف المبلغ للمحفظة
       if (next.to === 'delivered') {
-        const { data: { user } } = await supabase.auth.getUser()
-        if (user) {
+        const driverId = localStorage.getItem('driver_id')
+        if (driverId) {
           const { data: driver } = await supabase
             .from('drivers')
             .select('id, wallet_balance, total_orders')
-            .eq('user_id', user.id)
+            .eq('id', driverId)
             .single()
 
           if (driver) {

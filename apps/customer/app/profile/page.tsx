@@ -2,49 +2,25 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
 import BottomNav from '@/components/BottomNav'
 
 export default function ProfilePage() {
   const router = useRouter()
   const [user, setUser] = useState<{ name: string; phone: string } | null>(null)
-  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    async function load() {
-      const supabase = createClient()
-      const { data: { user: authUser } } = await supabase.auth.getUser()
-      if (!authUser) { router.push('/login'); return }
-
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('full_name, phone')
-        .eq('id', authUser.id)
-        .single()
-
-      setUser({
-        name: profile?.full_name || 'مستخدم',
-        phone: profile?.phone || '',
-      })
-      setLoading(false)
-    }
-    load()
+    if (typeof window === 'undefined') return
+    if (!localStorage.getItem('abshar_logged_in')) { router.push('/login'); return }
+    setUser({
+      name: localStorage.getItem('abshar_name') || 'مستخدم',
+      phone: localStorage.getItem('abshar_phone') || '',
+    })
   }, [router])
 
-  async function handleLogout() {
-    const supabase = createClient()
-    await supabase.auth.signOut()
+  function handleLogout() {
+    if (typeof window === 'undefined') return
     localStorage.clear()
     router.push('/login')
-    router.refresh()
-  }
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-soft" dir="rtl">
-        <div className="w-20 h-20 rounded-4xl bg-gradient-primary animate-pulse-glow" />
-      </div>
-    )
   }
 
   if (!user) return null

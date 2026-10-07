@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
 import BottomNav from '@/components/BottomNav'
 import NotificationBell from '@/components/NotificationBell'
 
@@ -15,40 +14,29 @@ const quickActions = [
 
 export default function DashboardPage() {
   const router = useRouter()
-  const [user, setUser] = useState<{ name: string; phone: string } | null>(null)
+  const [user, setUser] = useState<{ name: string; phone: string; id: string } | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    async function loadUser() {
-      const supabase = createClient()
-      const { data: { user: authUser } } = await supabase.auth.getUser()
+    if (typeof window === 'undefined') return
+    const isLoggedIn = localStorage.getItem('abshar_logged_in')
+    const userId = localStorage.getItem('abshar_user_id')
+    const phone = localStorage.getItem('abshar_phone')
+    const name = localStorage.getItem('abshar_name') || 'مستخدم'
 
-      if (!authUser) {
-        router.push('/login')
-        return
-      }
-
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('full_name, phone')
-        .eq('id', authUser.id)
-        .single()
-
-      setUser({
-        name: profile?.full_name || 'مستخدم',
-        phone: profile?.phone || authUser.phone || '',
-      })
-      setLoading(false)
+    if (!isLoggedIn || !userId) {
+      router.push('/login')
+      return
     }
-    loadUser()
+
+    setUser({ name, phone: phone || '', id: userId })
+    setLoading(false)
   }, [router])
 
-  async function handleLogout() {
-    const supabase = createClient()
-    await supabase.auth.signOut()
+  function handleLogout() {
+    if (typeof window === 'undefined') return
     localStorage.clear()
     router.push('/login')
-    router.refresh()
   }
 
   if (loading) {
@@ -73,7 +61,7 @@ export default function DashboardPage() {
               <h1 className="text-3xl font-black">{user.name}</h1>
             </div>
             <div className="flex gap-2">
-              <NotificationBell />
+              <NotificationBell userId={user.id} />
               <button onClick={handleLogout} className="px-4 py-2 bg-white/20 hover:bg-white/30 rounded-2xl text-sm font-bold transition backdrop-blur border border-white/20">
                 خروج
               </button>
