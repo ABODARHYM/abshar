@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "leaflet/dist/leaflet.css";
 
 * {
   box-sizing: border-box;
@@ -11,4 +12,54 @@ html {
 body {
   margin: 0;
   padding: 0;
+}
+
+/* إصلاح z-index لـ Leaflet */
+.leaflet-container {
+  z-index: 1 !important;
+  font-family: 'Tajawal', sans-serif !important;
+}
+
+.leaflet-pane,
+.leaflet-tile,
+.leaflet-marker-icon,
+.leaflet-marker-shadow,
+.leaflet-tile-container,
+.leaflet-pane > svg,
+.leaflet-pane > canvas,
+.leaflet-zoom-box,
+.leaflet-image-layer,
+.leaflet-layer {
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+
+.leaflet-container {
+  overflow: hidden;
+}
+
+.leaflet-control {
+  z-index: 800 !important;
+}
+
+.leaflet-top,
+.leaflet-bottom {
+  z-index: 800 !important;
+}
+
+/* جعل الأزرار فوق الخريطة */
+.sticky-header {
+  z-index: 50 !important;
+  position: sticky;
+}
+
+button, a {
+  position: relative;
+  z-index: 10;
+}
+
+/* BottomNav فوق كل شيء */
+nav.fixed {
+  z-index: 100 !important;
 }

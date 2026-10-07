@@ -2,6 +2,14 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import BottomNav from '@/components/BottomNav'
+
+const quickActions = [
+  { href: '/orders/new', icon: '📦', label: 'طلب جديد', sub: 'اطلب توصيل الآن' },
+  { href: '/orders', icon: '📋', label: 'طلباتي', sub: 'سجل الطلبات' },
+  { href: '/profile', icon: '👤', label: 'حسابي', sub: 'إعدادات شخصية' },
+  { href: '/support', icon: '💬', label: 'الدعم', sub: 'تواصل معنا' },
+]
 
 export default function DashboardPage() {
   const router = useRouter()
@@ -43,7 +51,7 @@ export default function DashboardPage() {
   if (!user) return null
 
   return (
-    <main className="min-h-screen bg-gray-50 pb-20" dir="rtl">
+    <main className="min-h-screen bg-gray-50 pb-24" dir="rtl">
       <header className="bg-primary-600 text-white p-6 rounded-b-3xl shadow-lg">
         <div className="flex justify-between items-center mb-6">
           <div>
@@ -66,49 +74,39 @@ export default function DashboardPage() {
 
       <section className="p-6 -mt-4">
         <div className="grid grid-cols-2 gap-4">
-          <div className="bg-white p-6 rounded-2xl shadow-sm text-center">
-            <div className="w-14 h-14 mx-auto mb-3 rounded-2xl bg-primary-100 flex items-center justify-center">
-              <span className="text-2xl">📦</span>
-            </div>
-            <p className="font-semibold text-gray-900">طلب جديد</p>
-            <p className="text-xs text-gray-500 mt-1">قريباً</p>
-          </div>
-
-          <div className="bg-white p-6 rounded-2xl shadow-sm text-center">
-            <div className="w-14 h-14 mx-auto mb-3 rounded-2xl bg-primary-100 flex items-center justify-center">
-              <span className="text-2xl">📋</span>
-            </div>
-            <p className="font-semibold text-gray-900">طلباتي</p>
-            <p className="text-xs text-gray-500 mt-1">قريباً</p>
-          </div>
-
-          <div className="bg-white p-6 rounded-2xl shadow-sm text-center">
-            <div className="w-14 h-14 mx-auto mb-3 rounded-2xl bg-primary-100 flex items-center justify-center">
-              <span className="text-2xl">👤</span>
-            </div>
-            <p className="font-semibold text-gray-900">حسابي</p>
-            <p className="text-xs text-gray-500 mt-1">قريباً</p>
-          </div>
-
-          <div className="bg-white p-6 rounded-2xl shadow-sm text-center">
-            <div className="w-14 h-14 mx-auto mb-3 rounded-2xl bg-primary-100 flex items-center justify-center">
-              <span className="text-2xl">💬</span>
-            </div>
-            <p className="font-semibold text-gray-900">الدعم</p>
-            <p className="text-xs text-gray-500 mt-1">قريباً</p>
-          </div>
+          {quickActions.map((action) => (
+            <a
+              key={action.href}
+              href={action.href}
+              className="bg-white p-6 rounded-2xl shadow-sm hover:shadow-md transition text-center"
+            >
+              <div className="w-14 h-14 mx-auto mb-3 rounded-2xl bg-primary-100 flex items-center justify-center">
+                <span className="text-2xl">{action.icon}</span>
+              </div>
+              <p className="font-semibold text-gray-900">{action.label}</p>
+              <p className="text-xs text-gray-500 mt-1">{action.sub}</p>
+            </a>
+          ))}
         </div>
       </section>
 
       <section className="px-6">
         <div className="bg-white p-8 rounded-2xl shadow-sm text-center">
           <div className="text-5xl mb-4">🚀</div>
-          <h3 className="font-bold text-gray-900 mb-2">التطبيق قيد البناء</h3>
+          <h3 className="font-bold text-gray-900 mb-2">ابدأ بطلب توصيل</h3>
           <p className="text-sm text-gray-500 mb-4">
-            سنضيف الخريطة والطلبات قريباً
+            اضغط "طلب جديد" لبدء أول توصيل
           </p>
+          <a
+            href="/orders/new"
+            className="inline-block px-6 py-3 bg-primary-600 text-white rounded-2xl font-semibold hover:bg-primary-700 transition"
+          >
+            طلب توصيل
+          </a>
         </div>
       </section>
+
+      <BottomNav />
     </main>
   )
 }
