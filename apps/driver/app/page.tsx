@@ -1,13 +1,20 @@
 export default function Home() {
   return (
-    <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-50 to-white" dir="rtl">
-      <div className="text-center p-8 max-w-md w-full">
-        <div className="w-24 h-24 mx-auto mb-6 rounded-3xl bg-primary-600 flex items-center justify-center shadow-lg"><span className="text-white text-5xl">🛵</span></div>
-        <h1 className="text-3xl font-bold text-primary-900 mb-2">أبشر بي - مندوب</h1>
-        <p className="text-gray-600 mb-8">سجّل دخولك وابدأ باستقبال الطلبات</p>
-        <div className="space-y-3">
-          <a href="/login" className="block w-full py-3 bg-primary-600 text-white rounded-2xl font-semibold hover:bg-primary-700 transition">تسجيل الدخول</a>
-          <a href="/register" className="block w-full py-3 bg-white text-primary-600 border-2 border-primary-600 rounded-2xl font-semibold hover:bg-primary-50 transition">حساب مندوب جديد</a>
+    <main className="min-h-screen relative overflow-hidden bg-white" dir="rtl">
+      <div className="absolute inset-0 bg-gradient-soft" />
+      <div className="absolute top-[-10%] right-[-10%] w-96 h-96 bg-primary-300 rounded-full blur-3xl opacity-30" />
+      <div className="absolute bottom-[-10%] left-[-10%] w-96 h-96 bg-pink-300 rounded-full blur-3xl opacity-30" />
+      <div className="relative min-h-screen flex items-center justify-center p-8">
+        <div className="text-center max-w-md w-full animate-slide-up">
+          <div className="w-28 h-28 mx-auto mb-8 rounded-4xl bg-gradient-primary flex items-center justify-center shadow-primary">
+            <span className="text-white text-6xl">🛵</span>
+          </div>
+          <h1 className="text-4xl font-black mb-3 bg-gradient-primary bg-clip-text text-transparent">أبشر بي - مندوب</h1>
+          <p className="text-gray-500 mb-10 text-lg font-semibold">سجّل دخولك وابدأ باستقبال الطلبات</p>
+          <div className="space-y-4">
+            <a href="/login" className="block w-full py-5 bg-gradient-primary text-white rounded-3xl font-black text-lg shadow-primary hover:scale-[1.02] transition-all duration-300">🚀 تسجيل الدخول</a>
+            <a href="/register" className="block w-full py-5 bg-white text-primary-600 border-2 border-primary-200 rounded-3xl font-black text-lg hover:border-primary-400 hover:bg-primary-50 transition-all duration-300 shadow-soft">✨ حساب مندوب جديد</a>
+          </div>
         </div>
       </div>
     </main>

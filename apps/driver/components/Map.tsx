@@ -8,7 +8,7 @@ interface MapProps { pickup?: [number, number] | null; dropoff?: [number, number
 export default function Map({ pickup, dropoff, height = '300px' }: MapProps) {
   const center: [number, number] = pickup || [15.3694, 44.191]
   return (
-    <div style={{ height, width: '100%', borderRadius: '1rem', overflow: 'hidden' }}>
+    <div style={{ height, width: '100%', borderRadius: '1.5rem', overflow: 'hidden', boxShadow: '0 4px 24px -4px rgba(0,0,0,0.06)' }}>
       <MapContainer center={center} zoom={13} style={{ height: '100%', width: '100%' }}>
         <TileLayer attribution='&copy; OpenStreetMap' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
         {pickup && <Marker position={pickup} icon={icon}><Popup>📍 الاستلام</Popup></Marker>}

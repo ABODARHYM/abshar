@@ -20,26 +20,27 @@ export default function ProfilePage() {
   function handleLogout() { localStorage.clear(); router.push('/login') }
   if (!data) return null
   return (
-    <main className="min-h-screen bg-gray-50 pb-24 relative" dir="rtl">
-      <header className="bg-primary-600 text-white p-8 rounded-b-3xl shadow-lg">
-        <div className="text-center">
-          <div className="w-24 h-24 mx-auto mb-4 rounded-full bg-white/20 flex items-center justify-center text-5xl">🛵</div>
-          <h1 className="text-xl font-bold">{data.name}</h1>
-          <p className="text-sm opacity-80 mt-1" dir="ltr">{data.phone}</p>
+    <main className="min-h-screen bg-gray-50 pb-32 relative" dir="rtl">
+      <header className="relative overflow-hidden bg-gradient-primary text-white p-10 rounded-b-4xl shadow-primary">
+        <div className="absolute top-[-50%] right-[-20%] w-96 h-96 bg-white rounded-full blur-3xl opacity-10" />
+        <div className="relative text-center">
+          <div className="w-28 h-28 mx-auto mb-5 rounded-full bg-white/20 backdrop-blur flex items-center justify-center text-6xl border-4 border-white/30">🛵</div>
+          <h1 className="text-2xl font-black">{data.name}</h1>
+          <p className="text-sm opacity-90 mt-1 font-bold" dir="ltr">{data.phone}</p>
         </div>
       </header>
-      <section className="p-6 -mt-4 space-y-3">
-        <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
-          <div className="p-4 border-b border-gray-100 flex justify-between"><span className="text-gray-500">المركبة</span><span className="font-semibold">{VEHICLES[data.vehicle] || data.vehicle}</span></div>
-          <div className="p-4 border-b border-gray-100 flex justify-between"><span className="text-gray-500">رقم اللوحة</span><span className="font-semibold">{data.plate}</span></div>
-          <div className="p-4 flex justify-between"><span className="text-gray-500">رقم الرخصة</span><span className="font-semibold">{data.license}</span></div>
+      <section className="p-6 -mt-8 space-y-4">
+        <div className="bg-white rounded-3xl shadow-soft overflow-hidden">
+          <div className="p-5 border-b border-gray-100 flex justify-between"><span className="text-gray-500 font-bold">🚗 المركبة</span><span className="font-black">{VEHICLES[data.vehicle] || data.vehicle}</span></div>
+          <div className="p-5 border-b border-gray-100 flex justify-between"><span className="text-gray-500 font-bold">🔢 اللوحة</span><span className="font-black">{data.plate}</span></div>
+          <div className="p-5 flex justify-between"><span className="text-gray-500 font-bold">📄 الرخصة</span><span className="font-black">{data.license}</span></div>
         </div>
-        <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
-          <a href="/support" className="flex items-center justify-between p-4 hover:bg-gray-50 border-b border-gray-100"><span className="font-medium">💬 الدعم الفني</span><span className="text-gray-300">←</span></a>
-          <a href="#" className="flex items-center justify-between p-4 hover:bg-gray-50"><span className="font-medium">📄 الشروط والأحكام</span><span className="text-gray-300">←</span></a>
+        <div className="bg-white rounded-3xl shadow-soft overflow-hidden">
+          <a href="/support" className="flex items-center justify-between p-5 hover:bg-gray-50 border-b border-gray-100 transition"><span className="font-black">💬 الدعم الفني</span><span className="text-gray-300 text-2xl">←</span></a>
+          <a href="#" className="flex items-center justify-between p-5 hover:bg-gray-50 transition"><span className="font-black">📄 الشروط والأحكام</span><span className="text-gray-300 text-2xl">←</span></a>
         </div>
-        <button onClick={handleLogout} className="w-full py-4 bg-red-50 text-red-600 rounded-2xl font-semibold hover:bg-red-100 transition">تسجيل الخروج</button>
-        <p className="text-center text-xs text-gray-400 pt-4">أبشر بي - مندوب v1.0.0</p>
+        <button onClick={handleLogout} className="w-full py-5 bg-red-50 text-red-600 rounded-3xl font-black text-lg hover:bg-red-100 transition border-2 border-red-100">🚪 تسجيل الخروج</button>
+        <p className="text-center text-xs text-gray-400 pt-4 font-semibold">أبشر بي - مندوب v1.0.0</p>
       </section>
       <BottomNav />
     </main>

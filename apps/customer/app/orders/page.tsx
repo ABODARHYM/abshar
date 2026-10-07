@@ -1,112 +1,44 @@
 'use client'
-
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { getUserOrders } from '@/lib/hooks/useOrders'
 import type { Order } from '@/lib/types/order'
 import OrderCard from '@/components/OrderCard'
 import BottomNav from '@/components/BottomNav'
-
 export default function OrdersPage() {
   const router = useRouter()
   const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<'active' | 'past'>('active')
-
   useEffect(() => {
     if (typeof window === 'undefined') return
-
-    const isLoggedIn = localStorage.getItem('abshar_logged_in')
-    const phone = localStorage.getItem('abshar_phone')
-
-    if (!isLoggedIn || !phone) {
-      router.push('/login')
-      return
-    }
-
-    // وضع التطوير: نستخدم رقم الجوال كـ customer_id مؤقتاً
-    // TODO: استبدال بـ user.id الحقيقي بعد تفعيل Auth
-    const customerId = phone
-
-    getUserOrders(customerId)
-      .then((data) => {
-        setOrders(data)
-        setLoading(false)
-      })
-      .catch(() => {
-        setOrders([])
-        setLoading(false)
-      })
+    if (!localStorage.getItem('abshar_logged_in')) { router.push('/login'); return }
+    const phone = localStorage.getItem('abshar_phone') || ''
+    getUserOrders(phone).then((data) => { setOrders(data); setLoading(false) }).catch(() => setLoading(false))
   }, [router])
-
-  const activeOrders = orders.filter(
-    (o) => !['delivered', 'cancelled'].includes(o.status)
-  )
-  const pastOrders = orders.filter((o) =>
-    ['delivered', 'cancelled'].includes(o.status)
-  )
-
-  const displayed = filter === 'active' ? activeOrders : pastOrders
-
+  const active = orders.filter((o) => !['delivered', 'cancelled'].includes(o.status))
+  const past = orders.filter((o) => ['delivered', 'cancelled'].includes(o.status))
+  const displayed = filter === 'active' ? active : past
   return (
-    <main className="min-h-screen bg-gray-50 pb-24" dir="rtl">
-      <header className="bg-white p-6 shadow-sm sticky top-0 z-40">
-        <h1 className="text-2xl font-bold text-gray-900 mb-4">طلباتي</h1>
-
-        <div className="flex gap-2 bg-gray-100 p-1 rounded-2xl">
-          <button
-            onClick={() => setFilter('active')}
-            className={`flex-1 py-2 rounded-xl font-semibold transition ${
-              filter === 'active'
-                ? 'bg-white text-primary-600 shadow-sm'
-                : 'text-gray-500'
-            }`}
-          >
-            النشطة ({activeOrders.length})
-          </button>
-          <button
-            onClick={() => setFilter('past')}
-            className={`flex-1 py-2 rounded-xl font-semibold transition ${
-              filter === 'past'
-                ? 'bg-white text-primary-600 shadow-sm'
-                : 'text-gray-500'
-            }`}
-          >
-            السابقة ({pastOrders.length})
-          </button>
+    <main className="min-h-screen bg-gray-50 pb-32 relative" dir="rtl">
+      <header className="bg-white/80 backdrop-blur-xl p-6 shadow-soft sticky top-0 z-40 rounded-b-4xl border-b border-gray-100">
+        <h1 className="text-3xl font-black text-gray-900 mb-5">📋 طلباتي</h1>
+        <div className="flex gap-2 p-1.5 bg-gray-100 rounded-3xl">
+          <button onClick={() => setFilter('active')} className={`flex-1 py-3 rounded-2xl font-black transition-all duration-300 ${filter === 'active' ? 'bg-gradient-primary text-white shadow-primary' : 'text-gray-500'}`}>النشطة ({active.length})</button>
+          <button onClick={() => setFilter('past')} className={`flex-1 py-3 rounded-2xl font-black transition-all duration-300 ${filter === 'past' ? 'bg-gradient-primary text-white shadow-primary' : 'text-gray-500'}`}>السابقة ({past.length})</button>
         </div>
       </header>
-
       <section className="p-6 space-y-4">
-        {loading ? (
-          <div className="text-center py-12">
-            <p className="text-gray-500">جاري التحميل...</p>
+        {loading ? <div className="text-center py-20"><div className="w-20 h-20 mx-auto rounded-4xl bg-gradient-primary animate-pulse-glow" /></div>
+        : displayed.length === 0 ? (
+          <div className="bg-white p-12 rounded-3xl text-center shadow-soft animate-fade-in">
+            <div className="text-8xl mb-5">📭</div>
+            <h3 className="font-black text-gray-900 mb-2 text-xl">{filter === 'active' ? 'لا توجد طلبات نشطة' : 'لا توجد طلبات سابقة'}</h3>
+            <p className="text-sm text-gray-500 mb-6 font-semibold">{filter === 'active' ? 'ابدأ بطلب توصيل جديد' : 'طلباتك السابقة ستظهر هنا'}</p>
+            {filter === 'active' && <a href="/orders/new" className="inline-block px-8 py-4 bg-gradient-primary text-white rounded-3xl font-black shadow-primary hover:scale-105 transition-all duration-300">طلب جديد →</a>}
           </div>
-        ) : displayed.length === 0 ? (
-          <div className="bg-white p-12 rounded-2xl text-center">
-            <div className="text-6xl mb-4">📭</div>
-            <h3 className="font-bold text-gray-900 mb-2">
-              {filter === 'active' ? 'لا توجد طلبات نشطة' : 'لا توجد طلبات سابقة'}
-            </h3>
-            <p className="text-sm text-gray-500 mb-6">
-              {filter === 'active'
-                ? 'ابدأ بطلب توصيل جديد'
-                : 'طلباتك السابقة ستظهر هنا'}
-            </p>
-            {filter === 'active' && (
-              <a
-                href="/orders/new"
-                className="inline-block px-6 py-3 bg-primary-600 text-white rounded-2xl font-semibold hover:bg-primary-700 transition"
-              >
-                طلب جديد
-              </a>
-            )}
-          </div>
-        ) : (
-          displayed.map((order) => <OrderCard key={order.id} order={order} />)
-        )}
+        ) : displayed.map((order) => <OrderCard key={order.id} order={order} />)}
       </section>
-
       <BottomNav />
     </main>
   )
