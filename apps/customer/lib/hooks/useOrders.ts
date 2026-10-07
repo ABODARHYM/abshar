@@ -21,22 +21,24 @@ export interface CreateOrderInput {
   payment_method: PaymentMethod
 }
 
-/**
- * إنشاء طلب جديد
- */
 export async function createOrder(
   customerId: string,
   input: CreateOrderInput
 ): Promise<Order> {
   const supabase = createClient()
 
+  const userId = typeof window !== 'undefined'
+    ? localStorage.getItem('abshar_user_id')
+    : null
+
+  const finalCustomerId = userId || customerId
   const orderNumber = 'ABS-' + Date.now().toString().slice(-8)
 
   const { data, error } = await supabase
     .from('orders')
     .insert({
       order_number: orderNumber,
-      customer_id: customerId,
+      customer_id: finalCustomerId,
       ...input,
       status: 'pending',
       payment_status: 'pending',
@@ -48,25 +50,25 @@ export async function createOrder(
   return data as Order
 }
 
-/**
- * جلب طلبات المستخدم
- */
 export async function getUserOrders(customerId: string): Promise<Order[]> {
   const supabase = createClient()
+
+  const userId = typeof window !== 'undefined'
+    ? localStorage.getItem('abshar_user_id')
+    : null
+
+  const finalCustomerId = userId || customerId
 
   const { data, error } = await supabase
     .from('orders')
     .select('*')
-    .eq('customer_id', customerId)
+    .eq('customer_id', finalCustomerId)
     .order('created_at', { ascending: false })
 
   if (error) throw error
   return (data || []) as Order[]
 }
 
-/**
- * جلب تفاصيل طلب
- */
 export async function getOrderById(orderId: string): Promise<Order | null> {
   const supabase = createClient()
 
@@ -80,9 +82,6 @@ export async function getOrderById(orderId: string): Promise<Order | null> {
   return data as Order
 }
 
-/**
- * Hook لمتابعة طلب معين
- */
 export function useOrder(orderId: string) {
   const [order, setOrder] = useState<Order | null>(null)
   const [loading, setLoading] = useState(true)
@@ -103,7 +102,6 @@ export function useOrder(orderId: string) {
         setLoading(false)
       })
 
-    // الاشتراك في التحديثات الحية
     const channel = supabase
       .channel(`order-${orderId}`)
       .on(
