@@ -6,9 +6,19 @@ import { createClient } from '@/lib/supabase/client'
 import { formatPrice } from '@/lib/utils/pricing'
 import BottomNav from '@/components/BottomNav'
 
+interface Transaction {
+  id: string
+  amount: number
+  type: string
+  description: string
+  created_at: string
+  status: string
+}
+
 export default function WalletPage() {
   const router = useRouter()
   const [balance, setBalance] = useState(0)
+  const [transactions, setTransactions] = useState<Transaction[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -19,11 +29,22 @@ export default function WalletPage() {
 
       const { data: driver } = await supabase
         .from('drivers')
-        .select('wallet_balance')
+        .select('id, wallet_balance')
         .eq('user_id', user.id)
         .single()
 
       setBalance(Number(driver?.wallet_balance || 0))
+
+      if (driver) {
+        const { data: txs } = await supabase
+          .from('wallet_transactions')
+          .select('*')
+          .eq('driver_id', driver.id)
+          .order('created_at', { ascending: false })
+          .limit(50)
+
+        setTransactions((txs || []) as Transaction[])
+      }
       setLoading(false)
     }
     load()
@@ -57,10 +78,29 @@ export default function WalletPage() {
 
       <section className="p-6">
         <h2 className="font-black text-gray-900 mb-4 text-xl">📊 سجل المعاملات</h2>
-        <div className="bg-white rounded-3xl shadow-soft p-8 text-center">
-          <div className="text-5xl mb-3">📭</div>
-          <p className="text-gray-500 font-semibold">لا توجد معاملات بعد</p>
-        </div>
+
+        {transactions.length === 0 ? (
+          <div className="bg-white rounded-3xl shadow-soft p-8 text-center">
+            <div className="text-5xl mb-3">📭</div>
+            <p className="text-gray-500 font-semibold">لا توجد معاملات بعد</p>
+          </div>
+        ) : (
+          <div className="bg-white rounded-3xl shadow-soft divide-y divide-gray-100">
+            {transactions.map((tx) => (
+              <div key={tx.id} className="p-5 flex justify-between items-center">
+                <div>
+                  <p className="font-black text-gray-900">{tx.description}</p>
+                  <p className="text-xs text-gray-500 font-semibold">
+                    {new Date(tx.created_at).toLocaleString('ar-YE')}
+                  </p>
+                </div>
+                <span className={`font-black text-lg ${tx.type === 'earning' ? 'text-green-600' : tx.type === 'withdrawal' ? 'text-red-600' : 'text-primary-600'}`}>
+                  {tx.type === 'earning' ? '+' : tx.type === 'withdrawal' ? '-' : ''}{formatPrice(tx.amount)}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
       </section>
 
       <BottomNav />

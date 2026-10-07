@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import BottomNav from '@/components/BottomNav'
+import NotificationBell from '@/components/NotificationBell'
 
 const quickActions = [
   { href: '/orders/new', icon: '📦', label: 'طلب جديد', sub: 'اطلب توصيل الآن', gradient: 'from-purple-500 to-pink-500' },
@@ -71,9 +72,12 @@ export default function DashboardPage() {
               <p className="text-sm opacity-90 mb-1 font-semibold">مرحباً بك 👋</p>
               <h1 className="text-3xl font-black">{user.name}</h1>
             </div>
-            <button onClick={handleLogout} className="px-4 py-2 bg-white/20 hover:bg-white/30 rounded-2xl text-sm font-bold transition backdrop-blur border border-white/20">
-              خروج
-            </button>
+            <div className="flex gap-2">
+              <NotificationBell />
+              <button onClick={handleLogout} className="px-4 py-2 bg-white/20 hover:bg-white/30 rounded-2xl text-sm font-bold transition backdrop-blur border border-white/20">
+                خروج
+              </button>
+            </div>
           </div>
           <div className="glass rounded-3xl p-5 border border-white/30">
             <div className="flex items-center justify-between">

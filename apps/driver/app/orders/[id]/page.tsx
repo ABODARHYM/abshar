@@ -18,6 +18,16 @@ const nextStatus: Partial<Record<OrderStatus, { to: OrderStatus; label: string; 
   on_the_way: { to: 'delivered', label: '✅ تم التسليم', color: 'bg-green-600' },
 }
 
+const notificationMessages: Record<OrderStatus, string> = {
+  pending: 'تم إنشاء طلبك',
+  accepted: 'تم قبول طلبك',
+  heading_to_pickup: 'المندوب في الطريق للاستلام',
+  picked_up: 'تم استلام طلبك بنجاح',
+  on_the_way: 'طلبك في الطريق إليك',
+  delivered: 'تم توصيل طلبك بنجاح ✅',
+  cancelled: 'تم إلغاء الطلب',
+}
+
 export default function OrderDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
   const router = useRouter()
@@ -59,6 +69,17 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
       const { error } = await supabase.from('orders').update(update).eq('id', order.id)
       if (error) throw error
 
+      // إشعار العميل
+      await supabase.from('notifications').insert({
+        user_id: order.customer_id,
+        title: `تحديث الطلب ${order.order_number}`,
+        body: notificationMessages[next.to],
+        type: 'order',
+        data: { order_id: order.id, status: next.to },
+        is_read: false,
+      })
+
+      // إذا تم التسليم، أضف المبلغ للمحفظة
       if (next.to === 'delivered') {
         const { data: { user } } = await supabase.auth.getUser()
         if (user) {
@@ -73,6 +94,15 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
               wallet_balance: Number(driver.wallet_balance) + Number(order.total_price),
               total_orders: (driver.total_orders || 0) + 1,
             }).eq('id', driver.id)
+
+            await supabase.from('wallet_transactions').insert({
+              driver_id: driver.id,
+              amount: Number(order.total_price),
+              type: 'earning',
+              status: 'completed',
+              description: `أرباح الطلب ${order.order_number}`,
+              order_id: order.id,
+            })
           }
         }
       }

@@ -48,7 +48,7 @@ export default function NewOrderPage() {
 
       const orderNumber = 'ABS-' + Date.now().toString().slice(-8)
 
-      const { error: insertError } = await supabase.from('orders').insert({
+      const { data: orderData, error: insertError } = await supabase.from('orders').insert({
         order_number: orderNumber,
         customer_id: user.id,
         order_type: orderType,
@@ -67,9 +67,38 @@ export default function NewOrderPage() {
         payment_method: paymentMethod,
         status: 'pending',
         payment_status: 'pending',
-      })
+      }).select().single()
 
       if (insertError) throw insertError
+
+      // إشعار كل المندوبين المتصلين
+      const { data: drivers } = await supabase
+        .from('drivers')
+        .select('user_id')
+        .eq('is_online', true)
+
+      if (drivers && drivers.length > 0) {
+        const notifications = drivers.map((d) => ({
+          user_id: d.user_id,
+          title: `طلب جديد ${orderNumber}`,
+          body: `طلب ${ORDER_TYPE_LABELS[orderType]} من ${pickupAddress || 'موقع'}`,
+          type: 'order',
+          data: { order_id: orderData.id, order_number: orderNumber },
+          is_read: false,
+        }))
+
+        await supabase.from('notifications').insert(notifications)
+      }
+
+      // إشعار العميل بتأكيد الطلب
+      await supabase.from('notifications').insert({
+        user_id: user.id,
+        title: `تم استلام طلبك ${orderNumber}`,
+        body: 'جاري البحث عن مندوب...',
+        type: 'order',
+        data: { order_id: orderData.id },
+        is_read: false,
+      })
 
       router.push('/orders')
     } catch (err) {

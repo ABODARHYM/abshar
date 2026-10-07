@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import { formatPrice } from '@/lib/utils/pricing'
 import { ORDER_TYPE_ICONS, ORDER_TYPE_LABELS, type Order } from '@/lib/types/order'
 import BottomNav from '@/components/BottomNav'
+import NotificationBell from '@/components/NotificationBell'
 
 export default function DashboardPage() {
   const router = useRouter()
@@ -16,12 +17,15 @@ export default function DashboardPage() {
   const [accepting, setAccepting] = useState<string | null>(null)
   const [wallet, setWallet] = useState(0)
   const [driverId, setDriverId] = useState<string | null>(null)
+  const [driverUserId, setDriverUserId] = useState<string | null>(null)
 
   useEffect(() => {
     async function load() {
       const supabase = createClient()
       const { data: { user: authUser } } = await supabase.auth.getUser()
       if (!authUser) { router.push('/login'); return }
+
+      setDriverUserId(authUser.id)
 
       const { data: profile } = await supabase
         .from('profiles')
@@ -48,7 +52,7 @@ export default function DashboardPage() {
   }, [router])
 
   useEffect(() => {
-    if (!isOnline) return
+    if (!isOnline) { setOrders([]); return }
 
     const supabase = createClient()
     const load = async () => {
@@ -86,12 +90,31 @@ export default function DashboardPage() {
 
     try {
       const supabase = createClient()
+      const { data: order } = await supabase
+        .from('orders')
+        .select('*')
+        .eq('id', orderId)
+        .single()
+
       const { error } = await supabase
         .from('orders')
         .update({ driver_id: driverId, status: 'accepted' })
         .eq('id', orderId)
 
       if (error) throw error
+
+      // إشعار العميل
+      if (order) {
+        await supabase.from('notifications').insert({
+          user_id: order.customer_id,
+          title: `تم قبول طلبك ${order.order_number}`,
+          body: 'المندوب في الطريق للاستلام',
+          type: 'order',
+          data: { order_id: orderId },
+          is_read: false,
+        })
+      }
+
       router.push(`/orders/${orderId}`)
     } catch (err) {
       alert('حدث خطأ')
@@ -120,12 +143,15 @@ export default function DashboardPage() {
               <p className="text-sm opacity-90 mb-1 font-semibold">مرحباً 👋</p>
               <h1 className="text-2xl font-black">{user.name}</h1>
             </div>
-            <button
-              onClick={toggleOnline}
-              className={`px-5 py-3 rounded-2xl font-bold text-sm transition backdrop-blur border border-white/20 ${isOnline ? 'bg-green-500 shadow-lg' : 'bg-white/20'}`}
-            >
-              {isOnline ? '🟢 متصل' : '⚪ غير متصل'}
-            </button>
+            <div className="flex gap-2">
+              <NotificationBell />
+              <button
+                onClick={toggleOnline}
+                className={`px-5 py-3 rounded-2xl font-bold text-sm transition backdrop-blur border border-white/20 ${isOnline ? 'bg-green-500 shadow-lg' : 'bg-white/20'}`}
+              >
+                {isOnline ? '🟢 متصل' : '⚪ غير متصل'}
+              </button>
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="glass rounded-3xl p-4 border border-white/30">

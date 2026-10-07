@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useStats } from '@/lib/hooks/useAdminData'
 import { formatPrice } from '@/lib/utils/format'
 import Sidebar from '@/components/Sidebar'
+import NotificationBell from '@/components/NotificationBell'
 
 export default function DashboardPage() {
   const router = useRouter()
@@ -28,9 +29,12 @@ export default function DashboardPage() {
     <div className="min-h-screen bg-gray-50" dir="rtl">
       <Sidebar />
       <main className="mr-64 p-8">
-        <header className="mb-8">
-          <h1 className="text-4xl font-black text-gray-900">📊 لوحة القيادة</h1>
-          <p className="text-gray-500 mt-2 font-semibold">نظرة عامة على أداء التطبيق</p>
+        <header className="mb-8 flex justify-between items-center">
+          <div>
+            <h1 className="text-4xl font-black text-gray-900">📊 لوحة القيادة</h1>
+            <p className="text-gray-500 mt-2 font-semibold">نظرة عامة على أداء التطبيق</p>
+          </div>
+          <NotificationBell />
         </header>
 
         {loading ? (
@@ -91,11 +95,11 @@ export default function DashboardPage() {
                   نشطة
                 </span>
               </div>
-              <div className="flex items-center justify-between p-4 bg-amber-50 rounded-2xl border-2 border-amber-100">
+              <div className="flex items-center justify-between p-4 bg-green-50 rounded-2xl border-2 border-green-100">
                 <span className="text-gray-700 font-bold">الإشعارات</span>
-                <span className="flex items-center gap-2 text-amber-600 font-black text-sm">
-                  <span className="w-3 h-3 bg-amber-500 rounded-full"></span>
-                  قيد الإعداد
+                <span className="flex items-center gap-2 text-green-600 font-black text-sm">
+                  <span className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></span>
+                  نشطة
                 </span>
               </div>
             </div>
