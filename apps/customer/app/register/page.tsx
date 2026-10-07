@@ -1,16 +1,37 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 
 export default function RegisterPage() {
-  const [form, setForm] = useState({ name: '', phone: '', email: '' })
+  const router = useRouter()
+  const [form, setForm] = useState({ name: '', phone: '' })
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
-    await new Promise((r) => setTimeout(r, 1000))
-    setLoading(false)
+    setError('')
+
+    const formattedPhone = form.phone.startsWith('+')
+      ? form.phone
+      : '+967' + form.phone.replace(/^0/, '')
+
+    try {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('abshar_phone', formattedPhone)
+        localStorage.setItem('abshar_name', form.name)
+        localStorage.setItem('abshar_logged_in', 'true')
+      }
+
+      router.push('/dashboard')
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'حدث خطأ'
+      setError(message)
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -32,41 +53,48 @@ export default function RegisterPage() {
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
               required
+              minLength={3}
               className="w-full px-4 py-3 border-2 border-gray-200 rounded-2xl focus:border-primary-500 focus:outline-none"
             />
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">رقم الجوال</label>
-            <input
-              type="tel"
-              value={form.phone}
-              onChange={(e) => setForm({ ...form, phone: e.target.value })}
-              required
-              className="w-full px-4 py-3 border-2 border-gray-200 rounded-2xl focus:border-primary-500 focus:outline-none"
-              dir="ltr"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">البريد (اختياري)</label>
-            <input
-              type="email"
-              value={form.email}
-              onChange={(e) => setForm({ ...form, email: e.target.value })}
-              className="w-full px-4 py-3 border-2 border-gray-200 rounded-2xl focus:border-primary-500 focus:outline-none"
-              dir="ltr"
-            />
+            <div className="flex" dir="ltr">
+              <span className="inline-flex items-center px-4 rounded-l-2xl border-2 border-r-0 border-gray-200 bg-gray-50 text-gray-600 font-medium">
+                +967
+              </span>
+              <input
+                type="tel"
+                value={form.phone}
+                onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                placeholder="7XX XXX XXX"
+                required
+                className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-r-2xl focus:border-primary-500 focus:outline-none"
+              />
+            </div>
           </div>
 
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || form.phone.length < 9}
             className="w-full py-3 bg-primary-600 text-white rounded-2xl font-semibold hover:bg-primary-700 transition disabled:opacity-50"
           >
             {loading ? 'جاري الإنشاء...' : 'إنشاء الحساب'}
           </button>
+
+          {error && (
+            <p className="text-center text-sm text-red-600 bg-red-50 py-3 rounded-xl">
+              {error}
+            </p>
+          )}
         </form>
+
+        <div className="mt-6 p-4 bg-yellow-50 border-2 border-yellow-200 rounded-2xl">
+          <p className="text-xs text-yellow-800 text-center">
+            ⚠️ وضع التطوير: الدخول بدون تحقق
+          </p>
+        </div>
 
         <p className="text-center text-sm text-gray-500 mt-6">
           لديك حساب بالفعل؟{' '}
