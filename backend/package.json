@@ -11,7 +11,7 @@
     "build": "nest build",
     "start": "node --env-file=.env dist/main.js",
     "start:dev": "node --env-file=.env -r ts-node/register src/main.ts",
-    "start:prod": "node dist/main.js",
+    "start:prod": "node dist/src/main.js",
     "migrate": "node --env-file=.env -r ts-node/register src/database/migrate.ts up",
     "migrate:status": "node --env-file=.env -r ts-node/register src/database/migrate.ts status",
     "migrate:prod": "node --env-file=.env dist/database/migrate.js up",
