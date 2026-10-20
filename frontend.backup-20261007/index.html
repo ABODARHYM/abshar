@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#0f172a">
+  <meta name="description" content="أبشر بي - منصة الطلب والتوصيل الذكية">
+  <title>أبشر بي | ABSHER BI</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+
+<body>
+
+  <div id="app">
+
+    <!-- شاشة البداية -->
+    <section id="welcomePage" class="page active">
+
+      <div class="background-glow glow-one"></div>
+      <div class="background-glow glow-two"></div>
+
+      <div class="welcome-card">
+
+        <div class="brand">
+          <div class="brand-icon">أ</div>
+
+          <div>
+            <h1>أبشر بي</h1>
+            <span>ABSHER BI</span>
+          </div>
+        </div>
+
+        <div class="welcome-content">
+
+          <span class="badge">
+            منصة ذكية للتوصيل
+          </span>
+
+          <h2>
+            اطلبها،
+            <span>وأبشر بي</span>
+          </h2>
+
+          <p>
+            منصة تجمع العملاء والمتاجر والمندوبين
+            في تجربة طلب وتوصيل سهلة وسريعة.
+          </p>
+
+        </div>
+
+        <div class="welcome-actions">
+
+          <button
+            id="goLogin"
+            type="button"
+            class="btn btn-primary"
+          >
+            تسجيل الدخول
+          </button>
+
+          <button
+            id="goRegister"
+            type="button"
+            class="btn btn-secondary"
+          >
+            إنشاء حساب جديد
+          </button>
+
+        </div>
+
+      </div>
+
+    </section>
+
+
+    <!-- تسجيل الدخول -->
+    <section id="loginPage" class="page hidden">
+
+      <div class="auth-container">
+
+        <button
+          id="backToWelcomeFromLogin"
+          type="button"
+          class="back-button"
+        >
+          ← العودة
+        </button>
+
+        <div class="auth-header">
+
+          <div class="brand-icon small">
+            أ
+          </div>
+
+          <h2>
+            مرحباً بعودتك
+          </h2>
+
+          <p>
+            سجّل دخولك إلى حساب أبشر بي
+          </p>
+
+        </div>
+
+        <form
+          id="loginForm"
+          class="auth-form"
+        >
+
+          <label for="loginIdentifier">
+            البريد الإلكتروني أو رقم الهاتف
+          </label>
+
+          <input
+            id="loginIdentifier"
+            type="text"
+            placeholder="example@email.com أو 77xxxxxxx"
+            autocomplete="username"
+            required
+          >
+
+          <label for="loginPassword">
+            كلمة المرور
+          </label>
+
+          <div class="password-field">
+
+            <input
+              id="loginPassword"
+              type="password"
+              placeholder="أدخل كلمة المرور"
+              autocomplete="current-password"
+              required
+            >
+
+            <button
+              type="button"
+              class="password-toggle"
+              data-target="loginPassword"
+            >
+              👁
+            </button>
+
+          </div>
+
+          <button
+            type="submit"
+            class="btn btn-primary full"
+          >
+            <span>
+              تسجيل الدخول
+            </span>
+          </button>
+
+          <div
+            id="loginMessage"
+            class="form-message hidden"
+          ></div>
+
+        </form>
+
+        <div class="auth-footer">
+
+          ليس لديك حساب؟
+
+          <button
+            id="goRegisterFromLogin"
+            type="button"
+          >
+            إنشاء حساب
+          </button>
+
+        </div>
+
+      </div>
+
+    </section>
+
+
+    <!-- إنشاء الحساب -->
+    <section id="registerPage" class="page hidden">
+
+      <div class="auth-container">
+
+        <button
+          id="backToWelcomeFromRegister"
+          type="button"
+          class="back-button"
+        >
+          ← العودة
+        </button>
+
+        <div class="auth-header">
+
+          <div class="brand-icon small">
+            أ
+          </div>
+
+          <h2>
+            إنشاء حساب
+          </h2>
+
+          <p>
+            أنشئ حسابك وابدأ استخدام أبشر بي
+          </p>
+
+        </div>
+
+        <form
+          id="registerForm"
+          class="auth-form"
+        >
+
+          <label for="registerFullName">
+            الاسم الكامل
+          </label>
+
+          <input
+            id="registerFullName"
+            type="text"
+            placeholder="مثال: محمد أحمد"
+            autocomplete="name"
+            required
+          >
+
+          <label for="registerEmail">
+            البريد الإلكتروني
+          </label>
+
+          <input
+            id="registerEmail"
+            type="email"
+            placeholder="example@email.com"
+            autocomplete="email"
+            required
+          >
+
+          <label for="registerPhone">
+            رقم الهاتف
+          </label>
+
+          <input
+            id="registerPhone"
+            type="tel"
+            placeholder="77xxxxxxx"
+            autocomplete="tel"
+            required
+          >
+
+          <label for="registerPassword">
+            كلمة المرور
+          </label>
+
+          <div class="password-field">
+
+            <input
+              id="registerPassword"
+              type="password"
+              placeholder="8 أحرف على الأقل"
+              autocomplete="new-password"
+              required
+            >
+
+            <button
+              type="button"
+              class="password-toggle"
+              data-target="registerPassword"
+            >
+              👁
+            </button>
+
+          </div>
+
+          <button
+            type="submit"
+            class="btn btn-primary full"
+          >
+            إنشاء الحساب
+          </button>
+
+          <div
+            id="registerMessage"
+            class="form-message hidden"
+          ></div>
+
+        </form>
+
+        <div class="auth-footer">
+
+          لديك حساب بالفعل؟
+
+          <button
+            id="goLoginFromRegister"
+            type="button"
+          >
+            تسجيل الدخول
+          </button>
+
+        </div>
+
+      </div>
+
+    </section>
+
+
+    <!-- الصفحة الرئيسية -->
+    <section
+      id="homePage"
+      class="page hidden"
+    >
+
+      <header class="topbar">
+
+        <div class="topbar-brand">
+
+          <div class="brand-icon tiny">
+            أ
+          </div>
+
+          <div>
+
+            <strong>
+              أبشر بي
+            </strong>
+
+            <small>
+              ABSHER BI
+            </small>
+
+          </div>
+
+        </div>
+
+        <button
+          id="logoutButton"
+          type="button"
+          class="icon-button"
+          title="تسجيل الخروج"
+        >
+          ⇥
+        </button>
+
+      </header>
+
+
+      <main class="home-content">
+
+        <!-- الترحيب -->
+        <section class="hero-card">
+
+          <div>
+
+            <span class="hero-label">
+              مرحباً بك 👋
+            </span>
+
+            <h1 class="user-name">
+              ...
+            </h1>
+
+            <p>
+              ماذا تريد أن تطلب اليوم؟
+            </p>
+
+          </div>
+
+          <div class="hero-symbol">
+            أ
+          </div>
+
+        </section>
+
+
+        <!-- البحث -->
+        <section class="search-box">
+
+          <span>
+            ⌕
+          </span>
+
+          <input
+            type="search"
+            placeholder="ابحث عن متجر أو منتج..."
+            id="globalSearch"
+          >
+
+        </section>
+
+
+        <!-- الخدمات -->
+        <section class="section">
+
+          <div class="section-header">
+
+            <h2>
+              الخدمات
+            </h2>
+
+          </div>
+
+          <div class="service-grid">
+
+            <button
+              type="button"
+              class="service-card"
+              data-service="orders"
+            >
+
+              <span class="service-icon">
+                🛍️
+              </span>
+
+              <strong>
+                طلباتي
+              </strong>
+
+              <small>
+                تابع طلباتك
+              </small>
+
+            </button>
+
+
+            <button
+              type="button"
+              class="service-card"
+              data-service="stores"
+            >
+
+              <span class="service-icon">
+                🏪
+              </span>
+
+              <strong>
+                المتاجر
+              </strong>
+
+              <small>
+                اكتشف المتاجر
+              </small>
+
+            </button>
+
+
+            <button
+              type="button"
+              class="service-card"
+              data-service="favorites"
+            >
+
+              <span class="service-icon">
+                ♥
+              </span>
+
+              <strong>
+                المفضلة
+              </strong>
+
+              <small>
+                عناصر محفوظة
+              </small>
+
+            </button>
+
+
+            <button
+              type="button"
+              class="service-card"
+              data-service="addresses"
+            >
+
+              <span class="service-icon">
+                📍
+              </span>
+
+              <strong>
+                عناويني
+              </strong>
+
+              <small>
+                إدارة العناوين
+              </small>
+
+            </button>
+
+          </div>
+
+        </section>
+
+
+        <!-- حسابي -->
+        <section class="section">
+
+          <div class="section-header">
+
+            <h2>
+              حسابي
+            </h2>
+
+          </div>
+
+          <div class="profile-card">
+
+            <div
+              class="profile-avatar"
+              id="profileAvatar"
+            >
+              أ
+            </div>
+
+            <div class="profile-info">
+
+              <strong class="user-name">
+                ...
+              </strong>
+
+              <span class="user-email">
+                ...
+              </span>
+
+              <small class="user-role">
+                ...
+              </small>
+
+              <small class="user-phone">
+                ...
+              </small>
+
+              <small class="user-status">
+                ...
+              </small>
+
+            </div>
+
+          </div>
+
+        </section>
+
+
+        <!-- الصلاحيات -->
+        <section class="section">
+
+          <div class="section-header">
+
+            <h2>
+              الصلاحيات
+            </h2>
+
+          </div>
+
+          <div
+            id="permissionsList"
+            class="permissions-list"
+          >
+            جاري التحميل...
+          </div>
+
+        </section>
+
+      </main>
+
+
+      <!-- التنقل السفلي -->
+      <nav class="bottom-nav">
+
+        <button
+          type="button"
+          class="nav-item active"
+          data-page="home"
+        >
+
+          <span>
+            ⌂
+          </span>
+
+          <small>
+            الرئيسية
+          </small>
+
+        </button>
+
+
+        <button
+          type="button"
+          class="nav-item"
+          data-page="stores"
+        >
+
+          <span>
+            🏪
+          </span>
+
+          <small>
+            المتاجر
+          </small>
+
+        </button>
+
+
+        <button
+          type="button"
+          class="nav-item"
+          data-page="orders"
+        >
+
+          <span>
+            🛍️
+          </span>
+
+          <small>
+            طلباتي
+          </small>
+
+        </button>
+
+
+        <button
+          type="button"
+          class="nav-item"
+          data-page="favorites"
+        >
+
+          <span>
+            ♥
+          </span>
+
+          <small>
+            المفضلة
+          </small>
+
+        </button>
+
+      </nav>
+
+    </section>
+
+
+    <!-- شاشة التحميل -->
+    <div
+      id="loadingOverlay"
+      class="loading-overlay hidden"
+    >
+
+      <div class="loading-card">
+
+        <div class="loader"></div>
+
+        <p id="loadingText">
+          جاري التحميل...
+        </p>
+
+      </div>
+
+    </div>
+
+
+    <!-- Toast -->
+    <div
+      id="toast"
+      class="toast"
+    ></div>
+
+  </div>
+
+
+  <script src="js/app.js"></script>
+
+</body>
+</html>

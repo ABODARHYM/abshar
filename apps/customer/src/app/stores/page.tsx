@@ -1,0 +1,203 @@
+
+'use client';
+
+import Link from 'next/link';
+import { useEffect, useState, useMemo, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
+import TopBar from '@/components/TopBar';
+import BottomNav from '@/components/BottomNav';
+import { StoreListSkeleton } from '@/components/Skeleton';
+
+interface Store {
+  id: string;
+  nameAr: string;
+  logoUrl: string | null;
+  rating: number;
+  ratingCount: number;
+  deliveryFee: number;
+  avgPrepTime: number;
+  isOpen: boolean;
+  descriptionAr: string | null;
+  minOrder: number | null;
+}
+
+type TabKey = 'all' | 'open' | 'top-rated' | 'fast';
+
+const TABS: { key: TabKey; label: string }[] = [
+  { key: 'all', label: 'الكل' },
+  { key: 'open', label: 'المفتوحة' },
+  { key: 'top-rated', label: 'الأعلى تقييماً' },
+  { key: 'fast', label: 'الأسرع توصيلاً' },
+];
+
+function StoresContent() {
+  const searchParams = useSearchParams();
+  const categoryId = searchParams.get('categoryId');
+  const searchQuery = searchParams.get('search') || '';
+
+  const [stores, setStores] = useState<Store[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<TabKey>('all');
+  const [query, setQuery] = useState(searchQuery);
+
+  useEffect(() => {
+    setLoading(true);
+    const qs = new URLSearchParams();
+    if (categoryId) qs.set('categoryId', categoryId);
+
+    fetch(`/api/v1/stores${qs.toString() ? '?' + qs.toString() : ''}`)
+      .then((r) => (r.ok ? r.json() : { items: [] }))
+      .then((data) => {
+        const list = Array.isArray(data) ? data : data.items || [];
+        setStores(list);
+      })
+      .catch(() => setStores([]))
+      .finally(() => setLoading(false));
+  }, [categoryId]);
+
+  const filtered = useMemo(() => {
+    let list = [...stores];
+
+    if (query.trim()) {
+      const q = query.trim().toLowerCase();
+      list = list.filter((s) => s.nameAr.toLowerCase().includes(q));
+    }
+
+    switch (activeTab) {
+      case 'open':
+        list = list.filter((s) => s.isOpen);
+        break;
+      case 'top-rated':
+        list.sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0));
+        break;
+      case 'fast':
+        list.sort((a, b) => (a.avgPrepTime ?? 999) - (b.avgPrepTime ?? 999));
+        break;
+    }
+
+    return list;
+  }, [stores, activeTab, query]);
+
+  return (
+    <>
+      {/* Search input */}
+      <div className="relative animate-fade">
+        <div className="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none text-[var(--text-muted)]">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="11" cy="11" r="8" />
+            <path d="m21 21-4.3-4.3" />
+          </svg>
+        </div>
+        <input
+          type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="ابحث عن متجر..."
+          className="input pr-12"
+        />
+      </div>
+
+      {/* Tabs */}
+      <div className="h-scroll no-scrollbar -mx-4 px-4 animate-fade delay-100">
+        {TABS.map((tab) => {
+          const active = activeTab === tab.key;
+          return (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className={`px-4 py-2 rounded-full text-sm font-bold whitespace-nowrap border transition-all ${
+                active
+                  ? 'bg-[var(--brand-red)] text-white border-[var(--brand-red)]'
+                  : 'bg-[var(--bg-card)] text-[var(--text-secondary)] border-[var(--bg-border)]'
+              }`}
+            >
+              {tab.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Results */}
+      {loading ? (
+        <StoreListSkeleton count={5} />
+      ) : filtered.length === 0 ? (
+        <div className="card text-center py-12 animate-fade">
+          <div className="text-5xl mb-4">🔍</div>
+          <h3 className="font-black text-lg mb-2">لا توجد نتائج</h3>
+          <p className="text-[var(--text-muted)] text-sm mb-4">
+            {query ? 'جرّب البحث بكلمات أخرى' : 'لا توجد متاجر في هذه الفئة حالياً'}
+          </p>
+          {query && (
+            <button onClick={() => setQuery('')} className="btn btn-outline btn-sm">
+              مسح البحث
+            </button>
+          )}
+        </div>
+      ) : (
+        <>
+          <p className="text-xs text-[var(--text-muted)] animate-fade">
+            {filtered.length} متجر
+          </p>
+          <div className="space-y-3">
+            {filtered.map((store) => (
+              <Link
+                key={store.id}
+                href={`/stores/${store.id}`}
+                className="block"
+              >
+                <div className="card card-hover flex gap-3 items-center">
+                  <div className="w-20 h-20 rounded-xl bg-[var(--bg-elevated)] flex-shrink-0 overflow-hidden">
+                    {store.logoUrl ? (
+                      <img src={store.logoUrl} alt={store.nameAr} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-3xl">🏪</div>
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <h4 className="font-bold truncate">{store.nameAr}</h4>
+                      {store.isOpen ? (
+                        <span className="badge badge-green text-[10px]">مفتوح</span>
+                      ) : (
+                        <span className="badge badge-gray text-[10px]">مغلق</span>
+                      )}
+                    </div>
+                    {store.descriptionAr && (
+                      <p className="text-xs text-[var(--text-muted)] truncate mb-1">
+                        {store.descriptionAr}
+                      </p>
+                    )}
+                    <div className="flex items-center gap-3 text-xs text-[var(--text-secondary)]">
+                      <span className="flex items-center gap-1">
+                        <span className="text-[var(--brand-gold)]">⭐</span>
+                        <span className="font-bold">{Number(store.rating ?? 5).toFixed(1)}</span>
+                      </span>
+                      {store.avgPrepTime > 0 && <span>⏱️ {store.avgPrepTime} د</span>}
+                      <span>🚚 {store.deliveryFee ? `${store.deliveryFee} ر.ي` : 'مجاني'}</span>
+                    </div>
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </>
+      )}
+    </>
+  );
+}
+
+export default function StoresPage() {
+  return (
+    <div className="app-shell bg-[var(--bg-base)]">
+      <TopBar title="المتاجر" showBack showCart />
+
+      <main className="container-app py-4 space-y-4">
+        <Suspense fallback={<StoreListSkeleton count={5} />}>
+          <StoresContent />
+        </Suspense>
+      </main>
+
+      <BottomNav />
+    </div>
+  );
+}

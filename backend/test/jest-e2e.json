@@ -1,0 +1,14 @@
+{
+  "moduleFileExtensions": ["js", "json", "ts"],
+  "rootDir": "..",
+  "testEnvironment": "node",
+  "testMatch": [
+    "<rootDir>/test/e2e/**/*.spec.ts"
+  ],
+  "transform": {
+    "^.+\\.(t|j)s$": ["ts-jest", { "tsconfig": "test/tsconfig.json" }]
+  },
+  "testTimeout": 60000,
+  "forceExit": true,
+  "detectOpenHandles": true
+}

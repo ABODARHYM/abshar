@@ -1,0 +1,1 @@
+self.__REACT_LOADABLE_MANIFEST="{\"hooks/useOrderNotifications.ts -> socket.io-client\":{\"id\":\"hooks/useOrderNotifications.ts -> socket.io-client\",\"files\":[\"static/chunks/_app-pages-browser_node_modules_socket_io-client_build_esm_index_js.js\"]}}"

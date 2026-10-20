@@ -1,0 +1,11 @@
+node_modules/
+.next/
+dist/
+build/
+*.log
+*.bak
+*.broken
+*.backup
+.backups/
+.env
+.env.local

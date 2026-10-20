@@ -1,0 +1,249 @@
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { ErrorCode } from '../../common/error-codes';
+import { buildPage } from '../../common/pagination.dto';
+import {
+  NotificationRow,
+  NotificationsRepository,
+} from './notifications.repository';
+
+export interface NotificationResponse {
+  id: string;
+  type: string;
+  title: string;
+  body: string;
+  data: any;
+  isRead: boolean;
+  readAt: string | null;
+  createdAt: string;
+}
+
+export interface NotificationListResponse {
+  items: NotificationResponse[];
+  unreadCount: number;
+  meta: { page: number; limit: number; total: number; totalPages: number };
+}
+
+@Injectable()
+export class NotificationsService {
+  constructor(private readonly repo: NotificationsRepository) {}
+
+  async list(
+    userId: string,
+    query: { page: number; limit: number; unreadOnly?: boolean },
+  ): Promise<NotificationListResponse> {
+    const { rows, total, unreadCount } = await this.repo.list(userId, query);
+    const page = buildPage(rows.map((r) => this.toResponse(r)), total, query);
+    return {
+      items: page.items,
+      meta: page.meta,
+      unreadCount,
+    };
+  }
+
+  async markAsRead(userId: string, id: string): Promise<{ status: string }> {
+    const ok = await this.repo.markAsRead(userId, id);
+    if (!ok) {
+      throw new NotFoundException({
+        code: ErrorCode.NotFound,
+        message: 'Notification not found',
+      });
+    }
+    return { status: 'ok' };
+  }
+
+  async markAllAsRead(userId: string): Promise<{ marked: number }> {
+    const n = await this.repo.markAllAsRead(userId);
+    return { marked: n };
+  }
+
+  async remove(userId: string, id: string): Promise<{ status: string }> {
+    const ok = await this.repo.remove(userId, id);
+    if (!ok) {
+      throw new NotFoundException({
+        code: ErrorCode.NotFound,
+        message: 'Notification not found',
+      });
+    }
+    return { status: 'ok' };
+  }
+
+  async getUnreadCount(userId: string): Promise<{ unreadCount: number }> {
+    const n = await this.repo.getUnreadCount(userId);
+    return { unreadCount: n };
+  }
+
+  async notifyOrderCreated(
+    customerId: string,
+    orderNumber: string,
+    storeName: string,
+  ): Promise<void> {
+    await this.repo.create({
+      userId: customerId,
+      type: 'ORDER_CREATED',
+      title: 'تم استلام طلبك',
+      body: 'طلبك ' + orderNumber + ' من ' + storeName + ' قيد المراجعة',
+      data: { orderNumber },
+    });
+  }
+
+  async notifyOrderAccepted(
+    customerId: string,
+    orderNumber: string,
+  ): Promise<void> {
+    await this.repo.create({
+      userId: customerId,
+      type: 'ORDER_ACCEPTED',
+      title: 'تم قبول طلبك',
+      body: 'طلبك ' + orderNumber + ' قيد التحضير',
+      data: { orderNumber },
+    });
+  }
+
+  async notifyOrderReady(
+    customerId: string,
+    orderNumber: string,
+  ): Promise<void> {
+    await this.repo.create({
+      userId: customerId,
+      type: 'ORDER_READY',
+      title: 'طلبك جاهز',
+      body: 'طلبك ' + orderNumber + ' جاهز للاستلام من المتجر',
+      data: { orderNumber },
+    });
+  }
+
+  async notifyDriverAssigned(
+    customerId: string,
+    orderNumber: string,
+  ): Promise<void> {
+    await this.repo.create({
+      userId: customerId,
+      type: 'DRIVER_ASSIGNED',
+      title: 'المندوب في الطريق',
+      body: 'المندوب استلم طلبك ' + orderNumber,
+      data: { orderNumber },
+    });
+  }
+
+  async notifyOrderDelivered(
+    customerId: string,
+    orderNumber: string,
+  ): Promise<void> {
+    await this.repo.create({
+      userId: customerId,
+      type: 'ORDER_DELIVERED',
+      title: 'تم التوصيل',
+      body: 'طلبك ' + orderNumber + ' تم توصيله بنجاح',
+      data: { orderNumber },
+    });
+  }
+
+  async notifyOrderCancelled(
+    customerId: string,
+    orderNumber: string,
+    reason: string,
+  ): Promise<void> {
+    await this.repo.create({
+      userId: customerId,
+      type: 'ORDER_CANCELLED',
+      title: 'تم إلغاء الطلب',
+      body: 'طلبك ' + orderNumber + ' تم إلغاؤه: ' + reason,
+      data: { orderNumber, reason },
+    });
+  }
+
+  async notifyStoreNewOrder(
+    storeOwnerId: string,
+    orderNumber: string,
+    total: number,
+  ): Promise<void> {
+    await this.repo.create({
+      userId: storeOwnerId,
+      type: 'ORDER_CREATED',
+      title: 'طلب جديد',
+      body: 'طلب جديد ' + orderNumber + ' بقيمة ' + total,
+      data: { orderNumber, total },
+    });
+  }
+
+  async notifyDriverNewTask(
+    driverId: string,
+    orderNumber: string,
+    storeName: string,
+    deliveryArea: string,
+    distanceKm: number,
+    expiresInSeconds: number,
+    orderId: string,
+  ): Promise<void> {
+    const distanceText =
+      distanceKm < 9000 ? ' | ' + distanceKm.toFixed(1) + ' كم' : '';
+    await this.repo.create({
+      userId: driverId,
+      type: 'ORDER_READY',
+      title: 'طلب جديد متاح',
+      body: storeName + ' - ' + deliveryArea + distanceText,
+      data: {
+        orderId,
+        orderNumber,
+        storeName,
+        deliveryArea,
+        distanceKm,
+        expiresInSeconds,
+        action: 'available',
+      },
+    });
+  }
+
+  async broadcastOrderReadyToDrivers(
+    storeId: string,
+    orderId: string,
+    orderNumber: string,
+    storeName: string,
+    deliveryArea: string,
+  ): Promise<number> {
+    const drivers = await this.repo.getAvailableDriversForStore(storeId, 20);
+    if (drivers.length === 0) return 0;
+    let sent = 0;
+    for (const d of drivers) {
+      try {
+        await this.repo.create({
+          userId: d.user_id,
+          type: 'ORDER_READY',
+          title: 'طلب جديد متاح',
+          body: 'طلب ' + orderNumber + ' من ' + storeName,
+          data: {
+            orderId,
+            orderNumber,
+            storeName,
+            action: 'available',
+          },
+        });
+        sent++;
+      } catch (err) {
+        // silent
+      }
+    }
+    return sent;
+  }
+
+  async removeOrderReadyNotifications(orderId: string): Promise<number> {
+    try {
+      return await this.repo.deleteByOrderAndType(orderId, 'ORDER_READY');
+    } catch (err) {
+      return 0;
+    }
+  }
+
+  private toResponse(row: NotificationRow): NotificationResponse {
+    return {
+      id: row.id,
+      type: row.type,
+      title: row.title,
+      body: row.body,
+      data: row.data,
+      isRead: row.is_read,
+      readAt: row.read_at ? row.read_at.toISOString() : null,
+      createdAt: row.created_at.toISOString(),
+    };
+  }
+}

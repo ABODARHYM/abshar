@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#22c55e"/>
+      <stop offset="100%" stop-color="#15803d"/>
+    </linearGradient>
+    <linearGradient id="textGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#ecfdf5"/>
+    </linearGradient>
+  </defs>
+
+  <!-- الخلفية -->
+  <rect width="512" height="512" rx="112" fill="#07111f"/>
+  <rect x="32" y="32" width="448" height="448" rx="88" fill="url(#bgGrad)"/>
+
+  <!-- خط علوي زخرفي -->
+  <path d="M100 140 Q256 80 412 140" stroke="rgba(255,255,255,0.25)" stroke-width="4" fill="none"/>
+
+  <!-- حرف أ -->
+  <text x="256" y="360" text-anchor="middle"
+        font-family="Tahoma, Arial, sans-serif"
+        font-size="260" font-weight="900"
+        fill="url(#textGrad)">أ</text>
+
+  <!-- نجمة/شعار صغير في الأسفل -->
+  <circle cx="256" cy="418" r="6" fill="rgba(255,255,255,0.6)"/>
+  <circle cx="230" cy="418" r="4" fill="rgba(255,255,255,0.4)"/>
+  <circle cx="282" cy="418" r="4" fill="rgba(255,255,255,0.4)"/>
+</svg>

@@ -1,0 +1,625 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap');
+
+/* ═══════════════════════════════════════════════════════════
+   ABSHER BI — Lightweight CSS (Performance First)
+   ═══════════════════════════════════════════════════════════ */
+
+:root,
+[data-theme="dark"] {
+  --bg-base: #0a0a0a;
+  --bg-card: #1a1a1a;
+  --bg-card-hover: #222;
+  --bg-input: #1e1e1e;
+  --bg-border: #2a2a2a;
+  --bg-border-strong: #333;
+
+  --brand-red: #e11d48;
+  --brand-red-dark: #be123c;
+  --brand-red-light: #f43f5e;
+
+  --brand-gold: #fbbf24;
+
+  --text-primary: #fafafa;
+  --text-secondary: #a3a3a3;
+  --text-muted: #737373;
+
+  color-scheme: dark;
+}
+
+[data-theme="light"] {
+  --bg-base: #f8fafc;
+  --bg-card: #ffffff;
+  --bg-card-hover: #f1f5f9;
+  --bg-input: #f1f5f9;
+  --bg-border: #e2e8f0;
+  --bg-border-strong: #cbd5e1;
+
+  --brand-red: #e11d48;
+  --brand-red-dark: #be123c;
+  --brand-red-light: #f43f5e;
+
+  --brand-gold: #f59e0b;
+
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #94a3b8;
+
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  font-family: 'Cairo', system-ui, sans-serif;
+  background: var(--bg-base);
+  color: var(--text-primary);
+  line-height: 1.6;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ═══ Buttons — بلا GPU ops ═══ */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 20px;
+  font-family: 'Cairo', sans-serif;
+  font-weight: 700;
+  font-size: 15px;
+  border-radius: 12px;
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.15s, opacity 0.15s;
+  text-decoration: none;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.btn:active:not(:disabled) { opacity: 0.85; }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.btn-primary {
+  background: var(--brand-red);
+  color: white;
+}
+
+.btn-gold {
+  background: var(--brand-gold);
+  color: #0a0a0a;
+}
+
+.btn-outline {
+  background: transparent;
+  color: var(--text-primary);
+  border: 1.5px solid var(--bg-border-strong);
+}
+
+.btn-ghost {
+  background: var(--bg-card);
+  color: var(--text-primary);
+  border: 1px solid var(--bg-border);
+}
+
+.btn-lg { padding: 16px 28px; font-size: 16px; border-radius: 14px; }
+.btn-sm { padding: 8px 14px; font-size: 13px; border-radius: 8px; }
+.btn-full { width: 100%; }
+
+/* ═══ Inputs — بسيط جداً ═══ */
+.input {
+  width: 100%;
+  padding: 14px 16px;
+  font-family: 'Cairo', sans-serif;
+  font-size: 15px;
+  border: 1.5px solid var(--bg-border);
+  border-radius: 12px;
+  background: var(--bg-input);
+  color: var(--text-primary);
+  transition: border-color 0.15s;
+  outline: none;
+}
+
+.input:focus { border-color: var(--brand-red); }
+.input::placeholder { color: var(--text-muted); }
+
+/* ═══ Cards — بلا transform ═══ */
+.card {
+  background: var(--bg-card);
+  border-radius: 16px;
+  padding: 16px;
+  border: 1px solid var(--bg-border);
+}
+
+.card-hover:active {
+  background: var(--bg-card-hover);
+}
+
+/* بلا backdrop-filter — استخدم لون شبه شفاف بدلاً */
+.glass {
+  background: var(--bg-base);
+  border-bottom: 1px solid var(--bg-border);
+}
+
+/* ═══ Badges ═══ */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.badge-red { background: rgba(225, 29, 72, 0.15); color: var(--brand-red-light); }
+.badge-gold { background: rgba(251, 191, 36, 0.15); color: var(--brand-gold); }
+.badge-green { background: rgba(16, 185, 129, 0.15); color: #34d399; }
+.badge-gray { background: var(--bg-card-hover); color: var(--text-secondary); }
+
+/* ═══ Layout ═══ */
+.app-shell {
+  min-height: 100vh;
+  padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+}
+
+.container-app {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 0 16px;
+}
+
+/* ═══ Bottom Nav — بلا blur ═══ */
+.bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 40;
+  background: var(--bg-card);
+  border-top: 1px solid var(--bg-border);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.bottom-nav-inner {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  max-width: 720px;
+  margin: 0 auto;
+  height: 64px;
+}
+
+.bottom-nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.bottom-nav-item.active { color: var(--brand-red); }
+
+/* ═══ Sticky Bottom ═══ */
+.sticky-bottom {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 30;
+  background: var(--bg-card);
+  border-top: 1px solid var(--bg-border);
+  padding: 16px;
+  padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+}
+
+.sticky-bottom-inner {
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+/* ═══ Scroll ═══ */
+.h-scroll {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.h-scroll > * { flex-shrink: 0; }
+
+.h-scroll::-webkit-scrollbar { display: none; }
+
+/* ═══ Utilities ═══ */
+.text-red { color: var(--brand-red); }
+.text-gold { color: var(--brand-gold); }
+.text-muted { color: var(--text-muted); }
+.text-secondary { color: var(--text-secondary); }
+
+.divider { height: 1px; background: var(--bg-border); margin: 16px 0; }
+
+/* ═══ Theme Toggle — بسيط ═══ */
+.theme-toggle {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-card);
+  border: 1px solid var(--bg-border);
+  cursor: pointer;
+  color: var(--text-primary);
+}
+
+/* ═══ Skeleton — بسيط ═══ */
+.skeleton {
+  background: var(--bg-card-hover);
+  border-radius: 12px;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+/* ═══ Animations — تقليل جداً ═══ */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.animate-fade { animation: fadeIn 0.2s ease-out both; }
+.animate-spin { animation: spin 1s linear infinite; }
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ═══ Aspect ═══ */
+.product-img { aspect-ratio: 1/1; object-fit: cover; width: 100%; border-radius: 12px; }
+.store-cover { aspect-ratio: 16/9; object-fit: cover; width: 100%; }
+.store-logo { width: 64px; height: 64px; border-radius: 16px; object-fit: cover; }
+
+/* ═══ Safe areas ═══ */
+.safe-top { padding-top: calc(8px + env(safe-area-inset-top, 0px)); }
+
+/* ═══ Responsive ═══ */
+@media (max-width: 480px) {
+  .container-app { padding: 0 12px; }
+}
+
+/* ═══ Performance Critical ═══ */
+img { content-visibility: auto; }
+a, button { touch-action: manipulation; }
+
+/* منع أي animation معقد */
+@media (max-width: 480px) {
+  *, *::before, *::after {
+    animation-duration: 0.2s !important;
+    transition-duration: 0.15s !important;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   VISUAL TOUCHES — خفيفة وحديثة (بلا blur ثقيل)
+   ═══════════════════════════════════════════════════════════ */
+
+/* ═══ Cards — border gradient خفيف ═══ */
+.card-featured {
+  position: relative;
+  background: var(--bg-card);
+  border: 1px solid var(--bg-border);
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.card-featured::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--brand-red), var(--brand-gold), transparent);
+  opacity: 0.7;
+}
+
+/* ═══ Section headers بلمسة ذهبية ═══ */
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.section-header::before {
+  content: '';
+  width: 4px;
+  height: 20px;
+  background: linear-gradient(180deg, var(--brand-red), var(--brand-gold));
+  border-radius: 2px;
+}
+
+/* ═══ Buttons — subtle sheen عند hover ═══ */
+.btn-primary {
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-primary::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent);
+  transition: left 0.5s;
+}
+
+.btn-primary:active::after {
+  left: 100%;
+}
+
+/* ═══ Live Dot — نقطة حمراء نابضة ═══ */
+.live-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--brand-red);
+  margin-left: 6px;
+  animation: livePulse 1.5s ease-in-out infinite;
+}
+
+@keyframes livePulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.8); }
+}
+
+/* ═══ Store card — أيقونة دائرية ═══ */
+.store-icon-ring {
+  padding: 3px;
+  background: linear-gradient(135deg, var(--brand-red), var(--brand-gold));
+  border-radius: 50%;
+  display: inline-flex;
+}
+
+.store-icon-ring img,
+.store-icon-ring > div {
+  border-radius: 50%;
+  border: 2px solid var(--bg-card);
+}
+
+/* ═══ Rating pill ═══ */
+.rating-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  background: var(--bg-card-hover);
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.rating-pill svg {
+  color: var(--brand-gold);
+}
+
+/* ═══ Delivery badge ═══ */
+.delivery-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  background: rgba(16, 185, 129, 0.1);
+  color: var(--success);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+/* ═══ Promo ribbon ═══ */
+.promo-ribbon {
+  position: absolute;
+  top: 12px;
+  right: -32px;
+  background: var(--brand-gold);
+  color: #0a0a0a;
+  font-size: 10px;
+  font-weight: 900;
+  padding: 4px 40px;
+  transform: rotate(45deg);
+  letter-spacing: 1px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  z-index: 10;
+}
+
+/* ═══ Empty state — icon bounce ═══ */
+.empty-icon {
+  font-size: 60px;
+  animation: emptyBounce 2s ease-in-out infinite;
+}
+
+@keyframes emptyBounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+/* ═══ Chip — للتصنيفات ═══ */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--bg-border);
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+  white-space: nowrap;
+  transition: all 0.15s;
+}
+
+.chip:active {
+  background: var(--bg-card-hover);
+  transform: scale(0.97);
+}
+
+.chip.active {
+  background: var(--brand-red);
+  border-color: var(--brand-red);
+  color: white;
+}
+
+/* ═══ Hero header — لمسة عصرية ═══ */
+.hero-header {
+  background: linear-gradient(135deg, var(--brand-red) 0%, var(--brand-red-dark) 100%);
+  border-radius: 20px;
+  padding: 20px;
+  color: white;
+  position: relative;
+  overflow: hidden;
+}
+
+.hero-header::after {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.1) 0%, transparent 40%);
+  pointer-events: none;
+}
+
+/* ═══ Icon Box — للتصنيفات ═══ */
+.icon-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 10px;
+  border-radius: 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--bg-border);
+  transition: all 0.15s;
+  min-width: 76px;
+}
+
+.icon-box:active {
+  background: var(--bg-card-hover);
+  transform: scale(0.96);
+}
+
+.icon-box-emoji {
+  font-size: 28px;
+  width: 52px;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-card-hover);
+  border-radius: 14px;
+}
+
+.icon-box-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-primary);
+  text-align: center;
+  line-height: 1.2;
+}
+
+/* ═══ Store logo circle ═══ */
+.store-avatar {
+  width: 76px;
+  height: 76px;
+  border-radius: 50%;
+  border: 3px solid var(--bg-card);
+  overflow: hidden;
+  background: var(--bg-elevated);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32px;
+  flex-shrink: 0;
+}
+
+/* ═══ Discount tag ═══ */
+.discount-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  background: var(--brand-red);
+  color: white;
+  font-size: 10px;
+  font-weight: 900;
+  border-radius: 6px;
+  letter-spacing: 0.5px;
+}
+
+/* ═══ Load shimmer للصور ═══ */
+.img-wrapper {
+  position: relative;
+  overflow: hidden;
+  background: var(--bg-card-hover);
+}
+
+.img-wrapper img {
+  display: block;
+}
+
+/* ═══ Story circles — مثل Instagram للتصنيفات ═══ */
+.story-circle {
+  width: 68px;
+  height: 68px;
+  border-radius: 50%;
+  padding: 2px;
+  background: linear-gradient(135deg, var(--brand-red), var(--brand-gold));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.story-circle > div {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: var(--bg-card);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  border: 2px solid var(--bg-base);
+}
+
+.story-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+  margin-top: 6px;
+  color: var(--text-secondary);
+  max-width: 76px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

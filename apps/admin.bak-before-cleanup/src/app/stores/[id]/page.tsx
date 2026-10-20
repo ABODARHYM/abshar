@@ -1,0 +1,617 @@
+
+'use client';
+
+import Link from 'next/link';
+import { useParams, useRouter } from 'next/navigation';
+import { useEffect, useState, useMemo, useRef } from 'react';
+import { ProductCardSkeleton } from '@/components/Skeleton';
+
+interface Store {
+  id: string;
+  nameAr: string;
+  nameEn: string | null;
+  logoUrl: string | null;
+  coverUrl: string | null;
+  descriptionAr: string | null;
+  rating: number;
+  ratingCount: number;
+  deliveryFee: number;
+  minOrder: number;
+  avgPrepTime: number;
+  isOpen: boolean;
+  addressText: string | null;
+}
+
+interface Category {
+  id: string;
+  nameAr: string;
+}
+
+interface Product {
+  id: string;
+  storeId: string;
+  storeName?: string;
+  categoryId: string | null;
+  nameAr: string;
+  nameEn?: string | null;
+  descriptionAr: string | null;
+  imageUrl: string | null;
+  basePrice: number;
+  price?: number;          // alias للتوافق
+  discountPrice?: number | null;
+  isAvailable: boolean;
+  stock?: number | null;
+}
+
+interface CartItem {
+  productId: string;
+  storeId: string;
+  nameAr: string;
+  price: number;
+  quantity: number;
+  imageUrl: string | null;
+}
+
+// Cart hook — localStorage
+function useCart() {
+  const [cart, setCart] = useState<CartItem[]>([]);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('absher_cart');
+      if (raw) setCart(JSON.parse(raw));
+    } catch {}
+    setLoaded(true);
+  }, []);
+
+  const persist = (items: CartItem[]) => {
+    setCart(items);
+    localStorage.setItem('absher_cart', JSON.stringify(items));
+    window.dispatchEvent(new Event('cart-updated'));
+  };
+
+  const add = (item: Omit<CartItem, 'quantity'>) => {
+    const existing = cart.find((c) => c.productId === item.productId);
+    if (existing) {
+      persist(cart.map((c) => c.productId === item.productId ? { ...c, quantity: c.quantity + 1 } : c));
+    } else {
+      persist([...cart, { ...item, quantity: 1 }]);
+    }
+  };
+
+  const setQty = (productId: string, qty: number) => {
+    if (qty <= 0) {
+      persist(cart.filter((c) => c.productId !== productId));
+    } else {
+      persist(cart.map((c) => c.productId === productId ? { ...c, quantity: qty } : c));
+    }
+  };
+
+  const getQty = (productId: string) => cart.find((c) => c.productId === productId)?.quantity ?? 0;
+
+  const total = cart.reduce((sum, c) => sum + c.price * c.quantity, 0);
+  const count = cart.reduce((sum, c) => sum + c.quantity, 0);
+
+  return { cart, loaded, add, setQty, getQty, total, count };
+}
+
+export default function StoreDetailsPage() {
+  const params = useParams();
+  const router = useRouter();
+  const storeId = params?.id as string;
+
+  const [store, setStore] = useState<Store | null>(null);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [activeCategoryId, setActiveCategoryId] = useState<string | 'all'>('all');
+  const [search, setSearch] = useState('');
+  const [showSearch, setShowSearch] = useState(false);
+
+  const cart = useCart();
+  const categoryRefs = useRef<Record<string, HTMLDivElement | null>>({});
+
+  useEffect(() => {
+    if (!storeId) return;
+    setLoading(true);
+
+    Promise.all([
+      fetch(`/api/v1/stores/${storeId}`).then((r) => (r.ok ? r.json() : null)),
+      fetch(`/api/v1/products?storeId=${storeId}`).then((r) => (r.ok ? r.json() : [])),
+    ])
+      .then(([storeData, productsData]) => {
+        setStore(storeData);
+        const list: Product[] = Array.isArray(productsData) ? productsData : (productsData.items || []);
+        setProducts(list);
+
+        // Extract unique categories from products
+        const catMap = new Map<string, Category>();
+        list.forEach((p) => {
+          if (p.categoryId) {
+            // We don't have category names here; use placeholder — will be replaced by separate fetch
+            if (!catMap.has(p.categoryId)) {
+              catMap.set(p.categoryId, { id: p.categoryId, nameAr: 'تصنيف' });
+            }
+          }
+        });
+        setCategories(Array.from(catMap.values()));
+      })
+      .catch(() => {
+        setStore(null);
+        setProducts([]);
+      })
+      .finally(() => setLoading(false));
+  }, [storeId]);
+
+  // Fetch category names separately
+  useEffect(() => {
+    if (categories.length === 0) return;
+    const ids = categories.map((c) => c.id);
+    fetch(`/api/v1/categories`)
+      .then((r) => (r.ok ? r.json() : []))
+      .then((all: Category[]) => {
+        if (!Array.isArray(all)) return;
+        setCategories((prev) =>
+          prev.map((c) => {
+            const found = all.find((a) => a.id === c.id);
+            return found ? { ...c, nameAr: found.nameAr } : c;
+          }),
+        );
+      })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [categories.length]);
+
+  const filtered = useMemo(() => {
+    let list = [...products];
+    if (activeCategoryId !== 'all') {
+      list = list.filter((p) => p.categoryId === activeCategoryId);
+    }
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      list = list.filter((p) => p.nameAr.toLowerCase().includes(q));
+    }
+    return list;
+  }, [products, activeCategoryId, search]);
+
+  const grouped = useMemo(() => {
+    if (activeCategoryId !== 'all' || search.trim()) return null;
+    const groups: Record<string, Product[]> = {};
+    products.forEach((p) => {
+      const key = p.categoryId || '__uncategorized__';
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(p);
+    });
+    return groups;
+  }, [products, activeCategoryId, search]);
+
+  const scrollToCategory = (catId: string) => {
+    setActiveCategoryId(catId);
+    const el = categoryRefs.current[catId];
+    if (el) {
+      const y = el.getBoundingClientRect().top + window.scrollY - 140;
+      window.scrollTo({ top: y, behavior: 'smooth' });
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="app-shell bg-[var(--bg-base)]">
+        <div className="skeleton h-56 w-full" />
+        <div className="container-app -mt-12 relative z-10">
+          <div className="skeleton w-20 h-20 rounded-2xl mb-3" />
+          <div className="skeleton h-6 w-1/2 mb-2" />
+          <div className="skeleton h-4 w-2/3 mb-6" />
+          <div className="grid grid-cols-2 gap-3">
+            <ProductCardSkeleton />
+            <ProductCardSkeleton />
+            <ProductCardSkeleton />
+            <ProductCardSkeleton />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!store) {
+    return (
+      <div className="app-shell bg-[var(--bg-base)] flex items-center justify-center min-h-screen">
+        <div className="text-center px-6">
+          <div className="text-6xl mb-4">😕</div>
+          <h2 className="font-black text-xl mb-2">المتجر غير موجود</h2>
+          <p className="text-[var(--text-muted)] text-sm mb-6">ربما تم حذفه أو الرابط خاطئ</p>
+          <Link href="/stores" className="btn btn-primary">
+            العودة للمتاجر
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="app-shell bg-[var(--bg-base)] pb-32">
+      {/* ═══ Cover Image ═══ */}
+      <div className="relative">
+        <div className="h-48 bg-[var(--bg-elevated)] overflow-hidden">
+          {store.coverUrl ? (
+            <img src={store.coverUrl} alt={store.nameAr} className="w-full h-full object-cover" />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center text-6xl">🏪</div>
+          )}
+        </div>
+
+        {/* Back + actions */}
+        <div className="absolute top-0 inset-x-0 pt-3 px-3 flex items-center justify-between safe-top">
+          <button
+            onClick={() => router.back()}
+            className="w-10 h-10 rounded-full bg-black/60 backdrop-blur flex items-center justify-center text-white"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M15 18l-6-6 6-6" />
+            </svg>
+          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowSearch(!showSearch)}
+              className="w-10 h-10 rounded-full bg-black/60 backdrop-blur flex items-center justify-center text-white"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="11" cy="11" r="8" />
+                <path d="m21 21-4.3-4.3" />
+              </svg>
+            </button>
+            {cart.count > 0 && (
+              <Link
+                href="/cart"
+                className="relative w-10 h-10 rounded-full bg-[var(--brand-red)] flex items-center justify-center text-white"
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="9" cy="21" r="1" />
+                  <circle cx="20" cy="21" r="1" />
+                  <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
+                </svg>
+                <span className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1 rounded-full bg-[var(--brand-gold)] text-black text-[11px] font-black flex items-center justify-center">
+                  {cart.count}
+                </span>
+              </Link>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ═══ Store Header ═══ */}
+      <section className="container-app -mt-10 relative z-10">
+        <div className="flex items-end gap-3 mb-4">
+          <div className="store-logo bg-[var(--bg-card)] shadow-xl">
+            {store.logoUrl ? (
+              <img src={store.logoUrl} alt={store.nameAr} className="w-full h-full object-cover rounded-xl" />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center text-2xl rounded-xl bg-[var(--bg-elevated)]">🏪</div>
+            )}
+          </div>
+        </div>
+
+        <div className="mb-4">
+          <div className="flex items-center gap-2 mb-1">
+            <h1 className="font-black text-xl flex-1 truncate">{store.nameAr}</h1>
+            {store.isOpen ? (
+              <span className="badge badge-green">مفتوح</span>
+            ) : (
+              <span className="badge badge-red">مغلق</span>
+            )}
+          </div>
+
+          {store.descriptionAr && (
+            <p className="text-sm text-[var(--text-muted)] mb-2">{store.descriptionAr}</p>
+          )}
+
+          <div className="flex flex-wrap items-center gap-3 text-xs text-[var(--text-secondary)]">
+            <span className="flex items-center gap-1">
+              <span className="text-[var(--brand-gold)]">⭐</span>
+              <span className="font-bold">{Number(store.rating ?? 5).toFixed(1)}</span>
+              <span className="text-[var(--text-muted)]">({store.ratingCount ?? 0})</span>
+            </span>
+            {store.avgPrepTime > 0 && <span>⏱️ {store.avgPrepTime} دقيقة</span>}
+            <span>🚚 {store.deliveryFee ? `${store.deliveryFee} ر.ي` : 'مجاني'}</span>
+            {store.minOrder > 0 && <span>📦 حد أدنى {store.minOrder} ر.ي</span>}
+          </div>
+
+          {store.addressText && (
+            <p className="text-xs text-[var(--text-muted)] mt-2 flex items-center gap-1">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+                <circle cx="12" cy="10" r="3" />
+              </svg>
+              {store.addressText}
+            </p>
+          )}
+        </div>
+
+        {!store.isOpen && (
+          <div className="card border-l-4 border-l-[var(--danger)] py-3 mb-4 bg-[var(--bg-elevated)]">
+            <p className="text-sm font-bold text-[var(--danger)]">
+              ⚠️ المتجر مغلق حالياً — لا يمكن استقبال طلبات جديدة
+            </p>
+          </div>
+        )}
+      </section>
+
+      {/* ═══ Search bar (toggle) ═══ */}
+      {showSearch && (
+        <div className="container-app mt-3 animate-slide-down">
+          <div className="relative">
+            <div className="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none text-[var(--text-muted)]">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="11" cy="11" r="8" />
+                <path d="m21 21-4.3-4.3" />
+              </svg>
+            </div>
+            <input
+              type="text"
+              autoFocus
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="ابحث في منتجات المتجر..."
+              className="input pr-12"
+            />
+          </div>
+        </div>
+      )}
+
+      {/* ═══ Category tabs ═══ */}
+      {categories.length > 0 && !search.trim() && (
+        <section className="sticky top-14 z-20 bg-[var(--bg-base)]/95 backdrop-blur border-b border-[var(--bg-border)] py-3 mt-4">
+          <div className="container-app">
+            <div className="h-scroll no-scrollbar">
+              <button
+                onClick={() => setActiveCategoryId('all')}
+                className={`px-4 py-2 rounded-full text-sm font-bold whitespace-nowrap border transition-all ${
+                  activeCategoryId === 'all'
+                    ? 'bg-[var(--brand-red)] text-white border-[var(--brand-red)]'
+                    : 'bg-[var(--bg-card)] text-[var(--text-secondary)] border-[var(--bg-border)]'
+                }`}
+              >
+                الكل
+              </button>
+              {categories.map((cat) => (
+                <button
+                  key={cat.id}
+                  onClick={() => scrollToCategory(cat.id)}
+                  className={`px-4 py-2 rounded-full text-sm font-bold whitespace-nowrap border transition-all ${
+                    activeCategoryId === cat.id
+                      ? 'bg-[var(--brand-red)] text-white border-[var(--brand-red)]'
+                      : 'bg-[var(--bg-card)] text-[var(--text-secondary)] border-[var(--bg-border)]'
+                  }`}
+                >
+                  {cat.nameAr}
+                </button>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* ═══ Products ═══ */}
+      <section className="container-app py-4">
+        {filtered.length === 0 ? (
+          <div className="card text-center py-12 animate-fade">
+            <div className="text-5xl mb-3">📭</div>
+            <h3 className="font-black mb-2">
+              {search.trim() ? 'لا توجد نتائج' : 'لا توجد منتجات'}
+            </h3>
+            <p className="text-sm text-[var(--text-muted)]">
+              {search.trim() ? 'جرّب البحث بكلمات أخرى' : 'سيتم إضافة المنتجات قريباً'}
+            </p>
+          </div>
+        ) : grouped ? (
+          <div className="space-y-6">
+            {categories.map((cat) => {
+              const items = grouped[cat.id] || [];
+              if (items.length === 0) return null;
+              return (
+                <div
+                  key={cat.id}
+                  ref={(el) => { categoryRefs.current[cat.id] = el; }}
+                >
+                  <h3 className="font-black text-base mb-3 flex items-center gap-2">
+                    {cat.nameAr}
+                    <span className="text-xs text-[var(--text-muted)] font-bold">({items.length})</span>
+                  </h3>
+                  <div className="grid grid-cols-2 gap-3">
+                    {items.map((p, i) => (
+                      <ProductCard
+                        key={p.id}
+                        product={p}
+                        qty={cart.getQty(p.id)}
+                        onAdd={() => cart.add({
+                          productId: p.id,
+                          storeId: store.id,
+                          nameAr: p.nameAr,
+                          price: Number(p.discountPrice ?? p.price ?? p.basePrice ?? 0),
+                          imageUrl: p.imageUrl,
+                        })}
+                        onQty={(q) => cart.setQty(p.id, q)}
+                        disabled={!store.isOpen || !p.isAvailable}
+                        index={i}
+                      />
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+            {/* Uncategorized */}
+            {grouped['__uncategorized__']?.length > 0 && (
+              <div>
+                <h3 className="font-black text-base mb-3">أخرى</h3>
+                <div className="grid grid-cols-2 gap-3">
+                  {grouped['__uncategorized__'].map((p, i) => (
+                    <ProductCard
+                      key={p.id}
+                      product={p}
+                      qty={cart.getQty(p.id)}
+                      onAdd={() => cart.add({
+                        productId: p.id,
+                        storeId: store.id,
+                        nameAr: p.nameAr,
+                        price: Number(p.discountPrice ?? p.price ?? p.basePrice ?? 0),
+                        imageUrl: p.imageUrl,
+                      })}
+                      onQty={(q) => cart.setQty(p.id, q)}
+                      disabled={!store.isOpen || !p.isAvailable}
+                      index={i}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-3">
+            {filtered.map((p, i) => (
+              <ProductCard
+                key={p.id}
+                product={p}
+                qty={cart.getQty(p.id)}
+                onAdd={() => cart.add({
+                  productId: p.id,
+                  storeId: store.id,
+                  nameAr: p.nameAr,
+                  price: Number(p.discountPrice ?? p.price ?? p.basePrice ?? 0),
+                  imageUrl: p.imageUrl,
+                })}
+                onQty={(q) => cart.setQty(p.id, q)}
+                disabled={!store.isOpen || !p.isAvailable}
+                index={i}
+              />
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* ═══ Sticky Cart Bar ═══ */}
+      {cart.count > 0 && (
+        <div className="sticky-bottom animate-slide-up">
+          <div className="sticky-bottom-inner">
+            <Link
+              href="/cart"
+              className="btn btn-primary btn-lg btn-full flex items-center justify-between"
+            >
+              <span className="flex items-center gap-2">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="9" cy="21" r="1" />
+                  <circle cx="20" cy="21" r="1" />
+                  <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
+                </svg>
+                <span>عرض السلة ({cart.count})</span>
+              </span>
+              <span className="font-black">{cart.total.toFixed(0)} ر.ي</span>
+            </Link>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ═══ Product Card Component ═══
+function ProductCard({
+  product,
+  qty,
+  onAdd,
+  onQty,
+  disabled,
+  index,
+}: {
+  product: Product;
+  qty: number;
+  onAdd: () => void;
+  onQty: (q: number) => void;
+  disabled: boolean;
+  index: number;
+}) {
+  const [favorited, setFavorited] = useState(false);
+  const price = Number(product.discountPrice ?? product.price ?? 0);
+  const hasDiscount = product.discountPrice != null && Number(product.discountPrice) < Number(product.price ?? 0);
+
+  return (
+    <div
+      className="card p-0 overflow-hidden animate-fade flex flex-col"
+      style={{ animationDelay: `${Math.min(index * 0.03, 0.3)}s` }}
+    >
+      <div className="relative">
+        <div className="aspect-square bg-[var(--bg-elevated)] overflow-hidden">
+          {product.imageUrl ? (
+            <img src={product.imageUrl} alt={product.nameAr} className="w-full h-full object-cover" loading="lazy" />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center text-5xl">🍽️</div>
+          )}
+        </div>
+
+        {/* Favorite */}
+        <button
+          onClick={(e) => {
+            e.preventDefault();
+            setFavorited(!favorited);
+          }}
+          className="absolute top-2 left-2 w-8 h-8 rounded-full bg-black/60 backdrop-blur flex items-center justify-center"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill={favorited ? 'var(--brand-red)' : 'none'} stroke={favorited ? 'var(--brand-red)' : 'white'} strokeWidth="2.2">
+            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+          </svg>
+        </button>
+
+        {hasDiscount && (
+          <span className="absolute top-2 right-2 badge badge-red text-[10px]">
+            -{Math.round(((Number(product.price ?? product.basePrice) - price) / Number(product.price ?? product.basePrice)) * 100)}%
+          </span>
+        )}
+
+        {!product.isAvailable && (
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center">
+            <span className="text-white text-xs font-bold">غير متوفر</span>
+          </div>
+        )}
+      </div>
+
+      <div className="p-3 flex-1 flex flex-col">
+        <h4 className="font-bold text-sm mb-1 line-clamp-2 min-h-[2.5rem]">{product.nameAr}</h4>
+
+        <div className="flex items-center gap-2 mb-3 mt-auto">
+          <span className="font-black text-[var(--brand-gold)]">{price.toFixed(0)} ر.ي</span>
+          {hasDiscount && (
+            <span className="text-xs text-[var(--text-muted)] line-through">
+              {Number(product.price ?? product.basePrice ?? 0).toFixed(0)}
+            </span>
+          )}
+        </div>
+
+        {qty === 0 ? (
+          <button
+            onClick={onAdd}
+            disabled={disabled}
+            className="btn btn-primary btn-sm btn-full"
+          >
+            {disabled ? 'غير متاح' : 'أضف للسلة'}
+          </button>
+        ) : (
+          <div className="flex items-center justify-between bg-[var(--bg-elevated)] rounded-lg p-1 border border-[var(--bg-border)]">
+            <button
+              onClick={() => onQty(qty + 1)}
+              className="w-8 h-8 rounded-md bg-[var(--brand-red)] text-white flex items-center justify-center font-black text-lg"
+            >
+              +
+            </button>
+            <span className="font-black text-sm">{qty}</span>
+            <button
+              onClick={() => onQty(qty - 1)}
+              className="w-8 h-8 rounded-md bg-[var(--bg-card)] text-white flex items-center justify-center font-black text-lg border border-[var(--bg-border)]"
+            >
+              −
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

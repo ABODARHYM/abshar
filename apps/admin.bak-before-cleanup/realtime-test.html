@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ABSHER BI Realtime Test</title>
+<style>
+body{font-family:Arial;background:#111;color:#fff;padding:20px}
+.box{padding:15px;border-radius:12px;background:#222;margin:10px 0;word-break:break-word}
+.ok{color:#00e676}.bad{color:#ff5252}
+</style>
+</head>
+<body>
+<h2>🔔 ABSHER BI Realtime</h2>
+<div id="status" class="box">جاري الاختبار...</div>
+<div id="log" class="box"></div>
+
+<script src="https://cdn.socket.io/4.8.3/socket.io.min.js"></script>
+<script>
+const token=localStorage.getItem('absher_access_token');
+const status=document.getElementById('status');
+const log=document.getElementById('log');
+
+function write(x){
+  log.innerHTML += '<div>'+x+'</div>';
+}
+
+if(!token){
+  status.innerHTML='<span class="bad">❌ لا يوجد Access Token</span>';
+}else{
+  const socket=io('http://127.0.0.1:3000/notifications',{
+    auth:{token:token},
+    transports:['websocket'],
+    timeout:10000,
+    reconnection:false
+  });
+
+  socket.on('connect',()=>{
+    status.innerHTML='<span class="ok">🟢 WebSocket متصل</span>';
+    write('Socket ID: '+socket.id);
+  });
+
+  socket.on('connect_error',(e)=>{
+    status.innerHTML='<span class="bad">🔴 فشل الاتصال</span>';
+    write('ERROR: '+e.message);
+  });
+
+  socket.on('notification',(n)=>{
+    write('🔔 إشعار: '+JSON.stringify(n));
+  });
+
+  socket.on('notification:count',(n)=>{
+    write('🔢 unread: '+JSON.stringify(n));
+  });
+
+  socket.on('disconnect',(reason)=>{
+    write('⚠️ disconnected: '+reason);
+  });
+}
+</script>
+</body>
+</html>

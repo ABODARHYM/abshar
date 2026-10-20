@@ -1,0 +1,237 @@
+==================================================
+ ABSHER BI - EXTRA DIAGNOSTIC
+ Date: Tue Oct 20 01:16:10 +03 2026
+ Root: /data/data/com.termux/files/home/absher-bi/absher-bi
+==================================================
+
+===== 1. الملفات الأساسية =====
+[OK] backend/package.json
+[OK] backend/tsconfig.json
+[OK] backend/tsconfig.build.json
+[OK] backend/src/main.ts
+[OK] backend/src/modules/addresses/dto/create-address.dto.ts
+[OK] backend/src/modules/addresses/dto/update-address.dto.ts
+[OK] backend/src/modules/addresses/addresses.service.ts
+[OK] backend/src/modules/addresses/addresses.repository.ts
+[OK] apps/customer/index.html
+[OK] apps/customer/js/addresses.js
+[OK] apps/customer/js/map-picker.js
+[OK] apps/customer/js/api.js
+
+===== 2. تفاصيل إرسال الإحداثيات =====
+apps/customer/js/addresses.js-58-  $('#addressLine').value        = address?.addressLine || '';
+apps/customer/js/addresses.js-59-  $('#addressBuilding').value    = address?.building || '';
+apps/customer/js/addresses.js-60-  $('#addressFloor').value       = address?.floor || '';
+apps/customer/js/addresses.js-61-  $('#addressApartment').value   = address?.apartment || '';
+apps/customer/js/addresses.js-62-  $('#addressLandmark').value    = address?.landmark || '';
+apps/customer/js/addresses.js:63:  $('#addressLat').value         = address?.latitude ?? 15.369445;
+apps/customer/js/addresses.js:64:  $('#addressLng').value         = address?.longitude ?? 44.191006;
+apps/customer/js/addresses.js-65-  $('#addressIsDefault').checked = !!address?.isDefault;
+apps/customer/js/addresses.js-66-  $('#addressModal').classList.remove('hidden');
+apps/customer/js/addresses.js-67-}
+apps/customer/js/addresses.js-68-
+apps/customer/js/addresses.js-69-function closeAddressModal() {
+--
+apps/customer/js/addresses.js-81-    addressLine: $('#addressLine').value.trim(),
+apps/customer/js/addresses.js-82-    building:    $('#addressBuilding').value.trim() || undefined,
+apps/customer/js/addresses.js-83-    floor:       $('#addressFloor').value.trim() || undefined,
+apps/customer/js/addresses.js-84-    apartment:   $('#addressApartment').value.trim() || undefined,
+apps/customer/js/addresses.js-85-    landmark:    $('#addressLandmark').value.trim() || undefined,
+apps/customer/js/addresses.js:86:    latitude:    parseFloat($('#addressLat').value),
+apps/customer/js/addresses.js:87:    longitude:   parseFloat($('#addressLng').value),
+apps/customer/js/addresses.js-88-    isDefault:   $('#addressIsDefault').checked,
+apps/customer/js/addresses.js-89-  };
+apps/customer/js/addresses.js-90-
+apps/customer/js/addresses.js-91-  if (!payload.addressLine || Number.isNaN(payload.latitude) || Number.isNaN(payload.longitude)) {
+apps/customer/js/addresses.js-92-    toast('أكمل الحقول الإلزامية', 'error');
+--
+apps/customer/js/addresses.js-94-  }
+apps/customer/js/addresses.js-95-
+apps/customer/js/addresses.js-96-  showLoading(id ? 'جاري التحديث...' : 'جاري الحفظ...');
+apps/customer/js/addresses.js-97-  try {
+apps/customer/js/addresses.js-98-    if (id) {
+apps/customer/js/addresses.js:99:      await api(`/addresses/${id}`, { method: 'PATCH', body: JSON.stringify(payload) });
+apps/customer/js/addresses.js-100-      toast('تم تحديث العنوان');
+apps/customer/js/addresses.js-101-    } else {
+apps/customer/js/addresses.js:102:      await api('/addresses', { method: 'POST', body: JSON.stringify(payload) });
+apps/customer/js/addresses.js-103-      toast('تم حفظ العنوان');
+apps/customer/js/addresses.js-104-    }
+apps/customer/js/addresses.js-105-    closeAddressModal();
+apps/customer/js/addresses.js-106-    await loadAddresses();
+apps/customer/js/addresses.js-107-  } catch (error) {
+--
+apps/customer/js/addresses.js-156-// ═══════════════════════════════════════════════════════════════
+apps/customer/js/addresses.js-157-//  دعم الخريطة التفاعلية
+apps/customer/js/addresses.js-158-// ═══════════════════════════════════════════════════════════════
+apps/customer/js/addresses.js-159-
+apps/customer/js/addresses.js-160-function openAddressMapPicker() {
+apps/customer/js/addresses.js:161:  var lat = parseFloat(document.querySelector('#addressLat').value) || 15.369445;
+apps/customer/js/addresses.js:162:  var lng = parseFloat(document.querySelector('#addressLng').value) || 44.191006;
+apps/customer/js/addresses.js-163-
+apps/customer/js/addresses.js-164-  if (typeof openMapPicker !== 'function') {
+apps/customer/js/addresses.js-165-    toast('الخريطة غير متوفرة', 'error');
+apps/customer/js/addresses.js-166-    return;
+apps/customer/js/addresses.js-167-  }
+apps/customer/js/addresses.js-168-
+apps/customer/js/addresses.js-169-  openMapPicker(lat, lng, function (newLat, newLng) {
+apps/customer/js/addresses.js:170:    document.querySelector('#addressLat').value = newLat.toFixed(6);
+apps/customer/js/addresses.js:171:    document.querySelector('#addressLng').value = newLng.toFixed(6);
+apps/customer/js/addresses.js-172-
+apps/customer/js/addresses.js-173-    var display = document.querySelector('#addressCoordsDisplay');
+apps/customer/js/addresses.js-174-    if (display) {
+apps/customer/js/addresses.js-175-      display.textContent = '\uD83D\uDCCD ' + newLat.toFixed(6) + ' \u00B7 ' + newLng.toFixed(6);
+apps/customer/js/addresses.js-176-    }
+--
+apps/customer/js/api.js-16-  const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
+apps/customer/js/api.js-17-  if (state.accessToken) headers.Authorization = `Bearer ${state.accessToken}`;
+apps/customer/js/api.js-18-
+apps/customer/js/api.js-19-  let response;
+apps/customer/js/api.js-20-  try {
+apps/customer/js/api.js:21:    response = await fetch(API_BASE_URL + path, { ...options, headers });
+apps/customer/js/api.js-22-  } catch (networkErr) {
+apps/customer/js/api.js-23-    const e = new Error(ERROR_MESSAGES.NETWORK_ERROR);
+apps/customer/js/api.js-24-    e.status = 0;
+apps/customer/js/api.js-25-    e.data = { code: 'NETWORK_ERROR' };
+apps/customer/js/api.js-26-    throw e;
+--
+apps/customer/js/api.js-45-}
+apps/customer/js/api.js-46-
+apps/customer/js/api.js-47-async function refreshAccessToken() {
+apps/customer/js/api.js-48-  if (!state.refreshToken) return false;
+apps/customer/js/api.js-49-  try {
+apps/customer/js/api.js:50:    const response = await fetch(API_BASE_URL + '/auth/refresh', {
+apps/customer/js/api.js-51-      method: 'POST',
+apps/customer/js/api.js-52-      headers: { 'Content-Type': 'application/json' },
+apps/customer/js/api.js-53-      body: JSON.stringify({ refreshToken: state.refreshToken }),
+apps/customer/js/api.js-54-    });
+apps/customer/js/api.js-55-    if (!response.ok) { clearAuth(); return false; }
+--
+apps/customer/index.html-300-            <strong>اختر من الخريطة</strong>
+apps/customer/index.html-301-            <small id="addressCoordsDisplay">📍 15.369445 · 44.191006</small>
+apps/customer/index.html-302-          </div>
+apps/customer/index.html-303-          <span style="color:var(--muted)">←</span>
+apps/customer/index.html-304-        </button>
+apps/customer/index.html:305:        <input type="hidden" id="addressLat" value="15.369445">
+apps/customer/index.html:306:        <input type="hidden" id="addressLng" value="44.191006">
+apps/customer/index.html-307-        <label style="display:flex;align-items:center;gap:8px;margin-top:8px">
+apps/customer/index.html-308-          <input id="addressIsDefault" type="checkbox" style="width:auto">
+apps/customer/index.html-309-          تعيين كعنوان افتراضي
+apps/customer/index.html-310-        </label>
+apps/customer/index.html-311-        <button class="btn btn-primary" type="submit">حفظ</button>
+
+===== 3. جميع مواضع إنشاء DTO العنوان =====
+backend/src/main.ts:10:import { buildValidationPipe } from './common/validation';
+backend/src/main.ts:35:  app.useGlobalPipes(buildValidationPipe());
+backend/src/common/validation.ts:1:import { UnprocessableEntityException, ValidationError, ValidationPipe } from '@nestjs/common';
+backend/src/common/validation.ts:19:export function buildValidationPipe(): ValidationPipe {
+backend/src/common/validation.ts:20:  return new ValidationPipe({
+backend/src/modules/addresses/dto/create-address.dto.ts:15:export class CreateAddressDto {
+backend/src/modules/addresses/dto/update-address.dto.ts:2:import { CreateAddressDto } from './create-address.dto';
+backend/src/modules/addresses/dto/update-address.dto.ts:4:export class UpdateAddressDto extends PartialType(CreateAddressDto) {}
+backend/src/modules/addresses/addresses.service.ts:11:import { CreateAddressDto } from './dto/create-address.dto';
+backend/src/modules/addresses/addresses.service.ts:12:import { UpdateAddressDto } from './dto/update-address.dto';
+backend/src/modules/addresses/addresses.service.ts:58:    dto: CreateAddressDto,
+backend/src/modules/addresses/addresses.service.ts:78:    dto: UpdateAddressDto,
+backend/src/modules/addresses/addresses.controller.ts:24:import { CreateAddressDto } from './dto/create-address.dto';
+backend/src/modules/addresses/addresses.controller.ts:25:import { UpdateAddressDto } from './dto/update-address.dto';
+backend/src/modules/addresses/addresses.controller.ts:59:    @Body() dto: CreateAddressDto,
+backend/src/modules/addresses/addresses.controller.ts:70:    @Body() dto: UpdateAddressDto,
+backend/src/modules/notifications/push-subscribe.dto.spec.ts:2:import { buildValidationPipe } from '../../common/validation';
+backend/src/modules/notifications/push-subscribe.dto.spec.ts:5:const pipe = buildValidationPipe();
+
+===== 4. إعدادات التحويل والتحقق =====
+backend/src/main.ts:10:import { buildValidationPipe } from './common/validation';
+backend/src/main.ts:35:  app.useGlobalPipes(buildValidationPipe());
+backend/src/config/env.validation.ts:2:import { plainToInstance } from 'class-transformer';
+backend/src/config/env.validation.ts:131:  const validated = plainToInstance(EnvironmentVariables, cleaned, {
+backend/src/config/env.validation.ts:132:    enableImplicitConversion: true,
+backend/src/common/validation.ts:19:export function buildValidationPipe(): ValidationPipe {
+backend/src/common/validation.ts:23:    transform: true,
+backend/src/common/validation.ts:24:    transformOptions: { enableImplicitConversion: false },
+backend/src/common/pagination.dto.spec.ts:1:import { plainToInstance } from 'class-transformer';
+backend/src/common/pagination.dto.spec.ts:7:    const dto = plainToInstance(PaginationQueryDto, {});
+backend/src/common/pagination.dto.spec.ts:14:    const dto = plainToInstance(PaginationQueryDto, { limit: '1000' });
+backend/src/common/pagination.dto.spec.ts:19:    expect(validateSync(plainToInstance(PaginationQueryDto, { page: '0' })).length).toBeGreaterThan(0);
+backend/src/common/pagination.dto.spec.ts:20:    expect(validateSync(plainToInstance(PaginationQueryDto, { sortOrder: 'sideways' })).length).toBeGreaterThan(0);
+backend/src/modules/notifications/push-subscribe.dto.spec.ts:2:import { buildValidationPipe } from '../../common/validation';
+backend/src/modules/notifications/push-subscribe.dto.spec.ts:5:const pipe = buildValidationPipe();
+
+===== 5. فحص JavaScript syntax =====
+
+===== 6. فحص TypeScript =====
+TypeScript exit code: 0
+
+===== 7. فحص حزم المشروع =====
+absher-bi-backend@0.1.0 /data/data/com.termux/files/home/absher-bi/absher-bi/backend
+├── @nestjs/cli@11.0.24 invalid: "^11.1.26" from the root project
+├── @nestjs/common@11.2.7
+├── @nestjs/config@12.0.1
+├── @nestjs/core@11.2.7
+├── @nestjs/jwt@12.0.2
+├── @nestjs/passport@12.0.0
+├── @nestjs/platform-express@11.2.7
+├── @nestjs/platform-socket.io@11.2.7
+├── @nestjs/swagger@11.4.5
+├── @nestjs/testing@11.2.7
+├── @nestjs/throttler@6.7.1
+├── @nestjs/websockets@11.2.7
+├── @types/bcryptjs@2.4.6
+├── @types/compression@1.8.1
+├── @types/express@5.0.6
+├── @types/jest@30.0.0
+├── @types/node@22.20.5
+├── @types/passport-jwt@4.0.1
+├── @types/pg@8.23.1
+├── @types/supertest@6.0.3
+├── @types/web-push@3.6.4
+├── bcryptjs@3.0.3
+├── class-transformer@0.5.1
+├── class-validator@0.14.4
+├── compression@1.8.2
+├── helmet@8.3.0
+├── jest@30.5.2
+├── passport-jwt@4.0.1
+├── passport@0.7.0
+├── pg@8.23.1
+├── reflect-metadata@0.2.2
+├── rxjs@7.8.2
+├── socket.io-client@4.8.3
+├── socket.io@4.8.4
+├── supertest@7.3.1
+├── ts-jest@29.4.14
+├── ts-node@10.9.2
+├── typescript@5.9.3
+└── web-push@3.6.7
+
+npm error code ELSPROBLEMS
+npm error invalid: @nestjs/cli@11.0.24 /data/data/com.termux/files/home/absher-bi/absher-bi/backend/node_modules/@nestjs/cli
+npm error A complete log of this run can be found in: /data/data/com.termux/files/home/.npm/_logs/2026-10-19T22_16_31_355Z-debug-0.log
+npm ls exit code: 1
+
+===== 8. حالة المنفذ 3000 =====
+curl: (7) Failed to connect to 127.0.0.1:3000 after 1 ms: Could not connect to server
+
+HTTP 000
+
+===== 9. البحث عن أخطاء غير مكتملة =====
+backend/src/database/migration-utils.ts:22:      throw new Error(`Invalid migration file name "${name}". Expected NNN_description.sql (lowercase, digits, underscores).`);
+backend/src/database/migration-utils.ts:27:      throw new Error(`Duplicate migration number ${prefix}: "${existing}" and "${name}".`);
+backend/src/database/migration-utils.ts:55:      throw new Error(`Migration "${a.name}" was applied to the database but its file is missing.`);
+backend/src/database/migration-utils.ts:58:      throw new Error(
+backend/src/database/migration-utils.ts:71:      throw new Error(
+backend/src/database/migrate.ts:29:  if (!url) throw new Error('DATABASE_URL is not set');
+backend/src/database/migrate.ts:74:        throw new Error(`Migration ${name} failed and was rolled back: ${(error as Error).message}`);
+backend/src/config/env.validation.ts:142:    throw new Error(`Invalid environment configuration:\n${lines.join('\n')}`);
+backend/src/config/env.validation.ts:147:    throw new Error(
+backend/src/config/env.validation.ts:161:      throw new Error(`Unsafe ${validated.NODE_ENV} configuration:\n${problems.map((p) => ` - ${p}`).join('\n')}`);
+backend/src/auth/auth.service.ts:102:        throw new Error('Default customer role is missing');
+backend/src/modules/orders/order-state-machine.ts:265:    throw new Error(
+backend/src/modules/store-owner/store-owner.repository.ts:550:        throw new Error(
+backend/src/modules/driver/driver.repository.ts:646:        throw new Error(
+backend/src/modules/pricing/pricing.controller.ts:138:      throw new Error('Store not found');
+backend/src/modules/loyalty/loyalty.repository.ts:164:        throw new Error('INSUFFICIENT_POINTS');
+apps/admin/src/lib/push.ts:108:  if (!(await saveSubscription(fetcher, sub))) throw new Error('save-failed');
+
+===== 10. نهاية الفحص =====
+لم يتم إرسال طلب إنشاء أو تعديل أو حذف.
+لم تتم طباعة محتويات ملفات .env.

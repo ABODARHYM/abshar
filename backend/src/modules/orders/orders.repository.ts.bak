@@ -1,0 +1,393 @@
+import { Injectable } from '@nestjs/common';
+import { PoolClient } from 'pg';
+import { DatabaseService } from '../../database/database.service';
+import { toOffset } from '../../common/pagination.dto';
+import { OrderQueryDto } from './dto/order-query.dto';
+
+export interface OrderRow {
+  id: string;
+  order_number: string;
+  customer_id: string;
+  store_id: string;
+  store_name: string | null;
+  driver_id: string | null;
+  status: string;
+  payment_method: string;
+  payment_status: string;
+  currency: string;
+  subtotal: string | number;
+  delivery_fee: string | number;
+  discount_total: string | number;
+  total: string | number;
+  customer_notes: string | null;
+  delivery_address_text: string;
+  recipient_name: string;
+  recipient_phone: string;
+  placed_at: Date | null;
+  delivered_at: Date | null;
+  cancelled_at: Date | null;
+  cancel_reason: string | null;
+  created_at: Date;
+}
+
+export interface OrderItemRow {
+  id: string;
+  order_id: string;
+  product_id: string | null;
+  variant_id: string | null;
+  product_name: string;
+  variant_name: string | null;
+  unit_price: string | number;
+  quantity: number;
+  line_total: string | number;
+  notes: string | null;
+}
+
+@Injectable()
+export class OrdersRepository {
+  constructor(private readonly db: DatabaseService) {}
+
+  async create(
+    customerId: string,
+    payload: {
+      storeId: string;
+      currency: string;
+      deliveryFee: number;
+      subtotal: number;
+      discountTotal: number;
+      total: number;
+      addressSnapshot: {
+        addressText: string;
+        latitude: number;
+        longitude: number;
+        recipientName: string;
+        recipientPhone: string;
+        addressId: string;
+      };
+      customerNotes?: string;
+      idempotencyKey: string;
+      items: Array<{
+        productId: string;
+        variantId?: string;
+        productName: string;
+        variantName?: string;
+        unitPrice: number;
+        quantity: number;
+        lineTotal: number;
+        notes?: string;
+      }>;
+    },
+  ): Promise<OrderRow> {
+    return this.db.transaction(async (client: PoolClient) => {
+      // 1) إنشاء الطلب
+      const orderRes = await client.query<OrderRow>(
+        `
+        INSERT INTO orders (
+          customer_id, store_id, status, payment_method, payment_status,
+          currency, subtotal, delivery_fee, discount_total, total,
+          customer_notes, delivery_address_id, delivery_address_text,
+          delivery_latitude, delivery_longitude,
+          recipient_name, recipient_phone, idempotency_key
+        )
+        VALUES (
+          $1, $2, 'pending', 'cash_on_delivery', 'pending',
+          $3, $4, $5, $6, $7,
+          $8, $9, $10,
+          $11, $12,
+          $13, $14, $15
+        )
+        RETURNING *
+        `,
+        [
+          customerId,
+          payload.storeId,
+          payload.currency,
+          payload.subtotal,
+          payload.deliveryFee,
+          payload.discountTotal,
+          payload.total,
+          payload.customerNotes ?? null,
+          payload.addressSnapshot.addressId,
+          payload.addressSnapshot.addressText,
+          payload.addressSnapshot.latitude,
+          payload.addressSnapshot.longitude,
+          payload.addressSnapshot.recipientName,
+          payload.addressSnapshot.recipientPhone,
+          payload.idempotencyKey,
+        ],
+      );
+      const order = orderRes.rows[0];
+
+      // 2) إضافة العناصر
+      for (const item of payload.items) {
+        await client.query(
+          `
+          INSERT INTO order_items (
+            order_id, product_id, variant_id, product_name, variant_name,
+            unit_price, quantity, line_total, notes
+          )
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+          `,
+          [
+            order.id,
+            item.productId,
+            item.variantId ?? null,
+            item.productName,
+            item.variantName ?? null,
+            item.unitPrice,
+            item.quantity,
+            item.lineTotal,
+            item.notes ?? null,
+          ],
+        );
+      }
+
+      // 3) تسجيل الحالة الأولى
+      await client.query(
+        `
+        INSERT INTO order_status_history (order_id, from_status, to_status, changed_by, actor_role)
+        VALUES ($1, NULL, 'pending', $2, 'customer')
+        `,
+        [order.id, customerId],
+      );
+
+      return order;
+    });
+  }
+
+  async findByIdempotencyKey(
+    customerId: string,
+    key: string,
+  ): Promise<OrderRow | null> {
+    const r = await this.db.query<OrderRow>(
+      `
+      SELECT o.*, s.name_ar AS store_name
+      FROM orders o
+      LEFT JOIN stores s ON s.id = o.store_id
+      WHERE o.customer_id = $1 AND o.idempotency_key = $2
+      LIMIT 1
+      `,
+      [customerId, key],
+    );
+    return r.rows[0] ?? null;
+  }
+
+  async findByNumber(orderNumber: string): Promise<OrderRow | null> {
+    const r = await this.db.query<OrderRow>(
+      `
+      SELECT o.*, s.name_ar AS store_name
+      FROM orders o
+      LEFT JOIN stores s ON s.id = o.store_id
+      WHERE o.order_number = $1
+      LIMIT 1
+      `,
+      [orderNumber],
+    );
+    return r.rows[0] ?? null;
+  }
+
+  async listMyOrders(
+    customerId: string,
+    query: OrderQueryDto,
+  ): Promise<{ rows: OrderRow[]; total: number }> {
+    const where: string[] = ['o.customer_id = $1'];
+    const params: unknown[] = [customerId];
+    let i = 2;
+
+    if (query.status) {
+      where.push(`o.status = $${i++}`);
+      params.push(query.status);
+    }
+    if (query.search) {
+      where.push(`o.order_number ILIKE $${i++}`);
+      params.push(`%${query.search}%`);
+    }
+
+    const whereSql = 'WHERE ' + where.join(' AND ');
+
+    const countRes = await this.db.query<{ count: string }>(
+      `SELECT COUNT(*)::text AS count FROM orders o ${whereSql}`,
+      params,
+    );
+    const total = parseInt(countRes.rows[0]?.count ?? '0', 10);
+
+    const offset = toOffset(query);
+    const limit = query.limit;
+
+    const rowsRes = await this.db.query<OrderRow>(
+      `
+      SELECT o.*, s.name_ar AS store_name
+      FROM orders o
+      LEFT JOIN stores s ON s.id = o.store_id
+      ${whereSql}
+      ORDER BY o.created_at DESC
+      LIMIT $${i++} OFFSET $${i++}
+      `,
+      [...params, limit, offset],
+    );
+
+    return { rows: rowsRes.rows, total };
+  }
+
+  async findByIdForCustomer(
+    id: string,
+    customerId: string,
+  ): Promise<OrderRow | null> {
+    const r = await this.db.query<OrderRow>(
+      `
+      SELECT o.*, s.name_ar AS store_name
+      FROM orders o
+      LEFT JOIN stores s ON s.id = o.store_id
+      WHERE o.id = $1 AND o.customer_id = $2
+      LIMIT 1
+      `,
+      [id, customerId],
+    );
+    return r.rows[0] ?? null;
+  }
+
+  async listItems(orderId: string): Promise<OrderItemRow[]> {
+    const r = await this.db.query<OrderItemRow>(
+      `
+      SELECT id, order_id, product_id, variant_id, product_name, variant_name,
+             unit_price, quantity, line_total, notes
+      FROM order_items
+      WHERE order_id = $1
+      ORDER BY created_at ASC
+      `,
+      [orderId],
+    );
+    return r.rows;
+  }
+
+  async cancel(
+    id: string,
+    customerId: string,
+    reason: string,
+  ): Promise<OrderRow | null> {
+    return this.db.transaction(async (client: PoolClient) => {
+      const cur = await client.query<OrderRow>(
+        `SELECT * FROM orders WHERE id = $1 AND customer_id = $2 FOR UPDATE`,
+        [id, customerId],
+      );
+      const order = cur.rows[0];
+      if (!order) return null;
+
+      const upd = await client.query<OrderRow>(
+        `
+        UPDATE orders
+        SET status = 'cancelled',
+            cancelled_at = now(),
+            cancelled_by = $3,
+            cancel_reason = $4
+        WHERE id = $1 AND customer_id = $2
+        RETURNING *
+        `,
+        [id, customerId, customerId, reason],
+      );
+
+      await client.query(
+        `
+        INSERT INTO order_status_history
+          (order_id, from_status, to_status, changed_by, actor_role, note)
+        VALUES ($1, $2, 'cancelled', $3, 'customer', $4)
+        `,
+        [id, order.status, customerId, reason],
+      );
+
+      return upd.rows[0] ?? null;
+    });
+  }
+
+  // ───── helpers يستخدمها Service للتحقق ─────
+
+  async getStoreForOrder(storeId: string): Promise<{
+    id: string;
+    name_ar: string;
+    delivery_fee: string | number;
+    min_order_amount: string | number;
+    is_open: boolean;
+    accepts_orders: boolean;
+    status: string;
+    deleted_at: Date | null;
+  } | null> {
+    const r = await this.db.query(
+      `
+      SELECT id, name_ar, delivery_fee, min_order_amount, is_open,
+             accepts_orders, status, deleted_at
+      FROM stores WHERE id = $1 LIMIT 1
+      `,
+      [storeId],
+    );
+    return r.rows[0] ?? null;
+  }
+
+  async getAddressForUser(
+    addressId: string,
+    userId: string,
+  ): Promise<{
+    id: string;
+    address_line: string;
+    building: string | null;
+    floor: string | null;
+    apartment: string | null;
+    landmark: string | null;
+    latitude: string | number;
+    longitude: string | number;
+    user_id: string;
+    deleted_at: Date | null;
+  } | null> {
+    const r = await this.db.query(
+      `
+      SELECT id, address_line, building, floor, apartment, landmark,
+             latitude, longitude, user_id, deleted_at
+      FROM addresses WHERE id = $1 AND user_id = $2 LIMIT 1
+      `,
+      [addressId, userId],
+    );
+    return r.rows[0] ?? null;
+  }
+
+  async getProductsForOrder(
+    productIds: string[],
+  ): Promise<
+    Array<{
+      id: string;
+      store_id: string;
+      name_ar: string;
+      base_price: string | number;
+      is_available: boolean;
+      deleted_at: Date | null;
+    }>
+  > {
+    if (productIds.length === 0) return [];
+    const r = await this.db.query(
+      `
+      SELECT id, store_id, name_ar, base_price, is_available, deleted_at
+      FROM products
+      WHERE id = ANY($1::uuid[])
+      `,
+      [productIds],
+    );
+    return r.rows;
+  }
+
+  async getCurrency(): Promise<string> {
+    const r = await this.db.query<{ value: string }>(
+      `SELECT value FROM settings WHERE key = 'currency' LIMIT 1`,
+    );
+    const v = r.rows[0]?.value;
+    return typeof v === 'string' ? v : 'USD';
+  }
+
+  async getUserInfo(userId: string): Promise<{
+    full_name: string;
+    phone: string | null;
+  } | null> {
+    const r = await this.db.query(
+      `SELECT full_name, phone FROM users WHERE id = $1 LIMIT 1`,
+      [userId],
+    );
+    return r.rows[0] ?? null;
+  }
+}

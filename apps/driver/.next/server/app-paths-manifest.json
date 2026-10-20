@@ -1,0 +1,8 @@
+{
+  "/api/v1/[...path]/route": "app/api/v1/[...path]/route.js",
+  "/page": "app/page.js",
+  "/profile/page": "app/profile/page.js",
+  "/available/page": "app/available/page.js",
+  "/notifications-setup/page": "app/notifications-setup/page.js",
+  "/active/page": "app/active/page.js"
+}

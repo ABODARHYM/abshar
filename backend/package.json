@@ -1,0 +1,87 @@
+{
+  "name": "absher-bi-backend",
+  "version": "0.1.0",
+  "private": true,
+  "description": "ABSHER BI - NestJS backend (REST + WebSocket) on PostgreSQL",
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=22.12"
+  },
+  "scripts": {
+    "build": "nest build",
+    "start": "node --env-file=.env dist/main.js",
+    "start:dev": "node --env-file=.env -r ts-node/register src/main.ts",
+    "start:prod": "node --env-file=.env dist/main.js",
+    "migrate": "node --env-file=.env -r ts-node/register src/database/migrate.ts up",
+    "migrate:status": "node --env-file=.env -r ts-node/register src/database/migrate.ts status",
+    "migrate:prod": "node --env-file=.env dist/database/migrate.js up",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "jest --passWithNoTests",
+    "test:cov": "jest --coverage",
+    "vapid:generate": "node scripts/generate-vapid.js"
+  },
+  "dependencies": {
+    "@nestjs/common": "^11.1.26",
+    "@nestjs/config": "^12.0.1",
+    "@nestjs/core": "^11.1.26",
+    "@nestjs/jwt": "^12.0.2",
+    "@nestjs/passport": "^12.0.0",
+    "@nestjs/platform-express": "^11.1.26",
+    "@nestjs/platform-socket.io": "^11.1.26",
+    "@nestjs/swagger": "^11.0.0",
+    "@nestjs/throttler": "^6.4.0",
+    "@nestjs/websockets": "^11.1.26",
+    "@types/web-push": "^3.6.4",
+    "bcryptjs": "^3.0.3",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.14.1",
+    "compression": "^1.7.5",
+    "helmet": "^8.0.0",
+    "passport": "^0.7.0",
+    "passport-jwt": "^4.0.1",
+    "pg": "^8.13.1",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.1",
+    "socket.io": "^4.8.4",
+    "web-push": "^3.6.7"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "^11.1.26",
+    "@nestjs/testing": "^11.1.26",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/compression": "^1.7.5",
+    "@types/express": "^5.0.0",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^22.10.0",
+    "@types/passport-jwt": "^4.0.1",
+    "@types/pg": "^8.11.10",
+    "@types/supertest": "^6.0.2",
+    "jest": "^30.5.2",
+    "socket.io-client": "^4.8.3",
+    "supertest": "^7.0.0",
+    "ts-jest": "^29.2.5",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.7.2"
+  },
+  "jest": {
+    "moduleFileExtensions": [
+      "js",
+      "json",
+      "ts"
+    ],
+    "rootDir": ".",
+    "roots": [
+      "<rootDir>/src"
+    ],
+    "testRegex": ".*\\.spec\\.ts$",
+    "transform": {
+      "^.+\\.ts$": "ts-jest"
+    },
+    "testEnvironment": "node",
+    "collectCoverageFrom": [
+      "src/**/*.ts",
+      "!src/main.ts"
+    ],
+    "coverageDirectory": "coverage"
+  }
+}

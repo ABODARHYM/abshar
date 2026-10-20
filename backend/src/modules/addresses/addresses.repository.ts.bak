@@ -1,0 +1,214 @@
+import { Injectable } from '@nestjs/common';
+import { PoolClient } from 'pg';
+import { DatabaseService } from '../../database/database.service';
+
+export interface AddressRow {
+  id: string;
+  user_id: string;
+  label: string;
+  address_line: string;
+  building: string | null;
+  floor: string | null;
+  apartment: string | null;
+  landmark: string | null;
+  latitude: string | number;
+  longitude: string | number;
+  zone_id: string | null;
+  is_default: boolean;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface AddressInput {
+  label?: string;
+  addressLine?: string;
+  building?: string;
+  floor?: string;
+  apartment?: string;
+  landmark?: string;
+  latitude?: number;
+  longitude?: number;
+  zoneId?: string;
+  isDefault?: boolean;
+}
+
+@Injectable()
+export class AddressesRepository {
+  constructor(private readonly db: DatabaseService) {}
+
+  async listByUser(userId: string): Promise<AddressRow[]> {
+    const result = await this.db.query<AddressRow>(
+      `
+      SELECT id, user_id, label, address_line, building, floor, apartment,
+             landmark, latitude, longitude, zone_id, is_default,
+             created_at, updated_at
+      FROM addresses
+      WHERE user_id = $1 AND deleted_at IS NULL
+      ORDER BY is_default DESC, created_at DESC
+      `,
+      [userId],
+    );
+    return result.rows;
+  }
+
+  async findByIdForUser(
+    id: string,
+    userId: string,
+  ): Promise<AddressRow | null> {
+    const result = await this.db.query<AddressRow>(
+      `
+      SELECT id, user_id, label, address_line, building, floor, apartment,
+             landmark, latitude, longitude, zone_id, is_default,
+             created_at, updated_at
+      FROM addresses
+      WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL
+      LIMIT 1
+      `,
+      [id, userId],
+    );
+    return result.rows[0] ?? null;
+  }
+
+  async zoneExists(zoneId: string): Promise<boolean> {
+    const result = await this.db.query<{ id: string }>(
+      `SELECT id FROM delivery_zones WHERE id = $1 AND is_active = true LIMIT 1`,
+      [zoneId],
+    );
+    return result.rows.length > 0;
+  }
+
+  /**
+   * إنشاء عنوان. إذا isDefault=true => نلغي is_default عن بقية عناوين المستخدم
+   * داخل transaction واحدة.
+   */
+  async create(userId: string, input: AddressInput): Promise<AddressRow> {
+    return this.db.transaction(async (client: PoolClient) => {
+      if (input.isDefault) {
+        await client.query(
+          `UPDATE addresses SET is_default = false WHERE user_id = $1 AND deleted_at IS NULL AND is_default = true`,
+          [userId],
+        );
+      }
+
+      const result = await client.query<AddressRow>(
+        `
+        INSERT INTO addresses (
+          user_id, label, address_line, building, floor, apartment,
+          landmark, latitude, longitude, zone_id, is_default
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        RETURNING id, user_id, label, address_line, building, floor, apartment,
+                  landmark, latitude, longitude, zone_id, is_default,
+                  created_at, updated_at
+        `,
+        [
+          userId,
+          input.label ?? 'home',
+          input.addressLine,
+          input.building ?? null,
+          input.floor ?? null,
+          input.apartment ?? null,
+          input.landmark ?? null,
+          input.latitude,
+          input.longitude,
+          input.zoneId ?? null,
+          input.isDefault ?? false,
+        ],
+      );
+      return result.rows[0];
+    });
+  }
+
+  async update(
+    id: string,
+    userId: string,
+    input: AddressInput,
+  ): Promise<AddressRow | null> {
+    return this.db.transaction(async (client: PoolClient) => {
+      if (input.isDefault === true) {
+        await client.query(
+          `UPDATE addresses SET is_default = false WHERE user_id = $1 AND deleted_at IS NULL AND id <> $2 AND is_default = true`,
+          [userId, id],
+        );
+      }
+
+      const sets: string[] = [];
+      const params: unknown[] = [];
+      let i = 1;
+
+      const map: Array<[string, unknown]> = [
+        ['label', input.label],
+        ['address_line', input.addressLine],
+        ['building', input.building],
+        ['floor', input.floor],
+        ['apartment', input.apartment],
+        ['landmark', input.landmark],
+        ['latitude', input.latitude],
+        ['longitude', input.longitude],
+        ['zone_id', input.zoneId],
+        ['is_default', input.isDefault],
+      ];
+      for (const [col, val] of map) {
+        if (val !== undefined) {
+          sets.push(`${col} = $${i++}`);
+          params.push(val);
+        }
+      }
+
+      if (sets.length === 0) {
+        const cur = await client.query<AddressRow>(
+          `
+          SELECT id, user_id, label, address_line, building, floor, apartment,
+                 landmark, latitude, longitude, zone_id, is_default,
+                 created_at, updated_at
+          FROM addresses WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL
+          `,
+          [id, userId],
+        );
+        return cur.rows[0] ?? null;
+      }
+
+      params.push(id, userId);
+      const result = await client.query<AddressRow>(
+        `
+        UPDATE addresses
+        SET ${sets.join(', ')}
+        WHERE id = $${i++} AND user_id = $${i} AND deleted_at IS NULL
+        RETURNING id, user_id, label, address_line, building, floor, apartment,
+                  landmark, latitude, longitude, zone_id, is_default,
+                  created_at, updated_at
+        `,
+        params,
+      );
+      return result.rows[0] ?? null;
+    });
+  }
+
+  async softDelete(id: string, userId: string): Promise<boolean> {
+    const result = await this.db.query(
+      `UPDATE addresses SET deleted_at = now(), is_default = false WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL`,
+      [id, userId],
+    );
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  async setDefault(id: string, userId: string): Promise<AddressRow | null> {
+    return this.db.transaction(async (client: PoolClient) => {
+      await client.query(
+        `UPDATE addresses SET is_default = false WHERE user_id = $1 AND deleted_at IS NULL AND is_default = true`,
+        [userId],
+      );
+      const result = await client.query<AddressRow>(
+        `
+        UPDATE addresses SET is_default = true
+        WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL
+        RETURNING id, user_id, label, address_line, building, floor, apartment,
+                  landmark, latitude, longitude, zone_id, is_default,
+                  created_at, updated_at
+        `,
+        [id, userId],
+      );
+      return result.rows[0] ?? null;
+    });
+  }
+}

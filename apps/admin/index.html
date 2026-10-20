@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#07111f">
+  <meta name="description" content="أبشر بي | منصة الطلب والتوصيل الذكية">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="أبشر بي">
+  <meta name="mobile-web-app-capable" content="yes">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <title>أبشر بي | ABSHER BI</title>
+  <link rel="stylesheet" href="css/main.css?v=23">
+  <link rel="stylesheet" href="css/components.css?v=23">
+  <link rel="stylesheet" href="css/pages.css?v=23">
+  <link rel="stylesheet" href="css/dispatch.css?v=1">
+</head>
+<body>
+  <div class="orb one"></div>
+  <div class="orb two"></div>
+
+  <!-- WELCOME -->
+  <section id="welcomePage" class="page welcome-page">
+    <div class="welcome-card">
+      <div class="brand">
+        <div class="brand-icon">أ</div>
+        <div><h1>أبشر بي</h1><span>ABSHER BI</span></div>
+      </div>
+      <div class="welcome-content">
+        <span class="badge">⚡ منصة ذكية للطلب والتوصيل</span>
+        <h2>اطلبها، <span>وأبشر بي</span></h2>
+        <p>منصة تجمع العملاء والمتاجر والمندوبين في تجربة طلب وتوصيل سهلة وسريعة.</p>
+      </div>
+      <div class="welcome-actions">
+        <button id="goLogin" class="btn btn-primary" type="button">تسجيل الدخول</button>
+        <button id="goRegister" class="btn btn-secondary" type="button">إنشاء حساب جديد</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- LOGIN -->
+  <section id="loginPage" class="page auth-page hidden">
+    <div class="auth-card">
+      <button id="backLogin" class="back" type="button">← العودة</button>
+      <div class="auth-header">
+        <div class="brand-icon small">أ</div>
+        <h2>مرحباً بعودتك</h2>
+        <p>سجّل دخولك إلى حساب أبشر بي</p>
+      </div>
+      <form id="loginForm" class="form">
+        <label>البريد الإلكتروني أو رقم الهاتف</label>
+        <input id="loginIdentifier" type="text" autocomplete="username" placeholder="example@email.com أو 77xxxxxxx" required>
+        <label>كلمة المرور</label>
+        <input id="loginPassword" type="password" autocomplete="current-password" placeholder="أدخل كلمة المرور" required>
+        <button type="submit" class="btn btn-primary">تسجيل الدخول</button>
+        <div id="loginMessage" class="message hidden"></div>
+      </form>
+      <div class="auth-footer">ليس لديك حساب؟ <button id="registerFromLogin" type="button">إنشاء حساب</button></div>
+    </div>
+  </section>
+
+  <!-- REGISTER -->
+  <section id="registerPage" class="page auth-page hidden">
+    <div class="auth-card">
+      <button id="backRegister" class="back" type="button">← العودة</button>
+      <div class="auth-header">
+        <div class="brand-icon small">أ</div>
+        <h2>إنشاء حساب</h2>
+        <p>أنشئ حسابك وابدأ استخدام أبشر بي</p>
+      </div>
+      <form id="registerForm" class="form">
+        <label>الاسم الكامل</label>
+        <input id="registerFullName" type="text" placeholder="محمد أحمد" autocomplete="name" required>
+        <label>البريد الإلكتروني</label>
+        <input id="registerEmail" type="email" placeholder="example@email.com" autocomplete="email" required>
+        <label>رقم الهاتف</label>
+        <input id="registerPhone" type="tel" placeholder="77xxxxxxx" autocomplete="tel" required>
+        <label>كلمة المرور</label>
+        <input id="registerPassword" type="password" placeholder="8 أحرف على الأقل" autocomplete="new-password" required>
+        <button type="submit" class="btn btn-primary">إنشاء الحساب</button>
+        <div id="registerMessage" class="message hidden"></div>
+      </form>
+      <div class="auth-footer">لديك حساب بالفعل؟ <button id="loginFromRegister" type="button">تسجيل الدخول</button></div>
+    </div>
+  </section>
+
+  <!-- APP -->
+  <section id="appPage" class="page app-page hidden">
+    <header class="topbar">
+      <div class="top-brand">
+        <div class="brand-icon">أ</div>
+        <div><strong>أبشر بي</strong><small>ABSHER BI</small></div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button id="notifButton" class="icon-btn" type="button" title="الإشعارات" onclick="openNotifications()" style="position:relative">
+          🔔
+          <span id="notifBadge" class="notif-badge" style="display:none"></span>
+        </button>
+        <button id="logoutButton" class="icon-btn" type="button" title="تسجيل الخروج">⇥</button>
+      </div>
+    </header>
+
+    <main class="content">
+      <!-- HOME -->
+      <div id="homeView" class="view">
+        <section class="hero">
+          <small>👋 مرحباً بك</small>
+          <h1 id="homeName">...</h1>
+          <p>ماذا تريد أن تطلب اليوم؟</p>
+        </section>
+        <div class="search">
+          <span>⌕</span>
+          <input id="searchInput" type="search" placeholder="ابحث عن متجر أو منتج...">
+        </div>
+        <section class="section">
+          <div class="section-title"><h2>الخدمات</h2></div>
+          <div class="services">
+            <button id="adminEntryBtn" class="service service-admin" type="button" style="display:none">
+              <div class="service-icon">⚙️</div><strong>الإدارة</strong><small>أدر المنصة</small>
+            </button>
+            <button id="driverEntryBtn" class="service service-driver" type="button" style="display:none">
+              <div class="service-icon">🛵</div><strong>توصيلاتي</strong><small>اقبل الطلبات</small>
+            </button>
+            <button id="soEntryBtn" class="service service-highlight" type="button" style="display:none">
+              <div class="service-icon">🏪</div><strong>متجري</strong><small>أدر متجرك</small>
+            </button>
+            <button class="service" data-view="storesView">
+              <div class="service-icon">🏪</div><strong>المتاجر</strong><small>اكتشف المتاجر</small>
+            </button>
+            <button class="service" data-view="ordersView">
+              <div class="service-icon">🛍️</div><strong>طلباتي</strong><small>تابع طلباتك</small>
+            </button>
+            <button class="service" data-view="favoritesView">
+              <div class="service-icon">♥</div><strong>المفضلة</strong><small>العناصر المحفوظة</small>
+            </button>
+            <button class="service" data-view="addressesView">
+              <div class="service-icon">📍</div><strong>عناويني</strong><small>إدارة العناوين</small>
+            </button>
+          </div>
+        </section>
+        <section class="section">
+          <div class="section-title"><h2>حسابي</h2><button id="editProfileButton" type="button">تعديل</button></div>
+          <div class="profile-card">
+            <div id="profileAvatar" class="avatar">أ</div>
+            <div class="profile-info">
+              <strong id="profileName">...</strong>
+              <span id="profileEmail">...</span>
+              <small id="profilePhone">...</small>
+              <small id="profileRole">...</small>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <!-- PROFILE -->
+      <div id="profileView" class="view hidden"><div id="profileContent"></div></div>
+
+      <!-- NOTIFICATIONS -->
+      <div id="notificationsView" class="view hidden">
+        <section class="section">
+          <div class="section-title"><h2>الإشعارات</h2></div>
+          <div id="notificationsContent"></div>
+        </section>
+      </div>
+
+      <!-- STORES -->
+      <div id="storesView" class="view hidden">
+        <section class="section">
+          <div class="section-title"><h2>التصنيفات</h2></div>
+          <div id="categoriesList" class="categories-grid"><div class="empty"><strong>جاري التحميل...</strong></div></div>
+        </section>
+        <section class="section">
+          <div class="section-title"><h2>المتاجر</h2></div>
+          <div id="storesList" class="grid"><div class="empty"><div class="empty-icon">🏪</div><strong>جاري التحميل...</strong></div></div>
+        </section>
+      </div>
+
+      <!-- STORE DETAILS -->
+      <div id="storeDetailsView" class="view hidden"><div id="storeDetailsContent"></div></div>
+      <!-- PRODUCT DETAILS -->
+      <div id="productDetailsView" class="view hidden"><div id="productDetailsContent"></div></div>
+
+      <!-- ORDERS -->
+      <div id="ordersView" class="view hidden">
+        <section class="section">
+          <div class="section-title"><h2>طلباتي</h2></div>
+          <div id="ordersList">
+            <div class="empty"><div class="empty-icon">🛍️</div><strong>لا توجد طلبات حالياً</strong><p>ستظهر طلباتك هنا.</p></div>
+          </div>
+        </section>
+      </div>
+
+      <!-- ORDER DETAILS -->
+      <div id="orderDetailsView" class="view hidden"><div id="orderDetailsContent"></div></div>
+
+      <!-- FAVORITES -->
+      <div id="favoritesView" class="view hidden">
+        <section class="section">
+          <div class="section-title"><h2>المفضلة</h2></div>
+          <div id="favoritesList"><div class="empty"><div class="empty-icon">♥</div><strong>المفضلة فارغة</strong></div></div>
+        </section>
+      </div>
+
+      <!-- ADDRESSES -->
+      <div id="addressesView" class="view hidden">
+        <section class="section">
+          <div class="section-title"><h2>عناويني</h2><button id="addAddressButton" type="button">+ إضافة</button></div>
+          <div id="addressesList"><div class="empty"><div class="empty-icon">📍</div><strong>لا توجد عناوين</strong></div></div>
+        </section>
+      </div>
+
+      <!-- CART -->
+      <div id="cartView" class="view hidden">
+        <section class="section">
+          <div class="section-title"><h2>سلة الطلب</h2></div>
+          <div id="cartList"></div>
+          <div id="cartEmpty" class="empty"><div class="empty-icon">🛒</div><strong>السلة فارغة</strong><p>أضف منتجات للبدء.</p></div>
+          <div id="cartSummary" class="cart-summary hidden">
+            <div class="summary-row"><span>المنتجات</span><strong id="subtotal">0</strong></div>
+            <div class="summary-row"><span>التوصيل</span><strong id="deliveryFee">0</strong></div>
+            <div class="summary-row total"><span>الإجمالي</span><strong id="total">0</strong></div>
+            <button id="checkoutButton" class="btn btn-primary full" type="button" style="margin-top:15px">متابعة الطلب</button>
+          </div>
+        </section>
+      </div>
+
+      <!-- CHECKOUT -->
+      <div id="checkoutView" class="view hidden"><div id="checkoutContent"></div></div>
+      <!-- STORE OWNER DASHBOARD -->
+      <div id="storeDashboardView" class="view hidden"><div id="storeDashboardContent"></div></div>
+      <!-- STORE OWNER ORDERS -->
+      <div id="soOrdersView" class="view hidden">
+        <section class="section">
+          <div class="section-title"><h2>طلبات المتجر</h2><button type="button" onclick="showView('storeDashboardView'); openStoreDashboard();">← لوحة المتجر</button></div>
+          <div id="soOrdersList"><div class="empty"><div class="spinner" style="margin:auto"></div></div></div>
+        </section>
+      </div>
+      <!-- STORE OWNER ORDER DETAILS -->
+      <div id="soOrderDetailsView" class="view hidden"><div id="soOrderDetailsContent"></div></div>
+      <!-- STORE OWNER PRODUCTS -->
+      <div id="soProductsView" class="view hidden">
+        <section class="section">
+          <div class="section-title"><h2>منتجات المتجر</h2><button type="button" onclick="showView('storeDashboardView'); openStoreDashboard();">← لوحة المتجر</button></div>
+          <div id="soProductsList"><div class="empty"><div class="spinner" style="margin:auto"></div></div></div>
+        </section>
+      </div>
+      <!-- STORE OWNER CATEGORIES -->
+      <div id="soCategoriesView" class="view hidden">
+        <section class="section">
+          <div class="section-title"><h2>تصنيفات المتجر</h2><button type="button" onclick="showView('storeDashboardView'); openStoreDashboard();">← لوحة المتجر</button></div>
+          <div id="soCategoriesList"><div class="empty"><div class="spinner" style="margin:auto"></div></div></div>
+        </section>
+      </div>
+      <!-- DRIVER DASHBOARD -->
+      <div id="driverDashboardView" class="view hidden"><div id="driverDashboardContent"></div></div>
+      <!-- DRIVER ORDER DETAILS -->
+      <div id="driverOrderDetailsView" class="view hidden"><div id="driverOrderDetailsContent"></div></div>
+      <!-- ADMIN DASHBOARD -->
+      <div id="adminDashboardView" class="view hidden"><div id="adminDashboardContent"></div></div>
+      <!-- ADMIN USER DETAILS -->
+      <div id="adminUserDetailsView" class="view hidden"><div id="adminUserDetailsContent"></div></div>
+    </main>
+
+    <nav class="bottom-nav">
+      <button class="nav-item active" data-view="homeView"><span>⌂</span><small>الرئيسية</small></button>
+      <button class="nav-item" data-view="storesView"><span>🏪</span><small>المتاجر</small></button>
+      <button class="nav-item" data-view="ordersView"><span>🛍️</span><small>طلباتي</small></button>
+      <button class="nav-item" data-view="favoritesView"><span>♥</span><small>المفضلة</small></button>
+      <button class="nav-item" data-view="cartView"><span>🛒</span><small>السلة</small></button>
+    </nav>
+  </section>
+
+  <!-- ADDRESS MODAL -->
+  <div id="addressModal" class="modal hidden">
+    <div class="modal-card">
+      <div class="modal-head">
+        <h2 id="addressModalTitle">إضافة عنوان</h2>
+        <button id="closeAddressModal" class="icon-btn" type="button">×</button>
+      </div>
+      <form id="addressForm" class="form">
+        <input type="hidden" id="addressId">
+        <label>اسم العنوان</label>
+        <input id="addressLabel" type="text" placeholder="المنزل" value="home">
+        <label>العنوان *</label>
+        <textarea id="addressLine" placeholder="شارع تعز..." required></textarea>
+        <label>البناء / الطابق / الشقة</label>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+          <input id="addressBuilding" type="text" placeholder="البناء">
+          <input id="addressFloor" type="text" placeholder="الطابق">
+          <input id="addressApartment" type="text" placeholder="الشقة">
+        </div>
+        <label>علامة مميزة</label>
+        <input id="addressLandmark" type="text" placeholder="بجانب المسجد">
+        <label>الموقع على الخريطة *</label>
+        <button type="button" class="map-picker-btn" onclick="openAddressMapPicker()">
+          <span style="font-size:22px">🗺️</span>
+          <div style="flex:1;text-align:right">
+            <strong>اختر من الخريطة</strong>
+            <small id="addressCoordsDisplay">📍 15.369445 · 44.191006</small>
+          </div>
+          <span style="color:var(--muted)">←</span>
+        </button>
+        <input type="hidden" id="addressLat" value="15.369445">
+        <input type="hidden" id="addressLng" value="44.191006">
+        <label style="display:flex;align-items:center;gap:8px;margin-top:8px">
+          <input id="addressIsDefault" type="checkbox" style="width:auto">
+          تعيين كعنوان افتراضي
+        </label>
+        <button class="btn btn-primary" type="submit">حفظ</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- EDIT PROFILE MODAL -->
+  <div id="editProfileModal" class="modal hidden">
+    <div class="modal-card">
+      <div class="modal-head">
+        <h2>تعديل الملف الشخصي</h2>
+        <button class="icon-btn" type="button" onclick="closeEditProfileModal()">×</button>
+      </div>
+      <form id="editProfileForm" class="form" onsubmit="submitEditProfile(event)">
+        <label>الاسم الكامل *</label>
+        <input id="editProfileFullName" type="text" required minlength="2" maxlength="120">
+        <label>رقم الهاتف</label>
+        <input id="editProfilePhone" type="tel" maxlength="20">
+        <label>اللغة</label>
+        <select id="editProfileLocale"><option value="ar">العربية</option><option value="en">English</option></select>
+        <button class="btn btn-primary" type="submit">حفظ</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- CHANGE PASSWORD MODAL -->
+  <div id="changePasswordModal" class="modal hidden">
+    <div class="modal-card">
+      <div class="modal-head">
+        <h2>تغيير كلمة المرور</h2>
+        <button class="icon-btn" type="button" onclick="closeChangePasswordModal()">×</button>
+      </div>
+      <form id="changePasswordForm" class="form" onsubmit="submitChangePassword(event)">
+        <label>كلمة المرور الحالية *</label>
+        <input id="cpCurrentPassword" type="password" required>
+        <label>كلمة المرور الجديدة *</label>
+        <input id="cpNewPassword" type="password" required minlength="8">
+        <label>تأكيد كلمة المرور الجديدة *</label>
+        <input id="cpConfirmPassword" type="password" required minlength="8">
+        <div id="changePasswordMessage" class="message hidden"></div>
+        <button class="btn btn-primary" type="submit">تغيير كلمة المرور</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- SO PRODUCT MODAL -->
+  <div id="soProductModal" class="modal hidden">
+    <div class="modal-card">
+      <div class="modal-head">
+        <h2 id="soProductModalTitle">منتج جديد</h2>
+        <button class="icon-btn" type="button" onclick="closeProductModal()">×</button>
+      </div>
+      <form id="soProductForm" class="form" onsubmit="submitProductForm(event)">
+        <input type="hidden" id="soProductId">
+        <label>الاسم بالعربية *</label>
+        <input id="soProductNameAr" type="text" required maxlength="160">
+        <label>الاسم بالإنجليزية *</label>
+        <input id="soProductNameEn" type="text" required maxlength="160">
+        <label>الوصف</label>
+        <textarea id="soProductDescAr" maxlength="1000"></textarea>
+        <label>السعر *</label>
+        <input id="soProductPrice" type="number" step="0.01" min="0" required>
+        <label>التصنيف</label>
+        <select id="soProductCategory"><option value="">بدون تصنيف</option></select>
+        <label>رابط الصورة</label>
+        <input id="soProductImageUrl" type="url" maxlength="500">
+        <label style="display:flex;align-items:center;gap:8px;margin-top:8px">
+          <input id="soProductIsAvailable" type="checkbox" checked style="width:auto">متوفر للبيع
+        </label>
+        <label>ترتيب العرض</label>
+        <input id="soProductSortOrder" type="number" value="0" min="0" max="10000">
+        <button class="btn btn-primary" type="submit">حفظ</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- SO CATEGORY MODAL -->
+  <div id="soCategoryModal" class="modal hidden">
+    <div class="modal-card">
+      <div class="modal-head">
+        <h2>تصنيف جديد</h2>
+        <button class="icon-btn" type="button" onclick="closeCategoryModal()">×</button>
+      </div>
+      <form id="soCategoryForm" class="form" onsubmit="submitCategoryForm(event)">
+        <label>الاسم بالعربية *</label>
+        <input id="soCategoryNameAr" type="text" required maxlength="120">
+        <label>الاسم بالإنجليزية *</label>
+        <input id="soCategoryNameEn" type="text" required maxlength="120">
+        <label>ترتيب العرض</label>
+        <input id="soCategorySortOrder" type="number" value="0" min="0" max="10000">
+        <button class="btn btn-primary" type="submit">حفظ</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- SO SETTINGS MODAL -->
+  <div id="soSettingsModal" class="modal hidden">
+    <div class="modal-card">
+      <div class="modal-head">
+        <h2>إعدادات المتجر</h2>
+        <button class="icon-btn" type="button" onclick="closeStoreSettings()">×</button>
+      </div>
+      <form id="soSettingsForm" class="form" onsubmit="submitStoreSettings(event)">
+        <label>الاسم بالعربية *</label>
+        <input id="soSettingsNameAr" type="text" required maxlength="160">
+        <label>الاسم بالإنجليزية *</label>
+        <input id="soSettingsNameEn" type="text" required maxlength="160">
+        <label>الوصف</label>
+        <textarea id="soSettingsDescAr" maxlength="1000"></textarea>
+        <label>الهاتف</label>
+        <input id="soSettingsPhone" type="tel" maxlength="20">
+        <label>العنوان *</label>
+        <input id="soSettingsAddress" type="text" required maxlength="255">
+        <label>رسوم التوصيل (ريال) *</label>
+        <input id="soSettingsDeliveryFee" type="number" step="0.01" min="0" required>
+        <label>الحد الأدنى للطلب (ريال) *</label>
+        <input id="soSettingsMinOrder" type="number" step="0.01" min="0" required>
+        <label>متوسط وقت التحضير (دقائق) *</label>
+        <input id="soSettingsPrepMinutes" type="number" min="1" max="600" required>
+        <label style="display:flex;align-items:center;gap:8px;margin-top:8px">
+          <input id="soSettingsAcceptsOrders" type="checkbox" style="width:auto">يستقبل طلبات جديدة
+        </label>
+        <button class="btn btn-primary" type="submit">حفظ الإعدادات</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- TOAST + LOADING -->
+  <div id="toast" class="toast"></div>
+  <div id="loading" class="loading hidden">
+    <div class="loading-box">
+      <div class="spinner"></div>
+      <p id="loadingText">جاري التحميل...</p>
+    </div>
+  </div>
+
+  <!-- SCRIPTS -->
+  <script src="js/config.js?v=23"></script>
+  <script src="js/state.js?v=23"></script>
+  <script src="js/api.js?v=23"></script>
+  <script src="js/skeleton.js?v=23"></script>
+  <script src="js/empty-states.js?v=23"></script>
+  <script src="js/ui.js?v=23"></script>
+  <script src="js/auth.js?v=23"></script>
+  <script src="js/profile.js?v=23"></script>
+  <script src="js/profile-page.js?v=23"></script>
+  <script src="js/addresses.js?v=23"></script>
+  <script src="js/map-picker.js?v=23"></script>
+  <script src="js/categories.js?v=23"></script>
+  <script src="js/stores.js?v=23"></script>
+  <script src="js/product-details.js?v=23"></script>
+  <script src="js/cart.js?v=23"></script>
+  <script src="js/checkout.js?v=23"></script>
+  <script src="js/orders.js?v=23"></script>
+  <script src="js/store-owner.js?v=23"></script>
+  <script src="js/store-dashboard.js?v=23"></script>
+  <script src="js/driver.js?v=25"></script>
+  <script src="js/driver-dashboard.js?v=23"></script>
+  <script src="js/dispatch.js?v=25"></script>
+  <script src="js/smart-dispatch-boot.js?v=1"></script>
+  <script src="js/admin.js?v=23"></script>
+  <script src="js/admin-dashboard.js?v=23"></script>
+  <script src="js/pull-refresh.js?v=23"></script>
+  <script src="js/install-prompt.js?v=23"></script>
+  <script src="js/notification-sound.js?v=23"></script>
+  <script src="js/notifications.js?v=23"></script>
+  <script src="https://cdn.socket.io/4.8.3/socket.io.min.js"></script>
+  <script src="js/notification-realtime.js?v=1"></script>
+  <script src="js/app.js?v=23"></script>
+
+  <!-- DEBUG TOKEN -->
+  <button id="debugToggleBtn" onclick="toggleDebugToken()" style="position:fixed;bottom:16px;right:16px;z-index:99998;background:#f59e0b;color:#000;border:0;padding:8px 12px;border-radius:10px;font-size:11px;font-weight:900;box-shadow:0 4px 12px rgba(0,0,0,.3)">🐛 Debug</button>
+  <div id="debugTokenBox" style="display:none;position:fixed;bottom:60px;right:16px;left:16px;z-index:99999;background:rgba(0,0,0,.92);color:#86efac;padding:12px;border-radius:12px;font-size:11px;font-family:monospace;max-height:40vh;overflow:auto;line-height:1.6">
+    <div id="debugTokenContent">...</div>
+    <button onclick="document.getElementById('debugTokenBox').style.display='none';document.getElementById('debugToggleBtn').style.display='block'" style="margin-top:8px;background:#22c55e;color:#fff;border:0;padding:6px 12px;border-radius:6px;font-size:11px;font-weight:700">إغلاق</button>
+  </div>
+  <script>
+  function toggleDebugToken() {
+    document.getElementById('debugTokenBox').style.display = 'block';
+    document.getElementById('debugToggleBtn').style.display = 'none';
+    updateDebugToken();
+  }
+  function updateDebugToken() {
+    var content = document.getElementById('debugTokenContent');
+    if (!content) return;
+    var tk = (window.state && window.state.accessToken) || '';
+    var ls = localStorage.getItem('absher_access_token') || '';
+    var user = window.state && window.state.user;
+    var html = '';
+    html += '<b>state.accessToken:</b> ' + (tk ? '<span style="color:#86efac">' + tk.substring(0, 30) + '...</span>' : '<span style="color:#fca5a5">❌ فارغ</span>') + '<br>';
+    html += '<b>localStorage token:</b> ' + (ls ? '<span style="color:#86efac">' + ls.substring(0, 30) + '...</span>' : '<span style="color:#fca5a5">❌ فارغ</span>') + '<br>';
+    html += '<b>user:</b> ' + (user ? '<span style="color:#86efac">' + (user.email || '') + '</span>' : '<span style="color:#fca5a5">❌ فارغ</span>') + '<br>';
+    html += '<b>roles:</b> ' + (user && user.roles ? '<span style="color:#86efac">' + JSON.stringify(user.roles) + '</span>' : '<span style="color:#fca5a5">❌</span>') + '<br>';
+    html += '<b>current view:</b> ' + (document.querySelector('.view:not(.hidden)') || {}).id + '<br>';
+    content.innerHTML = html;
+  }
+  setInterval(function() {
+    var box = document.getElementById('debugTokenBox');
+    if (box && box.style.display === 'block') updateDebugToken();
+  }, 1500);
+  </script>
+</body>
+</html>

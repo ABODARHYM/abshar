@@ -1,0 +1,326 @@
+'use client';
+
+import { useEffect, useState, Suspense } from 'react';
+import { useRouter } from 'next/navigation';
+import dynamic from 'next/dynamic';
+import TopBar from '@/components/TopBar';
+
+const MapPicker = dynamic(() => import('@/components/MapPicker'), {
+  ssr: false,
+  loading: () => (
+    <div className="rounded-2xl border border-[var(--bg-border)] bg-[var(--bg-card)] h-[300px] flex items-center justify-center">
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[var(--brand-red)] mx-auto mb-2" />
+        <p className="text-xs text-[var(--text-muted)]">جاري تحميل الخريطة...</p>
+      </div>
+    </div>
+  ),
+});
+
+const API = '/api/v1';
+
+interface City { id: string; nameAr: string; }
+interface District { id: string; nameAr: string; }
+interface Area { id: string; nameAr: string; }
+
+function NewAddressContent() {
+  const router = useRouter();
+
+  const [label, setLabel] = useState('');
+  const [addressLine, setAddressLine] = useState('');
+  const [building, setBuilding] = useState('');
+  const [floor, setFloor] = useState('');
+  const [apartment, setApartment] = useState('');
+  const [landmark, setLandmark] = useState('');
+  const [cityId, setCityId] = useState('');
+  const [districtId, setDistrictId] = useState('');
+  const [areaId, setAreaId] = useState('');
+  const [isDefault, setIsDefault] = useState(false);
+
+  const [lat, setLat] = useState(15.4633);
+  const [lng, setLng] = useState(45.3256);
+  const [addressFromMap, setAddressFromMap] = useState('');
+
+  const [cities, setCities] = useState<City[]>([]);
+  const [districts, setDistricts] = useState<District[]>([]);
+  const [areas, setAreas] = useState<Area[]>([]);
+
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    fetch(`${API}/geography/cities`)
+      .then((r) => (r.ok ? r.json() : []))
+      .then((d) => {
+        const list = Array.isArray(d) ? d : [];
+        setCities(list);
+        if (list.length === 1) setCityId(list[0].id);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    setDistricts([]); setDistrictId(''); setAreas([]); setAreaId('');
+    if (!cityId) return;
+    fetch(`${API}/geography/cities/${cityId}/districts`)
+      .then((r) => (r.ok ? r.json() : []))
+      .then((d) => setDistricts(Array.isArray(d) ? d : []))
+      .catch(() => {});
+  }, [cityId]);
+
+  useEffect(() => {
+    setAreas([]); setAreaId('');
+    if (!districtId) return;
+    fetch(`${API}/geography/districts/${districtId}/areas`)
+      .then((r) => (r.ok ? r.json() : []))
+      .then((d) => setAreas(Array.isArray(d) ? d : []))
+      .catch(() => {});
+  }, [districtId]);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+
+    if (!label.trim()) { setError('اسم العنوان مطلوب'); return; }
+    if (!addressLine.trim()) { setError('وصف العنوان مطلوب'); return; }
+
+    setSubmitting(true);
+
+    try {
+      const token = localStorage.getItem('accessToken');
+      if (!token) {
+        setError('يجب تسجيل الدخول أولاً');
+        setSubmitting(false);
+        router.push('/login?redirect=/addresses/new');
+        return;
+      }
+
+      const res = await fetch(`${API}/addresses`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          label: label.trim(),
+          addressLine: addressLine.trim(),
+          building: building.trim() || null,
+          floor: floor.trim() || null,
+          apartment: apartment.trim() || null,
+          landmark: landmark.trim() || null,
+          cityId: cityId || null,
+          districtId: districtId || null,
+          areaId: areaId || null,
+          isDefault,
+          latitude: lat,
+          longitude: lng,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.message || 'فشل حفظ العنوان');
+        setSubmitting(false);
+        return;
+      }
+
+      router.push('/addresses');
+    } catch {
+      setError('خطأ في الاتصال');
+      setSubmitting(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="app-shell bg-[var(--bg-base)]">
+        <TopBar title="عنوان جديد" showBack />
+        <main className="container-app py-4">
+          <div className="skeleton h-40 rounded-xl" />
+        </main>
+      </div>
+    );
+  }
+
+  return (
+    <div className="app-shell bg-[var(--bg-base)] pb-32">
+      <TopBar title="عنوان جديد" showBack />
+
+      <main className="container-app py-4 space-y-4">
+        {error && (
+          <div className="card border-r-4 border-r-[var(--danger)]">
+            <p className="text-sm font-bold text-[var(--danger)]">{error}</p>
+          </div>
+        )}
+
+        {/* Label */}
+        <div className="card">
+          <label className="block text-sm font-bold mb-2">
+            اسم العنوان <span className="text-[var(--brand-red)]">*</span>
+          </label>
+          <input
+            type="text"
+            value={label}
+            onChange={(e) => setLabel(e.target.value)}
+            placeholder="مثال: المنزل، العمل"
+            className="input"
+          />
+        </div>
+
+        {/* Map */}
+        <div className="card">
+          <label className="block text-sm font-bold mb-3">
+            📍 اضغط على الخريطة أو اسحب العلامة
+          </label>
+          <MapPicker
+            initialLat={lat}
+            initialLng={lng}
+            onLocationChange={(newLat, newLng, addr) => {
+              setLat(newLat);
+              setLng(newLng);
+              if (addr) setAddressFromMap(addr);
+            }}
+          />
+          <div className="mt-3 grid grid-cols-2 gap-2 text-xs" dir="ltr">
+            <div className="bg-[var(--bg-elevated)] p-2 rounded-lg">
+              <span className="text-[var(--text-muted)]">Lat:</span>{' '}
+              <span className="font-mono font-bold">{lat.toFixed(6)}</span>
+            </div>
+            <div className="bg-[var(--bg-elevated)] p-2 rounded-lg">
+              <span className="text-[var(--text-muted)]">Lng:</span>{' '}
+              <span className="font-mono font-bold">{lng.toFixed(6)}</span>
+            </div>
+          </div>
+          {addressFromMap && (
+            <div className="mt-3 p-3 rounded-lg bg-[var(--bg-elevated)] border border-[var(--bg-border)]">
+              <p className="text-[10px] text-[var(--text-muted)] mb-1">العنوان من الخريطة:</p>
+              <p className="text-xs text-[var(--text-secondary)]" dir="ltr">{addressFromMap}</p>
+            </div>
+          )}
+        </div>
+
+        {/* Address Line */}
+        <div className="card">
+          <label className="block text-sm font-bold mb-2">
+            وصف العنوان <span className="text-[var(--brand-red)]">*</span>
+          </label>
+          <textarea
+            value={addressLine}
+            onChange={(e) => setAddressLine(e.target.value)}
+            placeholder="مثال: حي الروضة، شارع الأربعين، بجانب مسجد الرحمة"
+            className="input"
+            rows={2}
+          />
+        </div>
+
+        {/* City */}
+        <div className="card">
+          <label className="block text-sm font-bold mb-2">المدينة</label>
+          <select value={cityId} onChange={(e) => setCityId(e.target.value)} className="input">
+            <option value="">— اختر المدينة —</option>
+            {cities.map((c) => <option key={c.id} value={c.id}>{c.nameAr}</option>)}
+          </select>
+        </div>
+
+        {/* District */}
+        {cityId && (
+          <div className="card">
+            <label className="block text-sm font-bold mb-2">الحي</label>
+            <select value={districtId} onChange={(e) => setDistrictId(e.target.value)} className="input">
+              <option value="">— اختر الحي —</option>
+              {districts.map((d) => <option key={d.id} value={d.id}>{d.nameAr}</option>)}
+            </select>
+          </div>
+        )}
+
+        {/* Area */}
+        {districtId && (
+          <div className="card">
+            <label className="block text-sm font-bold mb-2">المنطقة</label>
+            <select value={areaId} onChange={(e) => setAreaId(e.target.value)} className="input">
+              <option value="">— اختر المنطقة —</option>
+              {areas.map((a) => <option key={a.id} value={a.id}>{a.nameAr}</option>)}
+            </select>
+          </div>
+        )}
+
+        {/* Building, Floor, Apartment */}
+        <div className="card">
+          <label className="block text-sm font-bold mb-3">تفاصيل المبنى (اختياري)</label>
+          <div className="grid grid-cols-3 gap-2">
+            <input
+              type="text"
+              value={building}
+              onChange={(e) => setBuilding(e.target.value)}
+              placeholder="المبنى"
+              className="input"
+            />
+            <input
+              type="text"
+              value={floor}
+              onChange={(e) => setFloor(e.target.value)}
+              placeholder="الطابق"
+              className="input"
+            />
+            <input
+              type="text"
+              value={apartment}
+              onChange={(e) => setApartment(e.target.value)}
+              placeholder="الشقة"
+              className="input"
+            />
+          </div>
+        </div>
+
+        {/* Landmark */}
+        <div className="card">
+          <label className="block text-sm font-bold mb-2">أقرب معلم</label>
+          <input
+            type="text"
+            value={landmark}
+            onChange={(e) => setLandmark(e.target.value)}
+            placeholder="مثال: بجانب مسجد الرحمة"
+            className="input"
+          />
+        </div>
+
+        {/* Default */}
+        <div className="card">
+          <label className="flex items-center gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={isDefault}
+              onChange={(e) => setIsDefault(e.target.checked)}
+              className="w-5 h-5 accent-[var(--brand-red)]"
+            />
+            <div>
+              <p className="font-bold text-sm">اجعله العنوان الافتراضي</p>
+              <p className="text-xs text-[var(--text-muted)]">سيُستخدم تلقائياً في الطلبات الجديدة</p>
+            </div>
+          </label>
+        </div>
+      </main>
+
+      <div className="sticky-bottom">
+        <div className="sticky-bottom-inner flex gap-3">
+          <button onClick={() => router.back()} className="btn btn-ghost btn-lg flex-1">
+            إلغاء
+          </button>
+          <button onClick={submit} disabled={submitting} className="btn btn-primary btn-lg flex-1">
+            {submitting ? 'جاري الحفظ...' : '💾 حفظ العنوان'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function NewAddressPage() {
+  return (
+    <Suspense fallback={<div className="app-shell bg-[var(--bg-base)]" />}>
+      <NewAddressContent />
+    </Suspense>
+  );
+}
