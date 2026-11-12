@@ -6,6 +6,7 @@ services:
   - type: web
     name: absher-bi-customer-prep
     runtime: node
+    plan: free
     rootDir: apps/customer
     buildCommand: npm ci && npm run build
     startCommand: "npx next start -p $PORT"
@@ -23,6 +24,7 @@ services:
   - type: web
     name: absher-bi-store-prep
     runtime: node
+    plan: free
     rootDir: apps/store
     buildCommand: npm ci && npm run build
     startCommand: "npx next start -p $PORT"
@@ -40,6 +42,7 @@ services:
   - type: web
     name: absher-bi-driver-prep
     runtime: node
+    plan: free
     rootDir: apps/driver
     buildCommand: npm ci && npm run build
     startCommand: "npx next start -p $PORT"
@@ -57,6 +60,7 @@ services:
   - type: web
     name: absher-bi-admin-prep
     runtime: node
+    plan: free
     rootDir: apps/admin
     buildCommand: npm ci && npm run build
     startCommand: "npx next start -p $PORT"
