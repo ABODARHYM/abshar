@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#07111f">
+  <title>لا يوجد اتصال | أبشر بي</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      height: 100%;
+      background: radial-gradient(circle at 30% 20%, rgba(239,68,68,.10), transparent 50%),
+                  linear-gradient(145deg, #07111f, #020617);
+      color: #f8fafc;
+      font-family: Tahoma, Arial, sans-serif;
+      display: grid;
+      place-items: center;
+      padding: 30px;
+    }
+    .offline-box {
+      text-align: center;
+      max-width: 380px;
+    }
+    .offline-icon {
+      font-size: 90px;
+      margin-bottom: 22px;
+      animation: float 2.5s ease-in-out infinite;
+    }
+    h1 {
+      font-size: 26px;
+      margin-bottom: 12px;
+      color: #f8fafc;
+    }
+    p {
+      color: #94a3b8;
+      line-height: 1.8;
+      margin-bottom: 30px;
+      font-size: 14px;
+    }
+    .btn {
+      display: inline-block;
+      padding: 14px 32px;
+      border-radius: 15px;
+      background: linear-gradient(135deg, #22c55e, #16a34a);
+      color: white;
+      text-decoration: none;
+      font-weight: 800;
+      box-shadow: 0 12px 30px rgba(34,197,94,.25);
+      transition: .2s;
+      border: 0;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    .btn:active { transform: scale(.97); }
+    .btn-secondary {
+      background: rgba(255,255,255,.07);
+      border: 1px solid rgba(255,255,255,.10);
+      box-shadow: none;
+      margin-top: 12px;
+    }
+    .status {
+      margin-top: 30px;
+      font-size: 12px;
+      color: #475569;
+      letter-spacing: 2px;
+    }
+    @keyframes float {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-12px); }
+    }
+  </style>
+</head>
+<body>
+  <div class="offline-box">
+    <div class="offline-icon">📴</div>
+    <h1>لا يوجد اتصال بالإنترنت</h1>
+    <p>
+      يبدو أنك غير متصل. تحقق من اتصالك بالشبكة أو حاول مرة أخرى.
+      <br>
+      يمكنك تصفح الصفحات المحفوظة مسبقًا.
+    </p>
+    <button class="btn" onclick="location.reload()">🔄 إعادة المحاولة</button>
+    <br>
+    <a href="./index.html" class="btn btn-secondary">← العودة للرئيسية</a>
+    <div class="status" id="netStatus">جاري الفحص...</div>
+  </div>
+
+  <script>
+    function updateStatus() {
+      var el = document.getElementById('netStatus');
+      if (navigator.onLine) {
+        el.textContent = '✅ متصل الآن';
+        el.style.color = '#86efac';
+        setTimeout(function () {
+          if (navigator.onLine) location.replace('./index.html');
+        }, 800);
+      } else {
+        el.textContent = '❌ غير متصل';
+        el.style.color = '#fca5a5';
+      }
+    }
+
+    updateStatus();
+    window.addEventListener('online', updateStatus);
+    window.addEventListener('offline', updateStatus);
+    setInterval(updateStatus, 3000);
+  </script>
+</body>
+</html>

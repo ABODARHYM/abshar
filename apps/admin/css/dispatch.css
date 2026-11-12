@@ -1,0 +1,487 @@
+/* ============================================================
+   ABSHER BI — SMART DISPATCH UI
+   ============================================================ */
+
+.driver-dispatch-section {
+  margin: 14px 0 22px;
+  padding: 16px;
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 24px;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(34,197,94,.13), transparent 35%),
+    linear-gradient(145deg, rgba(13,27,42,.96), rgba(7,17,31,.98));
+  box-shadow: 0 18px 50px rgba(0,0,0,.22);
+  overflow: hidden;
+}
+
+.dispatch-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 15px;
+}
+
+.dispatch-kicker {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: rgba(34,197,94,.12);
+  color: #86efac;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 1px;
+}
+
+.dispatch-header h2 {
+  margin: 7px 0 3px;
+  font-size: 20px;
+  font-weight: 900;
+}
+
+.dispatch-header p {
+  margin: 0;
+  color: rgba(255,255,255,.58);
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.dispatch-live {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: rgba(34,197,94,.10);
+  color: #86efac;
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.dispatch-live span {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #22c55e;
+  box-shadow: 0 0 0 5px rgba(34,197,94,.08);
+  animation: dispatchLivePulse 1.5s infinite;
+}
+
+@keyframes dispatchLivePulse {
+  0%,100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: .45;
+    transform: scale(.75);
+  }
+}
+
+.dispatch-offer {
+  position: relative;
+  padding: 15px;
+  margin-top: 12px;
+  border-radius: 20px;
+  border: 1px solid rgba(255,255,255,.09);
+  background: rgba(255,255,255,.045);
+  box-shadow: 0 10px 30px rgba(0,0,0,.18);
+  animation: dispatchOfferIn .35s ease both;
+}
+
+.dispatch-offer.urgent {
+  border-color: rgba(239,68,68,.42);
+  box-shadow:
+    0 0 0 1px rgba(239,68,68,.06),
+    0 14px 40px rgba(239,68,68,.10);
+}
+
+@keyframes dispatchOfferIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.dispatch-offer-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 15px;
+}
+
+.dispatch-offer-head > div {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.dispatch-exclusive {
+  display: inline-flex;
+  width: max-content;
+  max-width: 100%;
+  padding: 6px 9px;
+  border-radius: 9px;
+  background: rgba(245,158,11,.13);
+  color: #fbbf24;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.dispatch-offer-head strong {
+  font-size: 16px;
+}
+
+.dispatch-round {
+  padding: 6px 9px;
+  border-radius: 9px;
+  background: rgba(59,130,246,.10);
+  color: #93c5fd;
+  font-size: 10px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.dispatch-route {
+  padding: 13px;
+  border-radius: 16px;
+  background: rgba(0,0,0,.16);
+}
+
+.dispatch-route-point {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.dispatch-route-point small {
+  display: block;
+  margin-bottom: 3px;
+  color: rgba(255,255,255,.48);
+  font-size: 10px;
+}
+
+.dispatch-route-point strong {
+  display: block;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.dispatch-route-icon {
+  flex: 0 0 38px;
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: rgba(255,255,255,.07);
+  font-size: 18px;
+}
+
+.dispatch-route-icon.store {
+  background: rgba(59,130,246,.12);
+}
+
+.dispatch-route-icon.customer {
+  background: rgba(34,197,94,.12);
+}
+
+.dispatch-route-line {
+  width: 2px;
+  height: 22px;
+  margin: 2px 0 2px 18px;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(255,255,255,.20) 0 4px,
+    transparent 4px 8px
+  );
+}
+
+.dispatch-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 7px;
+  margin-top: 10px;
+}
+
+.dispatch-stats > div {
+  min-width: 0;
+  padding: 10px 7px;
+  border-radius: 13px;
+  background: rgba(255,255,255,.045);
+  text-align: center;
+}
+
+.dispatch-stats span {
+  display: block;
+  margin-bottom: 5px;
+  color: rgba(255,255,255,.48);
+  font-size: 9px;
+}
+
+.dispatch-stats strong {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.dispatch-countdown {
+  color: #fbbf24;
+}
+
+.dispatch-offer.urgent .dispatch-countdown {
+  color: #f87171;
+  animation: dispatchCountdownPulse .7s infinite;
+}
+
+@keyframes dispatchCountdownPulse {
+  50% {
+    transform: scale(1.08);
+  }
+}
+
+.dispatch-progress {
+  height: 5px;
+  margin-top: 12px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255,255,255,.07);
+}
+
+.dispatch-progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #22c55e, #f59e0b, #ef4444);
+  transition: width .8s linear;
+}
+
+.dispatch-actions {
+  display: grid;
+  grid-template-columns: .85fr 1.4fr;
+  gap: 9px;
+  margin-top: 13px;
+}
+
+.dispatch-actions button {
+  min-height: 48px;
+  border: 0;
+  border-radius: 14px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 900;
+  cursor: pointer;
+  transition:
+    transform .15s ease,
+    opacity .15s ease;
+}
+
+.dispatch-actions button:active {
+  transform: scale(.97);
+}
+
+.dispatch-actions button:disabled {
+  opacity: .55;
+  cursor: wait;
+}
+
+.dispatch-reject {
+  background: rgba(239,68,68,.10);
+  color: #fca5a5;
+  border: 1px solid rgba(239,68,68,.16) !important;
+}
+
+.dispatch-accept {
+  background: linear-gradient(135deg, #16a34a, #22c55e);
+  color: #fff;
+  box-shadow: 0 8px 22px rgba(34,197,94,.20);
+}
+
+.dispatch-empty {
+  min-height: 190px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 22px 10px;
+  border: 1px dashed rgba(255,255,255,.10);
+  border-radius: 18px;
+  background: rgba(255,255,255,.025);
+}
+
+.dispatch-empty-icon {
+  width: 64px;
+  height: 64px;
+  display: grid;
+  place-items: center;
+  margin-bottom: 12px;
+  border-radius: 20px;
+  background: rgba(34,197,94,.08);
+  font-size: 30px;
+  animation: dispatchBikeFloat 2.2s ease-in-out infinite;
+}
+
+@keyframes dispatchBikeFloat {
+  0%,100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
+.dispatch-empty strong {
+  font-size: 14px;
+}
+
+.dispatch-empty p {
+  margin: 7px 0 13px;
+  color: rgba(255,255,255,.48);
+  font-size: 11px;
+}
+
+.dispatch-pulse {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.dispatch-pulse span {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #22c55e;
+  animation: dispatchDots 1.2s infinite;
+}
+
+.dispatch-pulse span:nth-child(2) {
+  animation-delay: .15s;
+}
+
+.dispatch-pulse span:nth-child(3) {
+  animation-delay: .3s;
+}
+
+@keyframes dispatchDots {
+  0%,80%,100% {
+    opacity: .25;
+    transform: translateY(0);
+  }
+
+  40% {
+    opacity: 1;
+    transform: translateY(-4px);
+  }
+}
+
+.dispatch-message {
+  padding: 10px 12px;
+  margin-bottom: 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.dispatch-message.success {
+  background: rgba(34,197,94,.10);
+  color: #86efac;
+}
+
+.dispatch-message.error {
+  background: rgba(239,68,68,.10);
+  color: #fca5a5;
+}
+
+.dispatch-message.hidden {
+  display: none !important;
+}
+
+@media (max-width: 390px) {
+  .driver-dispatch-section {
+    padding: 12px;
+    border-radius: 20px;
+  }
+
+  .dispatch-header {
+    align-items: flex-start;
+  }
+
+  .dispatch-header h2 {
+    font-size: 18px;
+  }
+
+  .dispatch-stats strong {
+    font-size: 10px;
+  }
+
+  .dispatch-actions {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ============================================================
+   SMART DISPATCH BOOT - FORCE VISIBILITY
+   ============================================================ */
+
+#driverDispatchView.driver-dispatch-section {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  width: 100% !important;
+  position: relative !important;
+  z-index: 20 !important;
+  box-sizing: border-box !important;
+}
+
+#driverDispatchView .dispatch-header {
+  display: flex !important;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+#driverDispatchView #dispatchOffers {
+  display: block !important;
+  min-height: 80px;
+}
+
+#driverDispatchView .dispatch-empty {
+  display: block;
+  text-align: center;
+  padding: 24px 16px;
+  border-radius: 20px;
+  margin-top: 14px;
+  background: rgba(255,255,255,.055);
+  border: 1px solid rgba(255,255,255,.09);
+}
+
+#driverDispatchView .dispatch-empty-icon {
+  font-size: 34px;
+  margin-bottom: 8px;
+}
+
+#driverDispatchView .dispatch-empty strong {
+  display: block;
+  font-size: 16px;
+  margin-bottom: 6px;
+}
+
+#driverDispatchView .dispatch-empty p {
+  margin: 0;
+  opacity: .7;
+  font-size: 13px;
+}
+

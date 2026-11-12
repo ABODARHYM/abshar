@@ -1,0 +1,72 @@
+# ABSHER BI - Frontend deployment preparation
+# Reuses the existing backend. No database service is defined.
+
+services:
+
+  - type: web
+    name: absher-bi-customer-prep
+    runtime: node
+    rootDir: apps/customer
+    buildCommand: npm ci && npm run build
+    startCommand: "npx next start -p $PORT"
+    autoDeployTrigger: "off"
+    envVars:
+      - key: NODE_VERSION
+        value: "22.12.0"
+      - key: BACKEND_URL
+        sync: false
+      - key: NEXT_PUBLIC_API_URL
+        sync: false
+      - key: NEXT_PUBLIC_WS_URL
+        sync: false
+
+  - type: web
+    name: absher-bi-store-prep
+    runtime: node
+    rootDir: apps/store
+    buildCommand: npm ci && npm run build
+    startCommand: "npx next start -p $PORT"
+    autoDeployTrigger: "off"
+    envVars:
+      - key: NODE_VERSION
+        value: "22.12.0"
+      - key: BACKEND_URL
+        sync: false
+      - key: NEXT_PUBLIC_API_URL
+        sync: false
+      - key: NEXT_PUBLIC_WS_URL
+        sync: false
+
+  - type: web
+    name: absher-bi-driver-prep
+    runtime: node
+    rootDir: apps/driver
+    buildCommand: npm ci && npm run build
+    startCommand: "npx next start -p $PORT"
+    autoDeployTrigger: "off"
+    envVars:
+      - key: NODE_VERSION
+        value: "22.12.0"
+      - key: BACKEND_URL
+        sync: false
+      - key: NEXT_PUBLIC_API_URL
+        sync: false
+      - key: NEXT_PUBLIC_WS_URL
+        sync: false
+
+  - type: web
+    name: absher-bi-admin-prep
+    runtime: node
+    rootDir: apps/admin
+    buildCommand: npm ci && npm run build
+    startCommand: "npx next start -p $PORT"
+    autoDeployTrigger: "off"
+    envVars:
+      - key: NODE_VERSION
+        value: "22.12.0"
+      - key: BACKEND_URL
+        sync: false
+      - key: NEXT_PUBLIC_API_URL
+        sync: false
+      - key: NEXT_PUBLIC_WS_URL
+        sync: false

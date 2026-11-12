@@ -1,0 +1,1394 @@
+/* Buttons */
+.btn { min-height: 50px; padding: 0 20px; border-radius: 15px; font-weight: 800; transition: .2s; }
+.btn:active { transform: scale(.97); }
+.btn-primary { background: linear-gradient(135deg, var(--primary), var(--primary2)); color: #fff; box-shadow: 0 12px 30px rgba(34,197,94,.22); }
+.btn-secondary { background: rgba(255,255,255,.07); color: var(--text); border: 1px solid var(--border); }
+.btn-danger { background: rgba(239,68,68,.12); color: #fca5a5; }
+.btn-small { min-height: 40px; padding: 0 14px; font-size: 13px; }
+.full { width: 100%; }
+
+/* Brand */
+.brand { display: flex; align-items: center; gap: 12px; }
+.brand-icon {
+  width: 54px; height: 54px; border-radius: 18px;
+  display: grid; place-items: center;
+  background: linear-gradient(135deg, var(--primary), #15803d);
+  color: #fff; font-size: 26px; font-weight: 900;
+  box-shadow: 0 15px 35px rgba(34,197,94,.25);
+}
+.brand-icon.small { width: 48px; height: 48px; margin: auto; }
+.brand h1 { font-size: 24px; }
+.brand span { display: block; font-size: 10px; color: var(--muted); letter-spacing: 3px; margin-top: 2px; }
+
+/* Forms */
+.form { display: grid; gap: 12px; }
+.form label { font-size: 13px; font-weight: 700; margin-top: 5px; }
+
+/* Messages */
+.message { padding: 12px; border-radius: 12px; font-size: 13px; line-height: 1.7; }
+.message.error { background: rgba(239,68,68,.12); color: #fca5a5; }
+.message.success { background: rgba(34,197,94,.12); color: #86efac; }
+
+/* Modal */
+.modal {
+  position: fixed; inset: 0; z-index: 100;
+  display: flex; align-items: flex-end; justify-content: center;
+  background: rgba(0,0,0,.65); backdrop-filter: blur(6px);
+}
+.modal-card {
+  width: min(100%, 600px); max-height: 90vh; overflow-y: auto;
+  background: #0f172a; border: 1px solid var(--border);
+  border-radius: 28px 28px 0 0; padding: 22px;
+}
+.modal-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+
+/* Toast */
+.toast {
+  position: fixed; top: 18px; left: 18px; right: 18px; z-index: 200;
+  padding: 14px 16px; border-radius: 14px;
+  background: #0f172a; border: 1px solid var(--border);
+  box-shadow: var(--shadow); transform: translateY(-130%);
+  transition: .3s; text-align: center;
+}
+.toast.show { transform: translateY(0); }
+.toast.success { border-color: rgba(34,197,94,.4); }
+.toast.error { border-color: rgba(239,68,68,.4); }
+
+/* Loading */
+.loading {
+  position: fixed; inset: 0; z-index: 300;
+  display: grid; place-items: center;
+  background: rgba(2,6,23,.75); backdrop-filter: blur(8px);
+}
+.loading-box {
+  padding: 25px; border-radius: 22px;
+  background: #0f172a; border: 1px solid var(--border);
+  text-align: center;
+}
+.spinner {
+  width: 40px; height: 40px;
+  border: 4px solid rgba(255,255,255,.1);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin .8s linear infinite;
+  margin: auto auto 12px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Empty */
+.empty {
+  padding: 45px 20px; text-align: center; color: var(--muted);
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 20px;
+}
+.empty-icon { font-size: 42px; margin-bottom: 12px; }
+
+/* Cards */
+.store-card, .product-card, .order-card, .address-card, .profile-card {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 20px; overflow: hidden;
+}
+
+/* Profile */
+.profile-card { padding: 18px; display: flex; align-items: center; gap: 14px; }
+.avatar {
+  width: 58px; height: 58px; border-radius: 18px;
+  display: grid; place-items: center;
+  background: linear-gradient(135deg, var(--primary), #15803d);
+  font-size: 24px; font-weight: 900;
+}
+.profile-info strong { display: block; }
+.profile-info span, .profile-info small { display: block; color: var(--muted); margin-top: 4px; font-size: 12px; }
+
+/* Address */
+.address-card { padding: 16px; margin-bottom: 12px; }
+.address-card strong { display: block; margin-bottom: 7px; }
+.address-card p { color: var(--muted); font-size: 13px; line-height: 1.8; }
+.address-actions { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+.address-badge {
+  display: inline-block; padding: 4px 10px; border-radius: 999px;
+  background: rgba(34,197,94,.12); color: #86efac;
+  font-size: 11px; font-weight: 700; margin-right: 6px;
+}
+
+/* ═══════════════════════════════════════════════
+   SKELETON LOADERS
+   ═══════════════════════════════════════════════ */
+.sk-list { display: grid; gap: 12px; }
+.sk-card {
+  padding: 16px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  display: grid;
+  gap: 10px;
+  animation: sk-pulse 1.6s ease-in-out infinite;
+}
+.sk-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+.sk-grid-item {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  overflow: hidden;
+  animation: sk-pulse 1.6s ease-in-out infinite;
+}
+.sk-image {
+  height: 110px;
+  background: linear-gradient(90deg, rgba(255,255,255,.05) 25%, rgba(255,255,255,.10) 50%, rgba(255,255,255,.05) 75%);
+  background-size: 200% 100%;
+  animation: sk-shine 1.5s linear infinite;
+}
+.sk-grid-item .sk-line { margin: 10px 14px; }
+.sk-grid-item .sk-line:last-child { margin-bottom: 14px; }
+
+.sk-profile {
+  display: flex;
+  gap: 14px;
+  padding: 18px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  animation: sk-pulse 1.6s ease-in-out infinite;
+}
+.sk-circle {
+  width: 58px;
+  height: 58px;
+  border-radius: 18px;
+  background: linear-gradient(90deg, rgba(255,255,255,.05) 25%, rgba(255,255,255,.10) 50%, rgba(255,255,255,.05) 75%);
+  background-size: 200% 100%;
+  animation: sk-shine 1.5s linear infinite;
+  flex-shrink: 0;
+}
+
+.sk-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+.sk-stat {
+  padding: 14px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  text-align: center;
+  animation: sk-pulse 1.6s ease-in-out infinite;
+}
+.sk-stat .sk-line { margin: 6px auto; }
+
+.sk-line {
+  height: 12px;
+  border-radius: 6px;
+  background: linear-gradient(90deg, rgba(255,255,255,.05) 25%, rgba(255,255,255,.10) 50%, rgba(255,255,255,.05) 75%);
+  background-size: 200% 100%;
+  animation: sk-shine 1.5s linear infinite;
+}
+.sk-line-lg { height: 16px; width: 60%; }
+.sk-line-md { height: 12px; width: 80%; }
+.sk-line-sm { height: 10px; width: 40%; }
+.sk-line-xs { height: 10px; width: 50%; }
+.sk-line-xl { height: 22px; width: 70%; }
+
+@keyframes sk-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .75; }
+}
+@keyframes sk-shine {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ═══════════════════════════════════════════════
+   VIEW ANIMATIONS
+   ═══════════════════════════════════════════════ */
+.view:not(.hidden) {
+  animation: view-fade-in 0.28s ease-out;
+}
+@keyframes view-fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.page:not(.hidden) {
+  animation: page-fade-in 0.4s ease-out;
+}
+@keyframes page-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* ═══════════════════════════════════════════════
+   TOAST IMPROVEMENTS
+   ═══════════════════════════════════════════════ */
+.toast {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-weight: 700;
+}
+.toast.success::before { content: '\2705'; }
+.toast.error::before   { content: '\274C'; }
+.toast.info::before    { content: '\2139\FE0F'; }
+.toast.warning::before { content: '\26A0\FE0F'; }
+.toast.info    { border-color: rgba(59,130,246,.4); }
+.toast.warning { border-color: rgba(245,158,11,.4); }
+
+/* ═══════════════════════════════════════════════
+   BUTTON RIPPLE
+   ═══════════════════════════════════════════════ */
+.btn, .service, .so-action-btn, .nav-item, .category-card {
+  position: relative;
+  overflow: hidden;
+  transition: transform .15s, background .2s, box-shadow .2s;
+}
+.btn:active, .service:active, .so-action-btn:active, .category-card:active {
+  transform: scale(.97);
+}
+
+/* ═══════════════════════════════════════════════
+   SKELETON STATES للقوائم
+   ═══════════════════════════════════════════════ */
+.skeleton-mode .empty { display: none; }
+JSEOF
+
+echo "✅ CSS Skeletons + Animations"
+
+# ═══════════════════════════════════════════════════════════════
+# 5) تحديث Store Owner — استخدام Skeletons
+# ═══════════════════════════════════════════════════════════════
+python3 << 'PYEOF'
+path = 'js/store-owner.js'
+with open(path, 'r', encoding='utf-8') as f:
+    content = f.read()
+
+# استبدل spinners بـ skeletons
+old1 = "el.innerHTML = '<div class=\"empty\"><div class=\"spinner\" style=\"margin:auto\"></div></div>';\n\n  try {\n    const [store, stats] = await Promise.all"
+new1 = "el.innerHTML = skeletonStats(6) + skeletonList(3, 100);\n\n  try {\n    const [store, stats] = await Promise.all"
+
+content = content.replace(old1, new1)
+
+old2 = "el.innerHTML = '<div class=\"empty\"><div class=\"spinner\" style=\"margin:auto\"></div></div>';\n\n  const params = new URLSearchParams({ limit: '30' });"
+new2 = "el.innerHTML = skeletonList(5, 90);\n\n  const params = new URLSearchParams({ limit: '30' });"
+
+content = content.replace(old2, new2)
+
+# آخر الطلبات
+old3 = "el.innerHTML = '<div class=\"empty\"><div class=\"spinner\" style=\"margin:auto\"></div></div>';\n\n  try {\n    const res = await api('/store-owner/orders?limit=5');"
+new3 = "el.innerHTML = skeletonList(3, 80);\n\n  try {\n    const res = await api('/store-owner/orders?limit=5');"
+
+content = content.replace(old3, new3)
+
+# المنتجات
+old4 = "el.innerHTML = '<div class=\"empty\"><div class=\"spinner\" style=\"margin:auto\"></div></div>';\n\n  try {\n    const [productsRes, catsRes] = await Promise.all"
+new4 = "el.innerHTML = skeletonList(5, 80);\n\n  try {\n    const [productsRes, catsRes] = await Promise.all"
+
+content = content.replace(old4, new4)
+
+# التصنيفات
+old5 = "el.innerHTML = '<div class=\"empty\"><div class=\"spinner\" style=\"margin:auto\"></div></div>';\n\n  try {\n    const cats = await api('/store-owner/categories');"
+new5 = "el.innerHTML = skeletonList(3, 70);\n\n  try {\n    const cats = await api('/store-owner/categories');"
+
+content = content.replace(old5, new5)
+
+# تفاصيل الطلب
+old6 = "el.innerHTML = '<div class=\"empty\"><div class=\"spinner\" style=\"margin:auto\"></div></div>';\n\n  try {\n    const order = await api(`/store-owner/orders/${orderId}`);"
+new6 = "el.innerHTML = skeletonList(3, 100);\n\n  try {\n    const order = await api(`/store-owner/orders/${orderId}`);"
+
+content = content.replace(old6, new6)
+
+with open(path, 'w', encoding='utf-8') as f:
+    f.write(content)
+
+print("✅ store-owner.js محدّث بـ skeletons")
+PYEOF
+
+# ═══════════════════════════════════════════════════════════════
+# 6) تحديث Driver — استخدام Skeletons
+# ═══════════════════════════════════════════════════════════════
+python3 << 'PYEOF'
+path = 'js/driver.js'
+with open(path, 'r', encoding='utf-8') as f:
+    content = f.read()
+
+# لوحة المندوب
+content = content.replace(
+    "el.innerHTML = '<div class=\"empty\"><div class=\"spinner\" style=\"margin:auto\"></div></div>';\n\n  try {\n    var profile = await api('/driver/profile');",
+    "el.innerHTML = skeletonProfile() + skeletonStats(3) + skeletonList(3, 90);\n\n  try {\n    var profile = await api('/driver/profile');"
+)
+
+# الطلبات
+content = content.replace(
+    "el.innerHTML = '<div class=\"empty\"><div class=\"spinner\" style=\"margin:auto\"></div></div>';\n  }\n\n  var url = driverState.currentTab === 'available'",
+    "el.innerHTML = skeletonList(5, 90);\n  }\n\n  var url = driverState.currentTab === 'available'"
+)
+
+# تفاصيل الطلب
+content = content.replace(
+    "if (el) el.innerHTML = '<div class=\"empty\"><div class=\"spinner\" style=\"margin:auto\"></div></div>';\n\n  var url = isAvailable",
+    "if (el) el.innerHTML = skeletonList(4, 100);\n\n  var url = isAvailable"
+)
+
+with open(path, 'w', encoding='utf-8') as f:
+    f.write(content)
+
+print("✅ driver.js محدّث بـ skeletons")
+PYEOF
+
+# ═══════════════════════════════════════════════════════════════
+# 7) تحديث Admin — استخدام Skeletons
+# ═══════════════════════════════════════════════════════════════
+python3 << 'PYEOF'
+path = 'js/admin.js'
+with open(path, 'r', encoding='utf-8') as f:
+    content = f.read()
+
+# Dashboard
+content = content.replace(
+    "el.innerHTML = '<div class=\"empty\"><div class=\"spinner\" style=\"margin:auto\"></div></div>';\n\n  try {\n    var dashboard = await api('/admin/dashboard');",
+    "el.innerHTML = skeletonStats(3) + skeletonList(2, 100);\n\n  try {\n    var dashboard = await api('/admin/dashboard');"
+)
+
+# Tabs
+content = content.replace(
+    "el.innerHTML = '<div class=\"empty\"><div class=\"spinner\" style=\"margin:auto\"></div></div>';\n\n  try {\n    if (tab === 'overview')",
+    "el.innerHTML = skeletonList(5, 80);\n\n  try {\n    if (tab === 'overview')"
+)
+
+# المستخدمون
+content = content.replace(
+    "el.innerHTML = '<div class=\"empty\"><div class=\"spinner\" style=\"margin:auto\"></div></div>';\n\n  try {\n    var params = new URLSearchParams({ limit: '50' });\n    if (adminState.currentUserFilter)",
+    "el.innerHTML = skeletonList(5, 80);\n\n  try {\n    var params = new URLSearchParams({ limit: '50' });\n    if (adminState.currentUserFilter)"
+)
+
+# المتاجر
+content = content.replace(
+    "el.innerHTML = '<div class=\"empty\"><div class=\"spinner\" style=\"margin:auto\"></div></div>';\n  try {\n    var res = await api('/admin/stores?limit=50');",
+    "el.innerHTML = skeletonList(5, 80);\n  try {\n    var res = await api('/admin/stores?limit=50');"
+)
+
+# المندوبون
+content = content.replace(
+    "el.innerHTML = '<div class=\"empty\"><div class=\"spinner\" style=\"margin:auto\"></div></div>';\n  try {\n    var res = await api('/admin/drivers?limit=50');",
+    "el.innerHTML = skeletonList(5, 80);\n  try {\n    var res = await api('/admin/drivers?limit=50');"
+)
+
+# الطلبات
+content = content.replace(
+    "el.innerHTML = '<div class=\"empty\"><div class=\"spinner\" style=\"margin:auto\"></div></div>';\n  try {\n    var params = new URLSearchParams({ limit: '50' });\n    if (adminState.currentOrderFilter)",
+    "el.innerHTML = skeletonList(5, 90);\n  try {\n    var params = new URLSearchParams({ limit: '50' });\n    if (adminState.currentOrderFilter)"
+)
+
+# Audit
+content = content.replace(
+    "el.innerHTML = '<div class=\"empty\"><div class=\"spinner\" style=\"margin:auto\"></div></div>';\n  try {\n    var res = await api('/admin/audit-logs?limit=50');",
+    "el.innerHTML = skeletonList(5, 70);\n  try {\n    var res = await api('/admin/audit-logs?limit=50');"
+)
+
+# تفاصيل المستخدم
+content = content.replace(
+    "if (el) el.innerHTML = '<div class=\"empty\"><div class=\"spinner\" style=\"margin:auto\"></div></div>';\n\n  try {\n    var u = await api('/admin/users/' + userId);",
+    "if (el) el.innerHTML = skeletonProfile() + skeletonStats(3);\n\n  try {\n    var u = await api('/admin/users/' + userId);"
+)
+
+with open(path, 'w', encoding='utf-8') as f:
+    f.write(content)
+
+print("✅ admin.js محدّث بـ skeletons")
+PYEOF
+
+# ═══════════════════════════════════════════════════════════════
+# 8) التحقق
+# ═══════════════════════════════════════════════════════════════
+echo ""
+echo "════════════════════════════════════════"
+echo "✅ الجولة 1 - UX Polish (Skeleton + Animations)"
+echo "════════════════════════════════════════"
+echo ""
+echo "═══ الملفات ═══"
+ls -la js/skeleton.js js/ui.js js/store-owner.js js/driver.js js/admin.js 2>&1
+
+echo ""
+echo "═══ index.html ═══"
+echo "skeleton.js: $(grep -c 'js/skeleton.js' index.html)"
+echo "v=15 count: $(grep -c '?v=15' index.html)"
+
+echo ""
+echo "═══ CSS ═══"
+echo "sk- classes: $(grep -c 'sk-line\|sk-card\|sk-circle\|view-fade' css/components.css)"
+
+echo ""
+echo "═══ Skeletons في JS ═══"
+echo "store-owner: $(grep -c 'skeletonStats\|skeletonList' js/store-owner.js)"
+echo "driver:      $(grep -c 'skeletonProfile\|skeletonList\|skeletonStats' js/driver.js)"
+echo "admin:       $(grep -c 'skeletonStats\|skeletonList\|skeletonProfile' js/admin.js)"
+
+cd ~/absher-bi/absher-bi/frontend
+
+# ═══════════════════════════════════════════════════════════════
+# 1) js/profile-page.js — صفحة Profile كاملة
+# ═══════════════════════════════════════════════════════════════
+cat > js/profile-page.js << 'JSEOF'
+/* ============================================================
+   ABSHER BI - profile-page.js
+   صفحة الملف الشخصي الكاملة + تغيير كلمة المرور
+   ============================================================ */
+
+// ═══════════════════════════════════════════════════════════════
+//  1) فتح صفحة الملف الشخصي
+// ═══════════════════════════════════════════════════════════════
+
+async function openProfilePage() {
+  showView('profileView');
+  var el = document.querySelector('#profileContent');
+  if (!el) return;
+
+  el.innerHTML = skeletonProfile() + skeletonList(2, 80);
+
+  try {
+    var p = await api('/profile');
+    state.profile = p;
+    renderProfilePage(p);
+  } catch (e) {
+    console.error('Open profile page error:', e);
+    el.innerHTML = [
+      '<div class="empty">',
+      '<div class="empty-icon">\u26A0\uFE0F</div>',
+      '<strong>تعذر تحميل الملف الشخصي</strong>',
+      '<p>' + escapeHtml(humanError(e)) + '</p>',
+      '</div>',
+    ].join('');
+  }
+}
+
+function renderProfilePage(p) {
+  var el = document.querySelector('#profileContent');
+  if (!el) return;
+
+  var user = state.user || p;
+  var roles = (user.roles || p.roles || []);
+  var first = (p.fullName || 'أ').trim().charAt(0);
+
+  var verifiedEmail = p.emailVerified
+    ? '<span class="verified-badge">\u2705 مُوثَّق</span>'
+    : '<span class="unverified-badge">\u26A0\uFE0F غير موثّق</span>';
+
+  var verifiedPhone = p.phoneVerified
+    ? '<span class="verified-badge">\u2705 مُوثَّق</span>'
+    : '<span class="unverified-badge">\u26A0\uFE0F غير موثّق</span>';
+
+  el.innerHTML = [
+    // رأس الملف
+    '<section class="profile-hero">',
+      '<div class="avatar-lg" id="profilePageAvatar">' + escapeHtml(first) + '</div>',
+      '<h1 id="profilePageName">' + escapeHtml(p.fullName || '') + '</h1>',
+      '<div class="profile-roles">',
+        roles.map(function (r) {
+          return '<span class="admin-role-pill">' + escapeHtml(r) + '</span>';
+        }).join(''),
+      '</div>',
+      '<p class="profile-status">\u25CF ' + (p.status === 'active' ? 'نشط' : p.status) + '</p>',
+    '</section>',
+
+    // المعلومات الشخصية
+    '<section class="section">',
+      '<div class="section-title">',
+        '<h2>المعلومات الشخصية</h2>',
+        '<button type="button" onclick="openEditProfileModal()">تعديل</button>',
+      '</div>',
+      '<div class="info-card profile-info-list">',
+        '<div class="profile-info-row">',
+          '<span class="info-icon">\uD83D\uDC64</span>',
+          '<div class="info-text">',
+            '<small>الاسم الكامل</small>',
+            '<strong>' + escapeHtml(p.fullName || 'غير محدد') + '</strong>',
+          '</div>',
+        '</div>',
+        '<div class="profile-info-row">',
+          '<span class="info-icon">\uD83D\uDCE7</span>',
+          '<div class="info-text">',
+            '<small>البريد الإلكتروني</small>',
+            '<strong>' + escapeHtml(p.email || 'غير محدد') + '</strong>',
+            verifiedEmail,
+          '</div>',
+        '</div>',
+        '<div class="profile-info-row">',
+          '<span class="info-icon">\uD83D\uDCF1</span>',
+          '<div class="info-text">',
+            '<small>رقم الهاتف</small>',
+            '<strong>' + escapeHtml(p.phone || 'غير محدد') + '</strong>',
+            verifiedPhone,
+          '</div>',
+        '</div>',
+        '<div class="profile-info-row">',
+          '<span class="info-icon">\uD83C\uDF10</span>',
+          '<div class="info-text">',
+            '<small>اللغة</small>',
+            '<strong>' + (p.locale === 'ar' ? 'العربية' : 'English') + '</strong>',
+          '</div>',
+        '</div>',
+      '</div>',
+    '</section>',
+
+    // الأمان
+    '<section class="section">',
+      '<div class="section-title"><h2>الأمان</h2></div>',
+      '<div class="profile-actions-list">',
+        '<button type="button" class="profile-action" onclick="openChangePasswordModal()">',
+          '<span class="info-icon">\uD83D\uDD10</span>',
+          '<div class="info-text">',
+            '<strong>تغيير كلمة المرور</strong>',
+            '<small>حدّث كلمة المرور بشكل دوري</small>',
+          '</div>',
+          '<span class="arrow">\u2190</span>',
+        '</button>',
+      '</div>',
+    '</section>',
+
+    // معلومات الحساب
+    '<section class="section">',
+      '<div class="section-title"><h2>معلومات الحساب</h2></div>',
+      '<div class="info-card">',
+        '<p><strong>معرّف المستخدم:</strong><br><small style="color:var(--muted);font-size:11px">' + escapeHtml(p.id) + '</small></p>',
+        '<p style="margin-top:10px"><strong>تاريخ الإنشاء:</strong> ' + formatDateLong(p.createdAt) + '</p>',
+        p.lastLoginAt ? '<p style="margin-top:6px"><strong>آخر دخول:</strong> ' + formatDateLong(p.lastLoginAt) + '</p>' : '',
+      '</div>',
+    '</section>',
+
+    // تسجيل الخروج
+    '<section class="section">',
+      '<button class="btn btn-danger full" type="button" onclick="logout()">',
+        '\uD83D\uDEAA تسجيل الخروج',
+      '</button>',
+    '</section>',
+  ].join('');
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  2) تعديل الملف الشخصي
+// ═══════════════════════════════════════════════════════════════
+
+function openEditProfileModal() {
+  var p = state.profile;
+  if (!p) return;
+
+  document.querySelector('#editProfileFullName').value = p.fullName || '';
+  document.querySelector('#editProfilePhone').value = p.phone || '';
+  document.querySelector('#editProfileLocale').value = p.locale || 'ar';
+  document.querySelector('#editProfileModal').classList.remove('hidden');
+}
+
+function closeEditProfileModal() {
+  document.querySelector('#editProfileModal').classList.add('hidden');
+}
+
+async function submitEditProfile(event) {
+  event.preventDefault();
+
+  var payload = {};
+  var fullName = document.querySelector('#editProfileFullName').value.trim();
+  var phone = document.querySelector('#editProfilePhone').value.trim();
+  var locale = document.querySelector('#editProfileLocale').value;
+
+  if (fullName) payload.fullName = fullName;
+  if (phone) payload.phone = phone;
+  if (locale) payload.locale = locale;
+
+  showLoading('جاري الحفظ...');
+  try {
+    var updated = await api('/profile', {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    });
+    state.profile = updated;
+
+    // حدّث state.user
+    if (state.user) {
+      state.user.fullName = updated.fullName;
+      state.user.phone = updated.phone;
+      localStorage.setItem(STORAGE.user, JSON.stringify(state.user));
+    }
+
+    toast('تم تحديث الملف الشخصي');
+    closeEditProfileModal();
+    renderProfilePage(updated);
+    if (typeof renderProfile === 'function') renderProfile();
+  } catch (e) {
+    console.error('Update profile error:', e);
+    toast(humanError(e), 'error');
+  } finally {
+    hideLoading();
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  3) تغيير كلمة المرور
+// ═══════════════════════════════════════════════════════════════
+
+function openChangePasswordModal() {
+  document.querySelector('#changePasswordForm').reset();
+  document.querySelector('#changePasswordMessage').className = 'message hidden';
+  document.querySelector('#changePasswordModal').classList.remove('hidden');
+}
+
+function closeChangePasswordModal() {
+  document.querySelector('#changePasswordModal').classList.add('hidden');
+}
+
+async function submitChangePassword(event) {
+  event.preventDefault();
+
+  var current = document.querySelector('#cpCurrentPassword').value;
+  var newPass = document.querySelector('#cpNewPassword').value;
+  var confirm = document.querySelector('#cpConfirmPassword').value;
+
+  var msgEl = document.querySelector('#changePasswordMessage');
+
+  // تحقق محلي
+  if (newPass.length < 8) {
+    msgEl.textContent = 'كلمة المرور الجديدة يجب أن تكون 8 أحرف على الأقل';
+    msgEl.className = 'message error';
+    return;
+  }
+  if (!/[A-Za-z]/.test(newPass) || !/\d/.test(newPass)) {
+    msgEl.textContent = 'يجب أن تحتوي على حرف ورقم على الأقل';
+    msgEl.className = 'message error';
+    return;
+  }
+  if (newPass !== confirm) {
+    msgEl.textContent = 'كلمة المرور الجديدة وتأكيدها غير متطابقين';
+    msgEl.className = 'message error';
+    return;
+  }
+  if (current === newPass) {
+    msgEl.textContent = 'كلمة المرور الجديدة يجب أن تختلف عن الحالية';
+    msgEl.className = 'message error';
+    return;
+  }
+
+  showLoading('جاري التحديث...');
+  try {
+    await api('/profile/change-password', {
+      method: 'POST',
+      body: JSON.stringify({
+        currentPassword: current,
+        newPassword: newPass,
+      }),
+    });
+
+    toast('تم تغيير كلمة المرور بنجاح');
+    closeChangePasswordModal();
+
+    // السيرفر يُبطل كل الجلسات → نسجّل خروج المستخدم
+    setTimeout(function () {
+      clearAuth();
+      showPage('welcomePage');
+      toast('يرجى تسجيل الدخول من جديد', 'info');
+    }, 1200);
+  } catch (e) {
+    console.error('Change password error:', e);
+    msgEl.textContent = humanError(e);
+    msgEl.className = 'message error';
+  } finally {
+    hideLoading();
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  4) Helpers
+// ═══════════════════════════════════════════════════════════════
+
+function formatDateLong(iso) {
+  if (!iso) return '—';
+  try {
+    return new Date(iso).toLocaleString('ar-YE', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  } catch (e) {
+    return iso;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  5) Export
+// ═══════════════════════════════════════════════════════════════
+
+window.openProfilePage = openProfilePage;
+window.renderProfilePage = renderProfilePage;
+window.openEditProfileModal = openEditProfileModal;
+window.closeEditProfileModal = closeEditProfileModal;
+window.submitEditProfile = submitEditProfile;
+window.openChangePasswordModal = openChangePasswordModal;
+window.closeChangePasswordModal = closeChangePasswordModal;
+window.submitChangePassword = submitChangePassword;
+JSEOF
+
+echo "✅ profile-page.js"
+
+# ═══════════════════════════════════════════════════════════════
+# 2) تحديث app.js — استبدال زر "تعديل" القديم
+# ═══════════════════════════════════════════════════════════════
+python3 << 'PYEOF'
+path = 'js/app.js'
+with open(path, 'r', encoding='utf-8') as f:
+    content = f.read()
+
+# استبدل زر "تعديل" القديم ليستخدم الصفحة الجديدة
+old = """  /* Edit profile — فتح نافذة بسيطة عبر prompt (نحسّنها لاحقًا) */
+  $('#editProfileButton')?.addEventListener('click', async () => {
+    const current = state.profile?.fullName || state.user?.fullName || '';
+    const newName = prompt('الاسم الكامل الجديد:', current);
+    if (!newName || newName.trim() === current) return;
+    await updateProfile(newName.trim());
+  });"""
+
+new = """  /* Edit profile — فتح صفحة Profile كاملة */
+  $('#editProfileButton')?.addEventListener('click', () => {
+    if (typeof openProfilePage === 'function') {
+      openProfilePage();
+    } else {
+      toast('الصفحة غير متوفرة', 'error');
+    }
+  });"""
+
+if old in content:
+    content = content.replace(old, new)
+    print("✅ app.js: زر التعديل محدّث")
+else:
+    print("⚠️  لم أجد النمط — تحقق يدويًا")
+
+with open(path, 'w', encoding='utf-8') as f:
+    f.write(content)
+PYEOF
+
+# ═══════════════════════════════════════════════════════════════
+# 3) تحديث index.html — أضف profile page + modals + scripts
+# ═══════════════════════════════════════════════════════════════
+cp index.html index.html.bak-ux2-$(date +%H%M)
+
+python3 << 'PYEOF'
+import re
+
+path = 'index.html'
+with open(path, 'r', encoding='utf-8') as f:
+    content = f.read()
+
+# ─── 1) أضف profileView بعد homeView
+marker = '''      <!-- ═══ STORES ═══ -->'''
+
+new_view = '''      <!-- ═══ PROFILE ═══ -->
+      <div id="profileView" class="view hidden">
+        <div id="profileContent"></div>
+      </div>
+
+      <!-- ═══ STORES ═══ -->'''
+
+if 'id="profileView"' not in content and marker in content:
+    content = content.replace(marker, new_view, 1)
+    print("✅ profileView أُضيف")
+
+# ─── 2) أضف modals قبل toast
+marker2 = '''  <!-- ═══════════════════ TOAST + LOADING ═══════════════════ -->'''
+
+new_modals = '''  <!-- ═══════════════════ EDIT PROFILE MODAL ═══════════════════ -->
+  <div id="editProfileModal" class="modal hidden">
+    <div class="modal-card">
+      <div class="modal-head">
+        <h2>تعديل الملف الشخصي</h2>
+        <button class="icon-btn" type="button" onclick="closeEditProfileModal()">×</button>
+      </div>
+      <form id="editProfileForm" class="form" onsubmit="submitEditProfile(event)">
+        <label>الاسم الكامل *</label>
+        <input id="editProfileFullName" type="text" placeholder="محمد أحمد" required minlength="2" maxlength="120">
+
+        <label>رقم الهاتف</label>
+        <input id="editProfilePhone" type="tel" placeholder="+967771234567" maxlength="20">
+
+        <label>اللغة</label>
+        <select id="editProfileLocale">
+          <option value="ar">العربية</option>
+          <option value="en">English</option>
+        </select>
+
+        <button class="btn btn-primary" type="submit">حفظ</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ═══════════════════ CHANGE PASSWORD MODAL ═══════════════════ -->
+  <div id="changePasswordModal" class="modal hidden">
+    <div class="modal-card">
+      <div class="modal-head">
+        <h2>تغيير كلمة المرور</h2>
+        <button class="icon-btn" type="button" onclick="closeChangePasswordModal()">×</button>
+      </div>
+      <form id="changePasswordForm" class="form" onsubmit="submitChangePassword(event)">
+        <label>كلمة المرور الحالية *</label>
+        <input id="cpCurrentPassword" type="password" placeholder="كلمة المرور الحالية" required autocomplete="current-password">
+
+        <label>كلمة المرور الجديدة *</label>
+        <input id="cpNewPassword" type="password" placeholder="8 أحرف على الأقل" required minlength="8" maxlength="128" autocomplete="new-password">
+
+        <label>تأكيد كلمة المرور الجديدة *</label>
+        <input id="cpConfirmPassword" type="password" placeholder="أعد كتابة كلمة المرور" required minlength="8" maxlength="128" autocomplete="new-password">
+
+        <div id="changePasswordMessage" class="message hidden"></div>
+
+        <button class="btn btn-primary" type="submit">تغيير كلمة المرور</button>
+      </form>
+    </div>
+  </div>
+
+''' + marker2
+
+if 'id="changePasswordModal"' not in content and marker2 in content:
+    content = content.replace(marker2, new_modals, 1)
+    print("✅ Modals أُضيفت")
+
+# ─── 3) أضف profile-page.js قبل app.js
+old_scripts_pattern = r'<script src="js/app\.js\?v=\d+"></script>'
+new_scripts = '''<script src="js/profile-page.js?v=15"></script>
+  <script src="js/app.js?v=15"></script>'''
+
+content = re.sub(old_scripts_pattern, new_scripts, content, count=1)
+
+with open(path, 'w', encoding='utf-8') as f:
+    f.write(content)
+
+print("✅ index.html محدّث")
+PYEOF
+
+# ═══════════════════════════════════════════════════════════════
+# 4) CSS Profile
+# ═══════════════════════════════════════════════════════════════
+cat >> css/pages.css << 'CSSEOF'
+
+/* ═══════════════════════════════════════════════
+   PROFILE PAGE
+   ═══════════════════════════════════════════════ */
+.profile-hero {
+  text-align: center;
+  padding: 30px 20px;
+  background: linear-gradient(135deg, rgba(34,197,94,.16), rgba(59,130,246,.10));
+  border: 1px solid var(--border);
+  border-radius: 24px;
+  margin-bottom: 20px;
+}
+.avatar-lg {
+  width: 90px;
+  height: 90px;
+  margin: 0 auto 14px;
+  border-radius: 28px;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg, var(--primary), #15803d);
+  font-size: 38px;
+  font-weight: 900;
+  box-shadow: 0 15px 40px rgba(34,197,94,.25);
+}
+.profile-hero h1 {
+  font-size: 22px;
+  margin-bottom: 8px;
+}
+.profile-roles {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+.profile-status {
+  color: #86efac;
+  font-size: 12px;
+  font-weight: 700;
+  margin-top: 10px;
+}
+
+.profile-info-list {
+  display: grid;
+  gap: 4px;
+}
+.profile-info-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+.profile-info-row:last-child { border-bottom: 0; }
+.info-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: rgba(34,197,94,.10);
+  display: grid;
+  place-items: center;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+.info-text {
+  flex: 1;
+  min-width: 0;
+}
+.info-text small {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+  margin-bottom: 2px;
+}
+.info-text strong {
+  display: block;
+  font-size: 14px;
+  word-break: break-all;
+}
+
+.verified-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(34,197,94,.15);
+  color: #86efac;
+  font-size: 10px;
+  font-weight: 700;
+  margin-top: 4px;
+}
+.unverified-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(245,158,11,.15);
+  color: #fcd34d;
+  font-size: 10px;
+  font-weight: 700;
+  margin-top: 4px;
+}
+
+.profile-actions-list {
+  display: grid;
+  gap: 8px;
+}
+.profile-action {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 14px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  color: var(--text);
+  text-align: right;
+  cursor: pointer;
+  transition: .2s;
+}
+.profile-action:hover { background: var(--card2); }
+.profile-action:active { transform: scale(.98); }
+.profile-action .arrow {
+  color: var(--muted);
+  font-size: 18px;
+}
+
+/* ═══════════════════════════════════════════════
+   PULL TO REFRESH
+   ═══════════════════════════════════════════════ */
+.pull-indicator {
+  position: fixed;
+  top: 0;
+  left: 50%;
+  transform: translate(-50%, -100px);
+  z-index: 500;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 20px;
+  background: #0f172a;
+  border: 1px solid var(--border);
+  border-radius: 0 0 20px 20px;
+  box-shadow: 0 10px 30px rgba(0,0,0,.3);
+  transition: transform .2s ease-out;
+  pointer-events: none;
+}
+.pull-indicator.ready {
+  border-color: rgba(34,197,94,.5);
+}
+.pull-indicator.ready .pull-text {
+  color: #86efac;
+}
+.pull-indicator.active .pull-text {
+  color: #86efac;
+}
+.pull-spinner {
+  color: var(--muted);
+}
+.pull-spinner svg {
+  display: block;
+}
+.pull-spinner.spinning svg {
+  animation: pull-spin .8s linear infinite;
+}
+@keyframes pull-spin {
+  to { transform: rotate(360deg); }
+}
+.pull-text {
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+/* ═══════════════════════════════════════════════
+   SCROLL TOP BUTTON
+   ═══════════════════════════════════════════════ */
+.scroll-top-btn {
+  position: fixed;
+  bottom: 100px;
+  left: 16px;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--primary), var(--primary2));
+  color: white;
+  font-size: 22px;
+  font-weight: 900;
+  border: 0;
+  cursor: pointer;
+  box-shadow: 0 10px 30px rgba(34,197,94,.35);
+  opacity: 0;
+  transform: translateY(30px);
+  transition: opacity .3s, transform .3s;
+  pointer-events: none;
+  z-index: 100;
+}
+.scroll-top-btn.visible {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+.scroll-top-btn:active { transform: scale(.9); }
+
+/* ═══════════════════════════════════════════════
+   EMPTY STATES
+   ═══════════════════════════════════════════════ */
+.empty-state {
+  padding: 45px 25px;
+  text-align: center;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+.empty-state.error {
+  border-color: rgba(239,68,68,.2);
+  background: rgba(239,68,68,.05);
+}
+.empty-state-icon {
+  font-size: 56px;
+  line-height: 1;
+  margin-bottom: 4px;
+  opacity: .85;
+}
+.empty-state-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+}
+.empty-state-desc {
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.7;
+  max-width: 320px;
+}
+.empty-state .btn {
+  min-width: 180px;
+  margin-top: 8px;
+}
+
+/* ═══════════════════════════════════════════════
+   INSTALL PROMPT (PWA)
+   ═══════════════════════════════════════════════ */
+.install-prompt {
+  position: fixed;
+  left: 16px;
+  right: 16px;
+  bottom: 90px;
+  z-index: 400;
+  padding: 16px;
+  background: linear-gradient(135deg, rgba(34,197,94,.20), rgba(59,130,246,.12)), #0f172a;
+  border: 1px solid rgba(34,197,94,.35);
+  border-radius: 20px;
+  box-shadow: 0 20px 50px rgba(0,0,0,.45);
+  transform: translateY(200%);
+  transition: transform .4s cubic-bezier(.34,1.56,.64,1);
+  backdrop-filter: blur(10px);
+}
+.install-prompt.visible {
+  transform: translateY(0);
+}
+
+.install-prompt-content {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+.install-prompt-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, var(--primary), #15803d);
+  display: grid;
+  place-items: center;
+  font-size: 26px;
+  flex-shrink: 0;
+  box-shadow: 0 8px 20px rgba(34,197,94,.25);
+}
+.install-prompt-text {
+  flex: 1;
+  min-width: 0;
+}
+.install-prompt-text strong {
+  display: block;
+  font-size: 15px;
+  margin-bottom: 2px;
+}
+.install-prompt-text small {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.install-prompt-text b {
+  color: var(--text);
+}
+
+.install-prompt-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+/* Push أعلى الشاشة في سطح المكتب */
+@media (min-width: 760px) {
+  .install-prompt {
+    left: auto;
+    right: 24px;
+    bottom: 24px;
+    width: 380px;
+  }
+}
+
+
+
+
+/* ═══════════════════════════════════════════════
+   NOTIFICATIONS — v2
+   ═══════════════════════════════════════════════ */
+
+/* الشارة الحمراء */
+.notif-badge {
+  position: absolute;
+  top: -6px;
+  left: -6px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  color: #fff;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 900;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(239,68,68,.6);
+  animation: notif-badge-pulse 2s infinite;
+  border: 2px solid #07111f;
+}
+@keyframes notif-badge-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.08); }
+}
+
+/* Toolbar */
+.notif-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.notif-mark-all {
+  padding: 8px 14px;
+  background: rgba(34,197,94,.12);
+  color: #86efac;
+  border: 1px solid rgba(34,197,94,.3);
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: .2s;
+}
+.notif-mark-all:hover {
+  background: rgba(34,197,94,.2);
+}
+.notif-mark-all:active {
+  transform: scale(.96);
+}
+
+/* List */
+.notif-list {
+  display: grid;
+  gap: 10px;
+}
+
+/* Item */
+.notif-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  cursor: pointer;
+  transition: .2s;
+  position: relative;
+}
+.notif-item:hover {
+  background: var(--card2);
+  transform: translateY(-1px);
+}
+.notif-item:active {
+  transform: scale(.99);
+}
+.notif-item.unread {
+  border-color: rgba(34,197,94,.35);
+  background: linear-gradient(135deg, rgba(34,197,94,.08), rgba(34,197,94,.02)), var(--card);
+}
+.notif-item.unread::before {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: linear-gradient(180deg, #22c55e, #16a34a);
+  border-radius: 0 16px 16px 0;
+}
+
+/* Icon */
+.notif-item-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  font-size: 22px;
+  flex-shrink: 0;
+}
+.notif-info    { background: rgba(59,130,246,.15);  }
+.notif-success { background: rgba(34,197,94,.15);   }
+.notif-warning { background: rgba(245,158,11,.15);  }
+.notif-danger  { background: rgba(239,68,68,.15);   }
+
+/* Body */
+.notif-item-body {
+  flex: 1;
+  min-width: 0;
+}
+.notif-item-title {
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+.notif-item-text {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+  margin-bottom: 6px;
+}
+.notif-item-time {
+  color: #64748b;
+  font-size: 11px;
+}
+
+/* Dot */
+.notif-item-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #22c55e;
+  box-shadow: 0 0 10px rgba(34,197,94,.8);
+  flex-shrink: 0;
+  margin-top: 8px;
+}
+
+/* Empty */
+.notif-empty {
+  text-align: center;
+  padding: 60px 20px;
+}
+.notif-empty-icon {
+  font-size: 70px;
+  margin-bottom: 18px;
+  opacity: .5;
+}
+.notif-empty h3 {
+  font-size: 18px;
+  margin-bottom: 8px;
+  color: var(--text);
+}
+.notif-empty p {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+  margin-bottom: 20px;
+}
+
+/* Skeleton */
+.notif-skeleton-item {
+  display: flex;
+  gap: 12px;
+  padding: 14px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  animation: notif-sk-pulse 1.5s ease-in-out infinite;
+}
+.notif-skeleton-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  flex-shrink: 0;
+  background: linear-gradient(90deg, rgba(255,255,255,.05) 25%, rgba(255,255,255,.10) 50%, rgba(255,255,255,.05) 75%);
+  background-size: 200% 100%;
+  animation: notif-sk-shine 1.5s linear infinite;
+}
+.notif-skeleton-line {
+  height: 10px;
+  border-radius: 5px;
+  margin-bottom: 8px;
+  background: linear-gradient(90deg, rgba(255,255,255,.05) 25%, rgba(255,255,255,.10) 50%, rgba(255,255,255,.05) 75%);
+  background-size: 200% 100%;
+  animation: notif-sk-shine 1.5s linear infinite;
+}
+@keyframes notif-sk-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .75; }
+}
+@keyframes notif-sk-shine {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
