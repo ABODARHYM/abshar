@@ -22,10 +22,9 @@ export default function StoreDetailPage() {
 
   const loadStore = async () => {
     try {
-      // ✅ استخدام /stores/:id (العام) بدلاً من /admin/stores/:id
       const [storeRes, productsRes] = await Promise.all([
-        authFetch(`/api/v1/stores/${storeId}`),
-        authFetch(`/api/v1/products?storeId=${storeId}&limit=100`),
+        authFetch(`/api/v1/admin/stores/${storeId}`),
+        authFetch(`/api/v1/admin/stores/${storeId}/products?limit=100`),
       ]);
 
       if (!storeRes.ok) {

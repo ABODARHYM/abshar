@@ -7,6 +7,9 @@ import {
 import { ErrorCode } from '../../common/error-codes';
 import { buildPage, Paginated } from '../../common/pagination.dto';
 import { AdminRepository } from './admin.repository';
+import { StoresService, StoreResponse } from '../stores/stores.service';
+import { ProductsService, ProductResponse } from '../products/products.service';
+import { ProductQueryDto } from '../products/dto/product-query.dto';
 import {
   OrderStatus,
   CancellationReason,
@@ -34,6 +37,8 @@ export class AdminService {
   constructor(
     private readonly repo: AdminRepository,
     private readonly notifications: NotificationsService,
+    private readonly storesService: StoresService,
+    private readonly productsService: ProductsService,
   ) {}
 
   // ───── Dashboard ─────
@@ -226,6 +231,17 @@ export class AdminService {
   }
 
   // ───── Stores ─────
+
+  async getStoreDetails(id: string): Promise<StoreResponse> {
+    return this.storesService.getForAdmin(id);
+  }
+
+  async listStoreProducts(
+    storeId: string,
+    query: ProductQueryDto,
+  ): Promise<Paginated<ProductResponse>> {
+    return this.productsService.listForAdminStore(storeId, query);
+  }
 
   async listStores(query: AdminUserQueryDto): Promise<Paginated<AdminStoreListItemDto>> {
     const { rows, total } = await this.repo.listStores(query);

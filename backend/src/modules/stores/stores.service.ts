@@ -45,6 +45,17 @@ export class StoresService {
     return this.toResponse(row);
   }
 
+  async getForAdmin(id: string): Promise<StoreResponse> {
+    const row = await this.repo.findByIdForAdmin(id);
+    if (!row) {
+      throw new NotFoundException({
+        code: ErrorCode.NotFound,
+        message: 'Store not found',
+      });
+    }
+    return this.toResponse(row);
+  }
+
   private toResponse(row: StoreRow): StoreResponse {
     return {
       id: row.id,

@@ -23,6 +23,9 @@ import { CurrentUser } from '../../auth/decorators/current-user.decorator';
 import { AuthUser } from '../../auth/auth.types';
 import { Paginated } from '../../common/pagination.dto';
 import { AdminService } from './admin.service';
+import { StoreResponse } from '../stores/stores.service';
+import { ProductResponse } from '../products/products.service';
+import { ProductQueryDto } from '../products/dto/product-query.dto';
 import { AdminUserQueryDto } from './dto/admin-user-query.dto';
 import { AdminOrderQueryDto } from './dto/admin-order-query.dto';
 import {
@@ -123,6 +126,25 @@ export class AdminController {
   @ApiOperation({ summary: 'List all stores' })
   listStores(@Query() query: AdminUserQueryDto): Promise<Paginated<AdminStoreListItemDto>> {
     return this.service.listStores(query);
+  }
+
+  @Get('stores/:id')
+  @RequirePermission('stores.read')
+  @ApiOperation({ summary: 'Get store details including suspended stores' })
+  getStoreDetails(
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<StoreResponse> {
+    return this.service.getStoreDetails(id);
+  }
+
+  @Get('stores/:id/products')
+  @RequirePermission('products.read')
+  @ApiOperation({ summary: 'List products for a store including suspended stores' })
+  listStoreProducts(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query() query: ProductQueryDto,
+  ): Promise<Paginated<ProductResponse>> {
+    return this.service.listStoreProducts(id, query);
   }
 
   @Patch('stores/:id/status')

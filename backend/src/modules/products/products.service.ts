@@ -26,6 +26,14 @@ export class ProductsService {
     return buildPage(rows.map((r) => this.toResponse(r)), total, query);
   }
 
+  async listForAdminStore(
+    storeId: string,
+    query: ProductQueryDto,
+  ): Promise<Paginated<ProductResponse>> {
+    const { rows, total } = await this.repo.listForAdminStore(storeId, query);
+    return buildPage(rows.map((r) => this.toResponse(r)), total, query);
+  }
+
   async get(id: string): Promise<ProductResponse> {
     const row = await this.repo.findById(id);
     if (!row) {

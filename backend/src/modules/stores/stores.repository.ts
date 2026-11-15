@@ -97,4 +97,23 @@ export class StoresRepository {
     );
     return result.rows[0] ?? null;
   }
+
+  async findByIdForAdmin(id: string): Promise<StoreRow | null> {
+    const result = await this.db.query<StoreRow>(
+      `
+      SELECT
+        s.id, s.name_ar, s.name_en, s.slug, s.description_ar,
+        s.logo_url, s.cover_url, s.phone, s.address_text,
+        s.latitude, s.longitude, s.is_open, s.accepts_orders,
+        s.delivery_fee, s.min_order_amount, s.avg_prep_minutes,
+        s.rating_avg, s.rating_count
+      FROM stores s
+      WHERE s.id = $1 AND s.deleted_at IS NULL
+      LIMIT 1
+      `,
+      [id],
+    );
+    return result.rows[0] ?? null;
+  }
+
 }
