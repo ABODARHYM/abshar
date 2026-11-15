@@ -2,6 +2,7 @@
 
 import { useState, Suspense, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 
 function LoginContent() {
   const router = useRouter();
@@ -133,6 +134,19 @@ function LoginContent() {
               {loading ? '⏳ جاري الدخول...' : '🔑 تسجيل الدخول'}
             </button>
           </form>
+          <div className="mt-5 text-center text-sm space-y-3">
+            <p>
+              ليس لديك حساب متجر؟
+              <Link href="/register" className="text-blue-400 font-black mr-1">
+                قدّم طلب انضمام
+              </Link>
+            </p>
+            <p>
+              <Link href="/application-status" className="text-blue-400">
+                متابعة طلب تسجيل سابق
+              </Link>
+            </p>
+          </div>
         </div>
 
         <p className="text-center text-xs text-[var(--text-muted)] mt-6">

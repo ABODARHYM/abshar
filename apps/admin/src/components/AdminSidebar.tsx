@@ -8,6 +8,7 @@ const MENU = [
   { href: '/', label: 'لوحة التحكم', icon: '📊' },
   { href: '/users', label: 'المستخدمون', icon: '👥' },
   { href: '/stores', label: 'المتاجر', icon: '🏪' },
+  { href: '/store-applications', label: 'طلبات انضمام المتاجر', icon: '📨' },
   { href: '/drivers', label: 'المندوبون', icon: '🛵' },
   { href: '/orders', label: 'الطلبات', icon: '📦' },
   { href: '/coupons', label: 'الكوبونات', icon: '🎫' },

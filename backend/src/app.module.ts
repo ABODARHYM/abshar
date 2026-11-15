@@ -1,3 +1,4 @@
+import { StoreApplicationsModule } from './modules/store-applications/store-applications.module';
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
@@ -28,6 +29,7 @@ import { ReferralModule } from './modules/referral/referral.module';
 
 @Module({
   imports: [
+    StoreApplicationsModule,
     AppConfigModule,
     DatabaseModule,
     ThrottlerModule.forRootAsync({

@@ -130,7 +130,7 @@ export default function SearchPage() {
                     <p className="text-xs text-muted truncate">{p.storeName}</p>
                     <p className="text-sm font-black text-accent mt-1">{p.price.toFixed(0)} ر.ي</p>
                   </div>
-                </Link>
+                </div>
               ))}
             </div>
           </section>

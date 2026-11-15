@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { authFetch } from '@/lib/auth';
+import Link from 'next/link';
 
 interface PlatformStats {
   totalUsers: number;
@@ -129,15 +130,7 @@ function StatCard({ icon, label, value }: any) {
     <div className="card">
       <div className="text-3xl mb-2">{icon}</div>
       <div className="text-3xl font-black mb-1">{value}</div>
-      <div className="text-xs text-[var(--text-muted)]">{label}<Link href="/notifications-setup" className="card card-accent flex items-center gap-3 mt-4">
-          <span className="text-2xl">🔔</span>
-          <div className="flex-1">
-            <div className="font-black">إعدادات الإشعارات</div>
-            <div className="text-xs text-[var(--text-muted)]">تفعيل الإشعارات الفورية</div>
-          </div>
-          <span className="text-accent">←</span>
-        </Link>
-      </div>
+      <div className="text-xs text-[var(--text-muted)]">{label}</div>
     </div>
   );
 }
