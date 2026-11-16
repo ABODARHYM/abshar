@@ -72,6 +72,61 @@ export class ProductsRepository {
     return { rows: rowsResult.rows, total };
   }
 
+
+  async listForAdminStore(
+    storeId: string,
+    query: ProductQueryDto,
+  ): Promise<{ rows: ProductRow[]; total: number }> {
+    const where: string[] = [
+      'p.deleted_at IS NULL',
+      's.deleted_at IS NULL',
+      'p.store_id = $1',
+    ];
+    const params: unknown[] = [storeId];
+    let i = 2;
+
+    if (query.search) {
+      where.push(`(p.name_ar ILIKE $${i} OR p.name_en ILIKE $${i})`);
+      params.push(`%${query.search}%`);
+      i++;
+    }
+    if (query.categoryId) {
+      where.push(`p.category_id = $${i++}`);
+      params.push(query.categoryId);
+    }
+
+    const whereSql = 'WHERE ' + where.join(' AND ');
+    const countResult = await this.db.query<{ count: string }>(
+      `SELECT COUNT(*)::text AS count FROM products p JOIN stores s ON s.id = p.store_id ${whereSql}`,
+      params,
+    );
+    const total = parseInt(countResult.rows[0]?.count ?? '0', 10);
+
+    const offset = toOffset(query);
+    const limit = query.limit;
+    const sortBy = ['created_at', 'base_price', 'name_ar'].includes(query.sortBy ?? '')
+      ? query.sortBy
+      : 'created_at';
+    const sortOrder = query.sortOrder === 'asc' ? 'ASC' : 'DESC';
+
+    const rowsResult = await this.db.query<ProductRow>(
+      `
+      SELECT
+        p.id, p.store_id, s.name_ar AS store_name, p.category_id,
+        p.name_ar, p.name_en, p.description_ar,
+        p.base_price, p.image_url, p.is_available
+      FROM products p
+      JOIN stores s ON s.id = p.store_id
+      ${whereSql}
+      ORDER BY p.${sortBy} ${sortOrder}
+      LIMIT $${i++} OFFSET $${i++}
+      `,
+      [...params, limit, offset],
+    );
+
+    return { rows: rowsResult.rows, total };
+  }
+
   async findById(id: string): Promise<ProductRow | null> {
     const result = await this.db.query<ProductRow>(
       `
