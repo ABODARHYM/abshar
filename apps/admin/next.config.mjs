@@ -1,7 +1,16 @@
+import path from 'node:path';
+
 const nextConfig = {
   outputFileTracingRoot: process.cwd(),
   reactStrictMode: true,
   poweredByHeader: false,
+  webpack(config) {
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      '@': path.resolve(process.cwd(), 'src'),
+    };
+    return config;
+  },
   async headers() {
     return [
       {
