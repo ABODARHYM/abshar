@@ -23,18 +23,44 @@ describe('DriverCashRepository finance integrity', () => {
     expect(String(client.query.mock.calls[1][0])).toContain('UPDATE orders');
   });
 
-  it('records a new manual cash submission as cash_remittance, not settlement_payout', async () => {
-    const db = makeDb();
-    db.query.mockResolvedValue({ rows: [{ id: 'tx-1' }], rowCount: 1 });
+  it('records a new manual cash submission atomically as cash_remittance', async () => {
+    const client = {
+      query: jest.fn()
+        .mockResolvedValueOnce({ rows: [{ user_id: 'driver-1' }], rowCount: 1 })
+        .mockResolvedValueOnce({ rows: [{ outstanding: '1000.00' }], rowCount: 1 })
+        .mockResolvedValueOnce({ rows: [{ id: 'tx-1' }], rowCount: 1 }),
+    };
+    const db = {
+      query: jest.fn(),
+      transaction: jest.fn(async (work: (tx: any) => Promise<any>) => work(client)),
+    };
     const repo = new DriverCashRepository(db as any);
 
     const result = await repo.submitCash('driver-1', 500, 'handover', 'YER');
 
     expect(result).toEqual({ transactionId: 'tx-1' });
-    const sql = String(db.query.mock.calls[0][0]);
+    expect(db.transaction).toHaveBeenCalledTimes(1);
+    expect(client.query).toHaveBeenCalledTimes(3);
+    expect(String(client.query.mock.calls[0][0])).toContain('FOR UPDATE');
+    const sql = String(client.query.mock.calls[2][0]);
     expect(sql).toContain("'cash_remittance'");
     expect(sql).toContain('created_by');
     expect(sql).not.toContain("'settlement_payout'");
+  });
+
+  it('rejects a cash handover above the balance while holding the driver lock', async () => {
+    const client = {
+      query: jest.fn()
+        .mockResolvedValueOnce({ rows: [{ user_id: 'driver-1' }], rowCount: 1 })
+        .mockResolvedValueOnce({ rows: [{ outstanding: '100.00' }], rowCount: 1 }),
+    };
+    const db = {
+      transaction: jest.fn(async (work: (tx: any) => Promise<any>) => work(client)),
+    };
+    const repo = new DriverCashRepository(db as any);
+
+    await expect(repo.submitCash('driver-1', 101, 'handover', 'YER')).rejects.toThrow();
+    expect(client.query).toHaveBeenCalledTimes(2);
   });
 
   it('keeps legacy manual remittances in submitted and outstanding totals', async () => {
