@@ -406,6 +406,7 @@ export class DriverService {
       const full = await this.repo.findOrderForDriver(orderId, userId);
       const items = await this.repo.listOrderItems(orderId);
 
+      if (toStatus === 'delivered') {
         // Commission and delivery ledger entries were committed with the order transition.
         if (full) {
           // Loyalty is a separate non-ledger side effect and remains retry-safe.
@@ -422,7 +423,7 @@ export class DriverService {
           }
         }
 
-             // إشعار العميل
+        // إشعار العميل
         if (full) {
           try {
             await this.notifications.notifyOrderDelivered(full.customer_id, full.order_number);
