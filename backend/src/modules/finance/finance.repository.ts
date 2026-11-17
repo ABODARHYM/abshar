@@ -160,6 +160,7 @@ export class FinanceRepository {
     periodEnd: string;
     notes?: string;
     createdBy: string;
+    actorRole: string | null;
   }): Promise<any | null> {
     return this.db.transaction(async (client: PoolClient) => {
       // Lock eligible commission rows so concurrent settlement requests cannot claim the same earnings.
@@ -234,8 +235,8 @@ export class FinanceRepository {
       await client.query(
         `INSERT INTO audit_logs
           (actor_user_id, actor_role, action, entity_type, entity_id, new_value)
-         VALUES ($1, 'finance', 'finance.settlement.create', 'settlement', $2, $3::jsonb)`,
-        [params.createdBy, settlement.id, JSON.stringify({
+         VALUES ($1, $2, 'finance.settlement.create', 'settlement', $3, $4::jsonb)`,
+        [params.createdBy, params.actorRole, settlement.id, JSON.stringify({
           partyType: params.partyType, partyId: params.partyId,
           grossAmount: gross, commissionAmount: commission, currency,
           commissionCount: eligible.rows.length,
@@ -249,6 +250,7 @@ export class FinanceRepository {
     id: string,
     status: 'approved' | 'paid' | 'cancelled',
     actorId: string,
+    actorRole: string | null,
   ): Promise<any | null> {
     return this.db.transaction(async (client: PoolClient) => {
       const currentResult = await client.query<{
@@ -310,8 +312,8 @@ export class FinanceRepository {
       await client.query(
         `INSERT INTO audit_logs
           (actor_user_id, actor_role, action, entity_type, entity_id, old_value, new_value)
-         VALUES ($1, 'finance', $2, 'settlement', $3, $4::jsonb, $5::jsonb)`,
-        [actorId, `finance.settlement.${status}`, id,
+         VALUES ($1, $2, $3, 'settlement', $4, $5::jsonb, $6::jsonb)`,
+        [actorId, actorRole, `finance.settlement.${status}`, id,
           JSON.stringify({ status: current.status }),
           JSON.stringify({ status, payoutAmount: status === 'paid' ? Number(current.net_amount) : null,
             currency: current.currency })],
