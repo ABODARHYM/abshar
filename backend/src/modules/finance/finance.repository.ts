@@ -140,7 +140,7 @@ export class FinanceRepository {
         s.id, s.party_type, s.party_id,
         COALESCE(st.name_ar, du.full_name) AS party_name,
         s.period_start, s.period_end,
-        s.gross_amount, s.commission_amount, s.net_amount,
+        s.gross_amount, s.commission_amount, s.net_amount, s.currency,
         s.status, s.notes, s.settled_at, s.created_at
       FROM settlements s
       LEFT JOIN stores st ON st.id = s.party_id AND s.party_type = 'store'
