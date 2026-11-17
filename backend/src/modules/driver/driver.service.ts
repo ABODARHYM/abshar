@@ -377,7 +377,26 @@ export class DriverService {
     await this.requireDriver(userId);
     try {
       const updated = await this.repo.transitionOrderStatus(
-        orderId, userId, expectedFrom, toStatus, note,
+        orderId,
+        userId,
+        expectedFrom,
+        toStatus,
+        note,
+        undefined,
+        async (client, deliveredOrder) => {
+          // Commission and delivery-time ledger effects commit atomically
+          // with the delivered status and its history record.
+          await this.finance.computeCommissionForOrder(orderId, client);
+
+          if (deliveredOrder.payment_method === 'cash_on_delivery' && Number(deliveredOrder.total) > 0) {
+            await this.driverCashRepo.recordCashCollection(client, {
+              driverId: userId,
+              orderId,
+              amount: Number(deliveredOrder.total),
+              currency: deliveredOrder.currency || 'YER',
+            });
+          }
+        },
       );
       if (!updated) {
         throw new NotFoundException({
@@ -387,46 +406,9 @@ export class DriverService {
       const full = await this.repo.findOrderForDriver(orderId, userId);
       const items = await this.repo.listOrderItems(orderId);
 
-      // احسب العمولة عند التسليم
-      if (toStatus === 'delivered') {
-        try {
-          await this.finance.computeCommissionForOrder(orderId);
-        } catch (err) {
-          console.warn('[driver] commission compute failed:', (err as Error).message);
-        }
-
-        // ═══ Driver Cash — تسجيل الأرباح + COD ═══
+        // Commission and delivery ledger entries were committed with the order transition.
         if (full) {
-          try {
-            const currency = full.currency || 'YER';
-            const deliveryFee = Number(full.delivery_fee);
-            const total = Number(full.total);
-            const paymentMethod = full.payment_method;
-
-            // 1) driver_earning (من delivery_fee)
-            if (deliveryFee > 0) {
-              await this.driverCashRepo.recordDriverEarning(
-                undefined as any,  // لا نحتاج transaction خارجي
-                { driverId: userId, orderId, amount: deliveryFee, currency },
-              );
-            }
-
-            // 2) cod_collection (إذا COD)
-            if (paymentMethod === 'cash_on_delivery' && total > 0) {
-              await this.driverCashRepo.recordCashCollection(
-                undefined as any,
-                { driverId: userId, orderId, amount: total, currency },
-              );
-            }
-
-            console.log(
-              `[driver] cash recorded: earning=${deliveryFee} cod=${paymentMethod === 'cash_on_delivery' ? total : 0} currency=${currency}`,
-            );
-          } catch (err) {
-            console.warn('[driver] cash record failed:', (err as Error).message);
-          }
-
-          // ═══ Loyalty — كسب نقاط للعميل ═══
+          // Loyalty is a separate non-ledger side effect and remains retry-safe.
           try {
             await this.loyalty.earnFromOrder(
               full.customer_id,
@@ -440,7 +422,7 @@ export class DriverService {
           }
         }
 
-        // إشعار العميل
+             // إشعار العميل
         if (full) {
           try {
             await this.notifications.notifyOrderDelivered(full.customer_id, full.order_number);
