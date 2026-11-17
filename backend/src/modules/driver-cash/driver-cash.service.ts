@@ -63,7 +63,7 @@ export class DriverCashService {
   ): Promise<CashSubmitResponseDto> {
     const summary = await this.getSummary(driverId);
 
-    if (amount <= 0) {
+    if (!Number.isFinite(amount) || amount <= 0) {
       throw new BadRequestException({
         code: ErrorCode.ValidationFailed,
         message: 'المبلغ يجب أن يكون أكبر من صفر',
