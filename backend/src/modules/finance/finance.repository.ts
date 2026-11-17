@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { ConflictException, Injectable } from '@nestjs/common';
 import { PoolClient } from 'pg';
 import { DatabaseService } from '../../database/database.service';
 import { toOffset } from '../../common/pagination.dto';
@@ -118,7 +118,7 @@ export class FinanceRepository {
         s.id, s.party_type, s.party_id,
         COALESCE(st.name_ar, du.full_name) AS party_name,
         s.period_start, s.period_end,
-        s.gross_amount, s.commission_amount, s.net_amount,
+        s.gross_amount, s.commission_amount, s.net_amount, s.currency,
         s.status, s.notes, s.settled_at, s.created_at
       FROM settlements s
       LEFT JOIN stores st ON st.id = s.party_id AND s.party_type = 'store'
@@ -140,7 +140,7 @@ export class FinanceRepository {
         s.id, s.party_type, s.party_id,
         COALESCE(st.name_ar, du.full_name) AS party_name,
         s.period_start, s.period_end,
-        s.gross_amount, s.commission_amount, s.net_amount,
+        s.gross_amount, s.commission_amount, s.net_amount, s.currency,
         s.status, s.notes, s.settled_at, s.created_at
       FROM settlements s
       LEFT JOIN stores st ON st.id = s.party_id AND s.party_type = 'store'
@@ -158,61 +158,166 @@ export class FinanceRepository {
     partyId: string;
     periodStart: string;
     periodEnd: string;
-    grossAmount: number;
-    commissionAmount: number;
-    netAmount: number;
     notes?: string;
     createdBy: string;
-  }): Promise<any> {
-    const r = await this.db.query(
-      `
-      INSERT INTO settlements (
-        party_type, party_id, period_start, period_end,
-        gross_amount, commission_amount, net_amount,
-        status, notes, created_by
-      )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending', $8, $9)
-      RETURNING id, party_type, party_id, period_start, period_end,
-                gross_amount, commission_amount, net_amount,
-                status, notes, settled_at, created_at
-      `,
-      [
-        params.partyType,
-        params.partyId,
-        params.periodStart,
-        params.periodEnd,
-        params.grossAmount,
-        params.commissionAmount,
-        params.netAmount,
-        params.notes ?? null,
-        params.createdBy,
-      ],
-    );
-    return r.rows[0];
+    actorRole: string | null;
+  }): Promise<any | null> {
+    return this.db.transaction(async (client: PoolClient) => {
+      // Lock eligible commission rows so concurrent settlement requests cannot claim the same earnings.
+      const idColumn = params.partyType === 'store' ? 'c.store_id' : 'o.driver_id';
+      const amountColumn = params.partyType === 'store' ? 'c.store_amount' : 'c.driver_amount';
+      const eligible = await client.query<{
+        id: string; amount: string; commission_amount: string; currency: string;
+      }>(
+        `
+        SELECT c.id, ${amountColumn}::text AS amount,
+               c.commission_amount::text AS commission_amount, o.currency
+        FROM commissions c
+        JOIN orders o ON o.id = c.order_id
+        WHERE ${idColumn} = $1
+          AND o.status = 'delivered'
+          AND o.delivered_at::date BETWEEN $2::date AND $3::date
+          AND ${amountColumn} > 0
+          AND NOT EXISTS (
+            SELECT 1 FROM settlement_commission_items sci
+            WHERE sci.commission_id = c.id
+              AND sci.party_type = $4
+              AND sci.released_at IS NULL
+          )
+        ORDER BY o.delivered_at, c.id
+        FOR UPDATE OF c SKIP LOCKED
+        `,
+        [params.partyId, params.periodStart, params.periodEnd, params.partyType],
+      );
+
+      if (eligible.rows.length === 0) return null;
+      const currencies = [...new Set(eligible.rows.map((r) => r.currency.trim()))];
+      if (currencies.length !== 1) {
+        throw new ConflictException('Cannot create one settlement for commissions with different currencies');
+      }
+
+      // Keep monetary aggregation in PostgreSQL NUMERIC; do not sum money using JS floats.
+      const totals = await client.query<{ gross: string; commission: string }>(
+        `SELECT
+           COALESCE(SUM(CASE WHEN $2 = 'store' THEN c.store_amount ELSE c.driver_amount END), 0)::text AS gross,
+           COALESCE(SUM(CASE WHEN $2 = 'store' THEN c.commission_amount ELSE 0 END), 0)::text AS commission
+         FROM commissions c
+         WHERE c.id = ANY($1::uuid[])`,
+        [eligible.rows.map((row) => row.id), params.partyType],
+      );
+      const gross = totals.rows[0].gross;
+      const commission = totals.rows[0].commission;
+      const currency = currencies[0];
+      const created = await client.query(
+        `
+        INSERT INTO settlements (
+          party_type, party_id, period_start, period_end, gross_amount,
+          commission_amount, net_amount, currency, status, notes, created_by
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $5, $7, 'pending', $8, $9)
+        RETURNING id, party_type, party_id, period_start, period_end,
+                  gross_amount, commission_amount, net_amount, currency,
+                  status, notes, settled_at, created_at
+        `,
+        [params.partyType, params.partyId, params.periodStart, params.periodEnd,
+          gross, commission, currency, params.notes ?? null, params.createdBy],
+      );
+      const settlement = created.rows[0];
+
+      for (const row of eligible.rows) {
+        await client.query(
+          `INSERT INTO settlement_commission_items (settlement_id, commission_id, party_type, amount)
+           VALUES ($1, $2, $3, $4)`,
+          [settlement.id, row.id, params.partyType, row.amount],
+        );
+      }
+
+      await client.query(
+        `INSERT INTO audit_logs
+          (actor_user_id, actor_role, action, entity_type, entity_id, new_value)
+         VALUES ($1, $2, 'finance.settlement.create', 'settlement', $3, $4::jsonb)`,
+        [params.createdBy, params.actorRole, settlement.id, JSON.stringify({
+          partyType: params.partyType, partyId: params.partyId,
+          grossAmount: gross, commissionAmount: commission, currency,
+          commissionCount: eligible.rows.length,
+        })],
+      );
+      return settlement;
+    });
   }
 
   async updateSettlementStatus(
     id: string,
     status: 'approved' | 'paid' | 'cancelled',
-    approvedBy: string,
+    actorId: string,
+    actorRole: string | null,
   ): Promise<any | null> {
-    const updates: string[] = ['status = $1', 'approved_by = $2'];
-    if (status === 'paid') {
-      updates.push('settled_at = now()');
-    }
+    return this.db.transaction(async (client: PoolClient) => {
+      const currentResult = await client.query<{
+        id: string; party_type: 'store' | 'driver'; party_id: string;
+        status: string; net_amount: string; currency: string | null;
+      }>(
+        `SELECT id, party_type, party_id, status, net_amount::text, currency
+         FROM settlements WHERE id = $1 FOR UPDATE`,
+        [id],
+      );
+      const current = currentResult.rows[0];
+      if (!current) return null;
 
-    const r = await this.db.query(
-      `
-      UPDATE settlements
-      SET ${updates.join(', ')}
-      WHERE id = $3
-      RETURNING id, party_type, party_id, period_start, period_end,
-                gross_amount, commission_amount, net_amount,
-                status, notes, settled_at, created_at
-      `,
-      [status, approvedBy, id],
-    );
-    return r.rows[0] ?? null;
+      const allowed =
+        (status === 'approved' && current.status === 'pending') ||
+        (status === 'paid' && current.status === 'approved') ||
+        (status === 'cancelled' && ['pending', 'approved'].includes(current.status));
+      if (!allowed) {
+        throw new ConflictException(`Invalid settlement transition: ${current.status} -> ${status}`);
+      }
+
+      if (status === 'paid') {
+        if (!current.currency) {
+          throw new ConflictException('Settlement currency is missing; reconcile this legacy settlement before marking it paid');
+        }
+        await client.query(
+          `INSERT INTO transactions
+            (settlement_id, account_type, account_id, type, direction, amount, currency, description, created_by, idempotency_key)
+           VALUES ($1, $2, $3, 'settlement_payout', 'debit', $4, $5, $6, $7, 'settlement:' || $1::text || ':payout')
+           ON CONFLICT (idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING`,
+          [id, current.party_type, current.party_id, current.net_amount,
+            current.currency, `Settlement payout ${id}`, actorId],
+        );
+      }
+
+      if (status === 'cancelled') {
+        await client.query(
+          `UPDATE settlement_commission_items
+           SET released_at = now()
+           WHERE settlement_id = $1 AND released_at IS NULL`,
+          [id],
+        );
+      }
+
+      const updated = await client.query(
+        `UPDATE settlements
+         SET status = $1,
+             approved_by = CASE WHEN $1 = 'approved' THEN $2 ELSE approved_by END,
+             settled_at = CASE WHEN $1 = 'paid' THEN now() ELSE settled_at END
+         WHERE id = $3
+         RETURNING id, party_type, party_id, period_start, period_end,
+                   gross_amount, commission_amount, net_amount, currency,
+                   status, notes, settled_at, created_at`,
+        [status, actorId, id],
+      );
+
+      await client.query(
+        `INSERT INTO audit_logs
+          (actor_user_id, actor_role, action, entity_type, entity_id, old_value, new_value)
+         VALUES ($1, $2, $3, 'settlement', $4, $5::jsonb, $6::jsonb)`,
+        [actorId, actorRole, `finance.settlement.${status}`, id,
+          JSON.stringify({ status: current.status }),
+          JSON.stringify({ status, payoutAmount: status === 'paid' ? Number(current.net_amount) : null,
+            currency: current.currency })],
+      );
+      return updated.rows[0] ?? null;
+    });
   }
 
   // ═══════════════ Commissions ═══════════════
@@ -267,26 +372,19 @@ export class FinanceRepository {
    */
   async computeCommissionForOrder(orderId: string): Promise<any | null> {
     return this.db.transaction(async (client: PoolClient) => {
-      // 1) هل يوجد commission مسبقًا؟
-      const existing = await client.query<{ id: string }>(
-        `SELECT id FROM commissions WHERE order_id = $1 LIMIT 1`,
-        [orderId],
-      );
-      if (existing.rows[0]) {
-        return existing.rows[0];
-      }
-
-      // 2) اجلب الطلب
+      // Re-read the delivered order on every retry so missing ledger rows can be repaired.
       const orderRes = await client.query<{
         id: string;
         store_id: string;
+        driver_id: string | null;
         subtotal: string;
         delivery_fee: string;
         discount_total: string;
         total: string;
+        currency: string;
       }>(
         `
-        SELECT id, store_id, subtotal, delivery_fee, discount_total, total
+        SELECT id, store_id, driver_id, subtotal, delivery_fee, discount_total, total, currency
         FROM orders
         WHERE id = $1 AND status = 'delivered'
         LIMIT 1
@@ -296,103 +394,106 @@ export class FinanceRepository {
       const order = orderRes.rows[0];
       if (!order) return null;
 
-      // 3) اجلب نسبة عمولة المتجر
-      const storeRes = await client.query<{ commission_rate: string | null }>(
-        `SELECT commission_rate FROM stores WHERE id = $1`,
-        [order.store_id],
-      );
-      let rate = storeRes.rows[0]?.commission_rate;
-
-      if (rate === null || rate === undefined) {
-        // استخدم الافتراضي من settings
-        const settingRes = await client.query<{ value: any }>(
-          `SELECT value FROM settings WHERE key = 'commission.default_rate_percent' LIMIT 1`,
-        );
-        rate = settingRes.rows[0]?.value ?? 10;
-      }
-
-      const rateNum = parseFloat(String(rate));
-      const subtotal = parseFloat(order.subtotal);
-      const deliveryFee = parseFloat(order.delivery_fee);
-      const discountTotal = parseFloat(order.discount_total);
-
-      // 4) الحسابات
-      const commissionAmount = (subtotal * rateNum) / 100;
-      const storeAmount = subtotal - commissionAmount;
-      const driverAmount = deliveryFee;
-      const platformAmount = commissionAmount;
-
-      // 5) أدخل commission
-      const insertRes = await client.query(
-        `
-        INSERT INTO commissions (
-          order_id, store_id, rate_percent,
-          order_amount, delivery_fee, discount_amount,
-          commission_amount, store_amount, driver_amount, platform_amount
-        )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-        RETURNING *
-        `,
-        [
-          orderId,
-          order.store_id,
-          rateNum,
-          subtotal,
-          deliveryFee,
-          discountTotal,
-          commissionAmount,
-          storeAmount,
-          driverAmount,
-          platformAmount,
-        ],
-      );
-
-      // 6) سجّل في الـ Ledger
-      const currencyRes = await client.query<{ value: any }>(
-        `SELECT value FROM settings WHERE key = 'currency' LIMIT 1`,
-      );
-      const currency = String(currencyRes.rows[0]?.value ?? 'USD').replace(/"/g, '');
-
-      // Store credit
-      await client.query(
-        `
-        INSERT INTO transactions (
-          order_id, account_type, account_id, type, direction, amount, currency, description
-        )
-        VALUES ($1, 'store', $2, 'store_earning', 'credit', $3, $4, 'Store earning')
-        `,
-        [orderId, order.store_id, storeAmount, currency],
-      );
-
-      // Platform commission
-      await client.query(
-        `
-        INSERT INTO transactions (
-          order_id, account_type, type, direction, amount, currency, description
-        )
-        VALUES ($1, 'platform', 'commission', 'credit', $2, $3, 'Platform commission')
-        `,
-        [orderId, commissionAmount, currency],
-      );
-
-      // Driver earning (يُحتسب عند التسليم أيضًا)
-      const driverRes = await client.query<{ driver_id: string }>(
-        `SELECT driver_id FROM orders WHERE id = $1`,
+      // Read the existing commission first. Do not recalculate historical rates on retries.
+      const existingRes = await client.query(
+        `SELECT * FROM commissions WHERE order_id = $1 LIMIT 1`,
         [orderId],
       );
-      if (driverRes.rows[0]?.driver_id) {
+      let commissionRow = existingRes.rows[0];
+
+      if (!commissionRow) {
+        const storeRes = await client.query<{ commission_rate: string | null }>(
+          `SELECT commission_rate FROM stores WHERE id = $1`,
+          [order.store_id],
+        );
+        let rate = storeRes.rows[0]?.commission_rate;
+        if (rate === null || rate === undefined) {
+          const settingRes = await client.query<{ value: any }>(
+            `SELECT value FROM settings WHERE key = 'commission.default_rate_percent' LIMIT 1`,
+          );
+          rate = settingRes.rows[0]?.value ?? 10;
+        }
+
+        const rateNum = parseFloat(String(rate));
+        const subtotal = Number(order.subtotal);
+        const deliveryFee = Number(order.delivery_fee);
+        const discountTotal = Number(order.discount_total);
+        const commissionAmount = (subtotal * rateNum) / 100;
+        const storeAmount = subtotal - commissionAmount;
+
+        const inserted = await client.query(
+          `
+          INSERT INTO commissions (
+            order_id, store_id, rate_percent,
+            order_amount, delivery_fee, discount_amount,
+            commission_amount, store_amount, driver_amount, platform_amount
+          )
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $7)
+          ON CONFLICT (order_id) DO NOTHING
+          RETURNING *
+          `,
+          [orderId, order.store_id, rateNum, subtotal, deliveryFee,
+            discountTotal, commissionAmount, storeAmount, deliveryFee],
+        );
+        commissionRow = inserted.rows[0];
+        if (!commissionRow) {
+          const concurrent = await client.query(
+            `SELECT * FROM commissions WHERE order_id = $1 LIMIT 1`,
+            [orderId],
+          );
+          commissionRow = concurrent.rows[0];
+        }
+      }
+
+      if (!commissionRow) return null;
+
+      // The order snapshot is authoritative for currency; preserve the driver's identity
+      // as the creator of all delivery-time ledger credits.
+      const currency = order.currency;
+      const creatorId = order.driver_id;
+
+      await client.query(
+        `
+        INSERT INTO transactions (
+          order_id, account_type, account_id, type, direction, amount,
+          currency, description, created_by, idempotency_key
+        )
+        VALUES ($1, 'store', $2, 'store_earning', 'credit', $3, $4, 'Store earning', $5,
+          'order:' || $1::text || ':store:store_earning:credit')
+        ON CONFLICT (idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING
+        `,
+        [orderId, order.store_id, commissionRow.store_amount, currency, creatorId],
+      );
+
+      await client.query(
+        `
+        INSERT INTO transactions (
+          order_id, account_type, type, direction, amount,
+          currency, description, created_by, idempotency_key
+        )
+        VALUES ($1, 'platform', 'commission', 'credit', $2, $3, 'Platform commission', $4,
+          'order:' || $1::text || ':platform:commission:credit')
+        ON CONFLICT (idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING
+        `,
+        [orderId, commissionRow.platform_amount, currency, creatorId],
+      );
+
+      if (order.driver_id && Number(commissionRow.driver_amount) > 0) {
         await client.query(
           `
           INSERT INTO transactions (
-            order_id, account_type, account_id, type, direction, amount, currency, description
+            order_id, account_type, account_id, type, direction, amount,
+            currency, description, created_by, idempotency_key
           )
-          VALUES ($1, 'driver', $2, 'driver_earning', 'credit', $3, $4, 'Driver earning')
+          VALUES ($1, 'driver', $2, 'driver_earning', 'credit', $3, $4, 'Driver earning', $5,
+            'order:' || $1::text || ':driver:driver_earning:credit')
+          ON CONFLICT (idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING
           `,
-          [orderId, driverRes.rows[0].driver_id, driverAmount, currency],
+          [orderId, order.driver_id, commissionRow.driver_amount, currency, creatorId],
         );
       }
 
-      return insertRes.rows[0];
+      return commissionRow;
     });
   }
 
@@ -451,37 +552,34 @@ export class FinanceRepository {
     partyId: string,
     periodStart: string,
     periodEnd: string,
-  ): Promise<{
-    gross: string;
-    commission: string;
-    net: string;
-    count: string;
-  }> {
-    const column = partyType === 'store' ? 'store_amount' : 'driver_amount';
-    const idColumn = partyType === 'store' ? 'store_id' : 'driver_id';
-
+  ): Promise<{ gross: string; commission: string; net: string; count: string }> {
+    const amountColumn = partyType === 'store' ? 'c.store_amount' : 'c.driver_amount';
+    const idColumn = partyType === 'store' ? 'c.store_id' : 'o.driver_id';
+    const commissionColumn = partyType === 'store' ? 'c.commission_amount' : '0::numeric';
     const r = await this.db.query<{
-      gross: string;
-      commission: string;
-      net: string;
-      count: string;
+      gross: string; commission: string; net: string; count: string;
     }>(
       `
       SELECT
-        COALESCE(SUM(c.${column}), 0)::text AS gross,
-        COALESCE(SUM(c.commission_amount), 0)::text AS commission,
-        COALESCE(SUM(c.${column}), 0)::text AS net,
+        COALESCE(SUM(${amountColumn}), 0)::text AS gross,
+        COALESCE(SUM(${commissionColumn}), 0)::text AS commission,
+        COALESCE(SUM(${amountColumn}), 0)::text AS net,
         COUNT(*)::text AS count
       FROM commissions c
       JOIN orders o ON o.id = c.order_id
-      WHERE c.${idColumn} = $1
+      WHERE ${idColumn} = $1
         AND o.status = 'delivered'
-        AND o.delivered_at >= $2
-        AND o.delivered_at <= $3
+        AND o.delivered_at::date BETWEEN $2::date AND $3::date
+        AND NOT EXISTS (
+          SELECT 1 FROM settlement_commission_items sci
+          WHERE sci.commission_id = c.id
+            AND sci.party_type = $4
+            AND sci.released_at IS NULL
+        )
       `,
-      [partyId, periodStart, periodEnd],
+      [partyId, periodStart, periodEnd, partyType],
     );
-
     return r.rows[0];
   }
+
 }
