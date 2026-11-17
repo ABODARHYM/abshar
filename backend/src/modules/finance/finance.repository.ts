@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { ConflictException, Injectable } from '@nestjs/common';
 import { PoolClient } from 'pg';
 import { DatabaseService } from '../../database/database.service';
 import { toOffset } from '../../common/pagination.dto';
@@ -259,12 +259,12 @@ export class FinanceRepository {
         (status === 'paid' && current.status === 'approved') ||
         (status === 'cancelled' && ['pending', 'approved'].includes(current.status));
       if (!allowed) {
-        throw new Error(`Invalid settlement transition: ${current.status} -> ${status}`);
+        throw new ConflictException(`Invalid settlement transition: ${current.status} -> ${status}`);
       }
 
       if (status === 'paid') {
         if (!current.currency) {
-          throw new Error('Settlement currency is missing; reconcile this legacy settlement before marking it paid');
+          throw new ConflictException('Settlement currency is missing; reconcile this legacy settlement before marking it paid');
         }
         await client.query(
           `INSERT INTO transactions
