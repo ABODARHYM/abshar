@@ -1,3 +1,4 @@
+import { PoolClient } from 'pg';
 import {
   BadRequestException,
   Injectable,
@@ -140,8 +141,8 @@ export class FinanceService {
     return buildPage(rows.map(this.toCommission), total, query);
   }
 
-  async computeCommissionForOrder(orderId: string): Promise<any> {
-    return this.repo.computeCommissionForOrder(orderId);
+  async computeCommissionForOrder(orderId: string, transactionClient?: PoolClient): Promise<any> {
+    return this.repo.computeCommissionForOrder(orderId, transactionClient);
   }
 
   // ═══════════════ Ledger ═══════════════
