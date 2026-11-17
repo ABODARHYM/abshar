@@ -181,6 +181,7 @@ export class FinanceService {
       grossAmount: Number(s.gross_amount),
       commissionAmount: Number(s.commission_amount),
       netAmount: Number(s.net_amount),
+      currency: s.currency?.trim?.() ?? null,
       status: s.status,
       notes: s.notes,
       settledAt: s.settled_at ? s.settled_at.toISOString() : null,
