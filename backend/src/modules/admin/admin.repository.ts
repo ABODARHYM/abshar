@@ -380,7 +380,7 @@ export class AdminRepository {
     const rowsRes = await this.db.query(
       `
       SELECT id, actor_user_id, actor_role, action, entity_type, entity_id,
-             ip_address, created_at
+             old_value, new_value, ip_address, user_agent, device_info, request_id, created_at
       FROM audit_logs
       ${whereSql}
       ORDER BY created_at DESC
