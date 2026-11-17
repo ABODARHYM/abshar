@@ -118,7 +118,7 @@ export class FinanceRepository {
         s.id, s.party_type, s.party_id,
         COALESCE(st.name_ar, du.full_name) AS party_name,
         s.period_start, s.period_end,
-        s.gross_amount, s.commission_amount, s.net_amount,
+        s.gross_amount, s.commission_amount, s.net_amount, s.currency,
         s.status, s.notes, s.settled_at, s.created_at
       FROM settlements s
       LEFT JOIN stores st ON st.id = s.party_id AND s.party_type = 'store'
@@ -194,10 +194,17 @@ export class FinanceRepository {
         throw new Error('Cannot create one settlement for commissions with different currencies');
       }
 
-      const gross = eligible.rows.reduce((sum, row) => sum + Number(row.amount), 0);
-      const commission = params.partyType === 'store'
-        ? eligible.rows.reduce((sum, row) => sum + Number(row.commission_amount), 0)
-        : 0;
+      // Keep monetary aggregation in PostgreSQL NUMERIC; do not sum money using JS floats.
+      const totals = await client.query<{ gross: string; commission: string }>(
+        `SELECT
+           COALESCE(SUM(CASE WHEN $2 = 'store' THEN c.store_amount ELSE c.driver_amount END), 0)::text AS gross,
+           COALESCE(SUM(CASE WHEN $2 = 'store' THEN c.commission_amount ELSE 0 END), 0)::text AS commission
+         FROM commissions c
+         WHERE c.id = ANY($1::uuid[])`,
+        [eligible.rows.map((row) => row.id), params.partyType],
+      );
+      const gross = totals.rows[0].gross;
+      const commission = totals.rows[0].commission;
       const currency = currencies[0];
       const created = await client.query(
         `
