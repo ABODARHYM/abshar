@@ -76,3 +76,16 @@ export function planMigrations(files: MigrationFile[], applied: AppliedMigration
 
   return { pending };
 }
+
+/**
+ * Remove a legacy migration's own outer BEGIN/COMMIT wrapper.
+ * The runner owns the transaction and records the checksum in that same
+ * transaction. Checksums must still be calculated from the original SQL.
+ */
+export function stripOuterTransactionStatements(sql: string): string {
+  const withoutLeadingBegin = sql.replace(
+    /^((?:(?:[\t ]*--[^\n]*(?:\n|$))|[\t \r\n])*)BEGIN[\t ]*;[\t ]*(?:\r?\n|$)/i,
+    '$1',
+  );
+  return withoutLeadingBegin.replace(/(?:\r?\n)[\t ]*COMMIT[\t ]*;[\t ]*(?:\r?\n)?[\t ]*$/i, '\n');
+}
