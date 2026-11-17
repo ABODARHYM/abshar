@@ -73,7 +73,7 @@ describe('real migration files', () => {
     const normalized = stripOuterTransactionStatements(sql);
     expect(normalized).not.toMatch(/^\s*BEGIN\s*;\s*$/m);
     expect(normalized).not.toMatch(/^\s*COMMIT\s*;\s*$/m);
-    expect(checksumOf(sql)).toBe(checksumOf(readFileSync(join(dir, '031_store_applications.sql'), 'utf8')));
+    expect(checksumOf(sql)).not.toBe(checksumOf(normalized));
   });
 
   it('contain every table required by the spec', () => {
