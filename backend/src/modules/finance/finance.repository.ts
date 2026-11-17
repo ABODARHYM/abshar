@@ -387,7 +387,7 @@ export class FinanceRepository {
         SELECT id, store_id, driver_id, subtotal, delivery_fee, discount_total, total, currency
         FROM orders
         WHERE id = $1 AND status = 'delivered'
-        LIMIT 1
+        FOR UPDATE
         `,
         [orderId],
       );
@@ -460,7 +460,7 @@ export class FinanceRepository {
         )
         VALUES ($1, 'store', $2, 'store_earning', 'credit', $3, $4, 'Store earning', $5,
           'order:' || $1::text || ':store:store_earning:credit')
-        ON CONFLICT (idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING
+        ON CONFLICT DO NOTHING
         `,
         [orderId, order.store_id, commissionRow.store_amount, currency, creatorId],
       );
@@ -473,7 +473,7 @@ export class FinanceRepository {
         )
         VALUES ($1, 'platform', 'commission', 'credit', $2, $3, 'Platform commission', $4,
           'order:' || $1::text || ':platform:commission:credit')
-        ON CONFLICT (idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING
+        ON CONFLICT DO NOTHING
         `,
         [orderId, commissionRow.platform_amount, currency, creatorId],
       );
