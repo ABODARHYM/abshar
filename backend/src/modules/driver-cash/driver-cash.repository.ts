@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { PoolClient } from 'pg';
 import { DatabaseService } from '../../database/database.service';
 import { toOffset } from '../../common/pagination.dto';
@@ -175,17 +175,48 @@ export class DriverCashRepository {
     note: string | null,
     currency: string,
   ): Promise<{ transactionId: string }> {
-    const r = await this.db.query<{ id: string }>(
-      `
-      INSERT INTO transactions (
-        account_type, account_id, type, direction, amount, currency, description, created_by
-      )
-      VALUES ('driver', $1, 'cash_remittance', 'debit', $2, $3, $4, $1)
-      RETURNING id::text
-      `,
-      [driverId, amount, currency, note ?? 'Cash submission'],
-    );
-    return { transactionId: r.rows[0].id };
+    return this.db.transaction(async (client: PoolClient) => {
+      // Serialize handovers for this driver so concurrent requests cannot over-submit.
+      const driver = await client.query(
+        `SELECT user_id FROM drivers WHERE user_id = $1 FOR UPDATE`,
+        [driverId],
+      );
+      if (driver.rowCount === 0) {
+        throw new BadRequestException('Driver account was not found');
+      }
+
+      const balance = await client.query<{ outstanding: string }>(
+        `
+        SELECT COALESCE(SUM(CASE
+          WHEN type = 'cod_collection' AND direction = 'credit' THEN amount
+          WHEN type = 'cash_remittance' AND direction = 'debit' THEN -amount
+          WHEN type = 'settlement_payout' AND direction = 'debit' AND settlement_id IS NULL THEN -amount
+          ELSE 0
+        END), 0)::text AS outstanding
+        FROM transactions
+        WHERE account_type = 'driver' AND account_id = $1
+        `,
+        [driverId],
+      );
+      const outstanding = Number(balance.rows[0]?.outstanding ?? 0);
+      if (!Number.isFinite(amount) || amount <= 0 || amount > outstanding) {
+        throw new BadRequestException(
+          `Cash submission exceeds the current outstanding balance (${outstanding})`,
+        );
+      }
+
+      const result = await client.query<{ id: string }>(
+        `
+        INSERT INTO transactions (
+          account_type, account_id, type, direction, amount, currency, description, created_by
+        )
+        VALUES ('driver', $1, 'cash_remittance', 'debit', $2, $3, $4, $1)
+        RETURNING id::text
+        `,
+        [driverId, amount, currency, note ?? 'Cash submission'],
+      );
+      return { transactionId: result.rows[0].id };
+    });
   }
 
   /**
