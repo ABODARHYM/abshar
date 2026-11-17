@@ -170,7 +170,7 @@ export class FinanceRepository {
         id: string; amount: string; commission_amount: string; currency: string;
       }>(
         `
-        SELECT c.id, c.${amountColumn}::text AS amount,
+        SELECT c.id, ${amountColumn}::text AS amount,
                c.commission_amount::text AS commission_amount, o.currency
         FROM commissions c
         JOIN orders o ON o.id = c.order_id
