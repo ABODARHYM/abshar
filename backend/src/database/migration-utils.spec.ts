@@ -87,7 +87,7 @@ describe('real migration files', () => {
       'delivery_zones', 'banners', 'promotions', 'favorites', 'settings', 'audit_logs',
     ];
     for (const table of required) {
-      expect(all).toMatch(new RegExp(`CREATE TABLE ${table}\s*\\(`));
+      expect(all).toMatch(new RegExp(`CREATE TABLE ${table}\\s*\\(`));
     }
   });
 
