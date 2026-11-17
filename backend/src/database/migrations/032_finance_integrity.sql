@@ -31,9 +31,9 @@ BEGIN
       ON s.status <> 'cancelled'
      AND o.delivered_at::date BETWEEN s.period_start AND s.period_end
      AND (
-       (s.party_type = 'store' AND s.party_id = c.store_id)
+       (s.party_type = 'store' AND s.party_id = c.store_id AND c.store_amount > 0)
        OR
-       (s.party_type = 'driver' AND s.party_id = o.driver_id)
+       (s.party_type = 'driver' AND s.party_id = o.driver_id AND c.driver_amount > 0)
      )
     GROUP BY c.id, s.party_type
     HAVING COUNT(*) > 1
@@ -72,6 +72,7 @@ JOIN commissions c
    (s.party_type = 'driver' AND s.party_id = o.driver_id)
  )
 WHERE s.status <> 'cancelled'
+  AND CASE WHEN s.party_type = 'store' THEN c.store_amount ELSE c.driver_amount END > 0
 ON CONFLICT DO NOTHING;
 
 -- Backfill currency only when all matched orders agree; leave ambiguous/unmatched legacy rows NULL.
