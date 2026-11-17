@@ -119,7 +119,7 @@ export class DriverCashRepository {
       )
       VALUES ($1, 'driver', $2, 'cod_collection', 'credit', $3, $4, 'Cash on delivery collected', $2,
         'order:' || $1::text || ':driver:cod_collection:credit')
-      ON CONFLICT (idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING
+      ON CONFLICT DO NOTHING
       `,
       [params.orderId, params.driverId, params.amount, params.currency],
     );
