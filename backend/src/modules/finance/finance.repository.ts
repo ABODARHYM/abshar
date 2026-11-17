@@ -158,61 +158,157 @@ export class FinanceRepository {
     partyId: string;
     periodStart: string;
     periodEnd: string;
-    grossAmount: number;
-    commissionAmount: number;
-    netAmount: number;
     notes?: string;
     createdBy: string;
-  }): Promise<any> {
-    const r = await this.db.query(
-      `
-      INSERT INTO settlements (
-        party_type, party_id, period_start, period_end,
-        gross_amount, commission_amount, net_amount,
-        status, notes, created_by
-      )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending', $8, $9)
-      RETURNING id, party_type, party_id, period_start, period_end,
-                gross_amount, commission_amount, net_amount,
-                status, notes, settled_at, created_at
-      `,
-      [
-        params.partyType,
-        params.partyId,
-        params.periodStart,
-        params.periodEnd,
-        params.grossAmount,
-        params.commissionAmount,
-        params.netAmount,
-        params.notes ?? null,
-        params.createdBy,
-      ],
-    );
-    return r.rows[0];
+  }): Promise<any | null> {
+    return this.db.transaction(async (client: PoolClient) => {
+      // Lock eligible commission rows so concurrent settlement requests cannot claim the same earnings.
+      const idColumn = params.partyType === 'store' ? 'c.store_id' : 'o.driver_id';
+      const amountColumn = params.partyType === 'store' ? 'c.store_amount' : 'c.driver_amount';
+      const eligible = await client.query<{
+        id: string; amount: string; commission_amount: string; currency: string;
+      }>(
+        `
+        SELECT c.id, c.${amountColumn}::text AS amount,
+               c.commission_amount::text AS commission_amount, o.currency
+        FROM commissions c
+        JOIN orders o ON o.id = c.order_id
+        WHERE ${idColumn} = $1
+          AND o.status = 'delivered'
+          AND o.delivered_at::date BETWEEN $2::date AND $3::date
+          AND NOT EXISTS (
+            SELECT 1 FROM settlement_commission_items sci
+            WHERE sci.commission_id = c.id
+              AND sci.party_type = $4
+              AND sci.released_at IS NULL
+          )
+        ORDER BY o.delivered_at, c.id
+        FOR UPDATE OF c SKIP LOCKED
+        `,
+        [params.partyId, params.periodStart, params.periodEnd, params.partyType],
+      );
+
+      if (eligible.rows.length === 0) return null;
+      const currencies = [...new Set(eligible.rows.map((r) => r.currency.trim()))];
+      if (currencies.length !== 1) {
+        throw new Error('Cannot create one settlement for commissions with different currencies');
+      }
+
+      const gross = eligible.rows.reduce((sum, row) => sum + Number(row.amount), 0);
+      const commission = params.partyType === 'store'
+        ? eligible.rows.reduce((sum, row) => sum + Number(row.commission_amount), 0)
+        : 0;
+      const currency = currencies[0];
+      const created = await client.query(
+        `
+        INSERT INTO settlements (
+          party_type, party_id, period_start, period_end, gross_amount,
+          commission_amount, net_amount, currency, status, notes, created_by
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $5, $7, 'pending', $8, $9)
+        RETURNING id, party_type, party_id, period_start, period_end,
+                  gross_amount, commission_amount, net_amount, currency,
+                  status, notes, settled_at, created_at
+        `,
+        [params.partyType, params.partyId, params.periodStart, params.periodEnd,
+          gross, commission, currency, params.notes ?? null, params.createdBy],
+      );
+      const settlement = created.rows[0];
+
+      for (const row of eligible.rows) {
+        await client.query(
+          `INSERT INTO settlement_commission_items (settlement_id, commission_id, party_type, amount)
+           VALUES ($1, $2, $3, $4)`,
+          [settlement.id, row.id, params.partyType, row.amount],
+        );
+      }
+
+      await client.query(
+        `INSERT INTO audit_logs
+          (actor_user_id, actor_role, action, entity_type, entity_id, new_value)
+         VALUES ($1, 'finance', 'finance.settlement.create', 'settlement', $2, $3::jsonb)`,
+        [params.createdBy, settlement.id, JSON.stringify({
+          partyType: params.partyType, partyId: params.partyId,
+          grossAmount: gross, commissionAmount: commission, currency,
+          commissionCount: eligible.rows.length,
+        })],
+      );
+      return settlement;
+    });
   }
 
   async updateSettlementStatus(
     id: string,
     status: 'approved' | 'paid' | 'cancelled',
-    approvedBy: string,
+    actorId: string,
   ): Promise<any | null> {
-    const updates: string[] = ['status = $1', 'approved_by = $2'];
-    if (status === 'paid') {
-      updates.push('settled_at = now()');
-    }
+    return this.db.transaction(async (client: PoolClient) => {
+      const currentResult = await client.query<{
+        id: string; party_type: 'store' | 'driver'; party_id: string;
+        status: string; net_amount: string; currency: string | null;
+      }>(
+        `SELECT id, party_type, party_id, status, net_amount::text, currency
+         FROM settlements WHERE id = $1 FOR UPDATE`,
+        [id],
+      );
+      const current = currentResult.rows[0];
+      if (!current) return null;
 
-    const r = await this.db.query(
-      `
-      UPDATE settlements
-      SET ${updates.join(', ')}
-      WHERE id = $3
-      RETURNING id, party_type, party_id, period_start, period_end,
-                gross_amount, commission_amount, net_amount,
-                status, notes, settled_at, created_at
-      `,
-      [status, approvedBy, id],
-    );
-    return r.rows[0] ?? null;
+      const allowed =
+        (status === 'approved' && current.status === 'pending') ||
+        (status === 'paid' && current.status === 'approved') ||
+        (status === 'cancelled' && ['pending', 'approved'].includes(current.status));
+      if (!allowed) {
+        throw new Error(`Invalid settlement transition: ${current.status} -> ${status}`);
+      }
+
+      if (status === 'paid') {
+        if (!current.currency) {
+          throw new Error('Settlement currency is missing; reconcile this legacy settlement before marking it paid');
+        }
+        await client.query(
+          `INSERT INTO transactions
+            (settlement_id, account_type, account_id, type, direction, amount, currency, description, created_by)
+           VALUES ($1, $2, $3, 'settlement_payout', 'debit', $4, $5, $6, $7)
+           ON CONFLICT (settlement_id)
+             WHERE settlement_id IS NOT NULL AND type = 'settlement_payout' AND direction = 'debit'
+           DO NOTHING`,
+          [id, current.party_type, current.party_id, current.net_amount,
+            current.currency, `Settlement payout ${id}`, actorId],
+        );
+      }
+
+      if (status === 'cancelled') {
+        await client.query(
+          `UPDATE settlement_commission_items
+           SET released_at = now()
+           WHERE settlement_id = $1 AND released_at IS NULL`,
+          [id],
+        );
+      }
+
+      const updated = await client.query(
+        `UPDATE settlements
+         SET status = $1, approved_by = $2,
+             settled_at = CASE WHEN $1 = 'paid' THEN now() ELSE settled_at END
+         WHERE id = $3
+         RETURNING id, party_type, party_id, period_start, period_end,
+                   gross_amount, commission_amount, net_amount, currency,
+                   status, notes, settled_at, created_at`,
+        [status, actorId, id],
+      );
+
+      await client.query(
+        `INSERT INTO audit_logs
+          (actor_user_id, actor_role, action, entity_type, entity_id, old_value, new_value)
+         VALUES ($1, 'finance', $2, 'settlement', $3, $4::jsonb, $5::jsonb)`,
+        [actorId, `finance.settlement.${status}`, id,
+          JSON.stringify({ status: current.status }),
+          JSON.stringify({ status, payoutAmount: status === 'paid' ? Number(current.net_amount) : null,
+            currency: current.currency })],
+      );
+      return updated.rows[0] ?? null;
+    });
   }
 
   // ═══════════════ Commissions ═══════════════
@@ -451,37 +547,33 @@ export class FinanceRepository {
     partyId: string,
     periodStart: string,
     periodEnd: string,
-  ): Promise<{
-    gross: string;
-    commission: string;
-    net: string;
-    count: string;
-  }> {
-    const column = partyType === 'store' ? 'store_amount' : 'driver_amount';
-    const idColumn = partyType === 'store' ? 'store_id' : 'driver_id';
-
+  ): Promise<{ gross: string; commission: string; net: string; count: string }> {
+    const amountColumn = partyType === 'store' ? 'c.store_amount' : 'c.driver_amount';
+    const idColumn = partyType === 'store' ? 'c.store_id' : 'o.driver_id';
     const r = await this.db.query<{
-      gross: string;
-      commission: string;
-      net: string;
-      count: string;
+      gross: string; commission: string; net: string; count: string;
     }>(
       `
       SELECT
-        COALESCE(SUM(c.${column}), 0)::text AS gross,
-        COALESCE(SUM(c.commission_amount), 0)::text AS commission,
-        COALESCE(SUM(c.${column}), 0)::text AS net,
+        COALESCE(SUM(${amountColumn}), 0)::text AS gross,
+        COALESCE(SUM(CASE WHEN $4 = 'store' THEN c.commission_amount ELSE 0 END), 0)::text AS commission,
+        COALESCE(SUM(${amountColumn}), 0)::text AS net,
         COUNT(*)::text AS count
       FROM commissions c
       JOIN orders o ON o.id = c.order_id
-      WHERE c.${idColumn} = $1
+      WHERE ${idColumn} = $1
         AND o.status = 'delivered'
-        AND o.delivered_at >= $2
-        AND o.delivered_at <= $3
+        AND o.delivered_at::date BETWEEN $2::date AND $3::date
+        AND NOT EXISTS (
+          SELECT 1 FROM settlement_commission_items sci
+          WHERE sci.commission_id = c.id
+            AND sci.party_type = $4
+            AND sci.released_at IS NULL
+        )
       `,
-      [partyId, periodStart, periodEnd],
+      [partyId, periodStart, periodEnd, partyType],
     );
-
     return r.rows[0];
   }
+
 }
