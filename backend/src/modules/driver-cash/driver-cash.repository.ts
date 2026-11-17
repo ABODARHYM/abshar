@@ -38,7 +38,7 @@ export class DriverCashRepository {
   /**
    * ملخص العهدة للمندوب.
    */
-  async getSummary(driverId: string): Promise<CashSummaryRow> {
+  async getSummary(driverId: string, currency: string): Promise<CashSummaryRow> {
     const r = await this.db.query<CashSummaryRow>(
       `
       SELECT
@@ -46,9 +46,9 @@ export class DriverCashRepository {
         COALESCE(SUM(CASE WHEN direction = 'debit' AND (type = 'cash_remittance' OR (type = 'settlement_payout' AND settlement_id IS NULL)) THEN amount ELSE 0 END), 0)::text AS total_submitted,
         COALESCE(SUM(CASE WHEN type = 'driver_earning' AND direction = 'credit' THEN amount ELSE 0 END), 0)::text AS total_earnings
       FROM transactions
-      WHERE account_type = 'driver' AND account_id = $1
+      WHERE account_type = 'driver' AND account_id = $1 AND currency = $2
       `,
-      [driverId],
+      [driverId, currency],
     );
     return r.rows[0];
   }
@@ -194,9 +194,9 @@ export class DriverCashRepository {
           ELSE 0
         END), 0)::text AS outstanding
         FROM transactions
-        WHERE account_type = 'driver' AND account_id = $1
+        WHERE account_type = 'driver' AND account_id = $1 AND currency = $2
         `,
-        [driverId],
+        [driverId, currency],
       );
       const outstanding = Number(balance.rows[0]?.outstanding ?? 0);
       if (!Number.isFinite(amount) || amount <= 0 || amount > outstanding) {
@@ -251,7 +251,7 @@ export class DriverCashRepository {
   async listOutstandingDrivers(query: {
     page: number;
     limit: number;
-  }): Promise<{ rows: OutstandingDriverRow[]; total: number }> {
+  }, currency: string): Promise<{ rows: OutstandingDriverRow[]; total: number }> {
     const countRes = await this.db.query<{ count: string }>(
       `SELECT COUNT(DISTINCT d.user_id)::text AS count FROM drivers d WHERE d.status = 'active'`,
     );
@@ -277,13 +277,13 @@ export class DriverCashRepository {
         MAX(CASE WHEN t.type = 'cod_collection' THEN t.created_at END) AS last_collection_at
       FROM drivers d
       JOIN users u ON u.id = d.user_id
-      LEFT JOIN transactions t ON t.account_type = 'driver' AND t.account_id = d.user_id
+      LEFT JOIN transactions t ON t.account_type = 'driver' AND t.account_id = d.user_id AND t.currency = $3
       WHERE d.status = 'active'
       GROUP BY d.user_id, u.full_name, u.phone
       ORDER BY outstanding_cash DESC
       LIMIT $1 OFFSET $2
       `,
-      [query.limit, offset],
+      [query.limit, offset, currency],
     );
 
     return { rows: rowsRes.rows, total };
