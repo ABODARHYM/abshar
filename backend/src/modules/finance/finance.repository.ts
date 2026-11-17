@@ -414,12 +414,10 @@ export class FinanceRepository {
           rate = settingRes.rows[0]?.value ?? 10;
         }
 
-        const rateNum = parseFloat(String(rate));
-        const subtotal = Number(order.subtotal);
-        const deliveryFee = Number(order.delivery_fee);
-        const discountTotal = Number(order.discount_total);
-        const commissionAmount = (subtotal * rateNum) / 100;
-        const storeAmount = subtotal - commissionAmount;
+        const rateText = String(rate);
+        if (!Number.isFinite(Number(rateText)) || Number(rateText) < 0 || Number(rateText) > 100) {
+          throw new ConflictException('The configured commission rate is invalid');
+        }
 
         const inserted = await client.query(
           `
@@ -428,12 +426,17 @@ export class FinanceRepository {
             order_amount, delivery_fee, discount_amount,
             commission_amount, store_amount, driver_amount, platform_amount
           )
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $7)
+          VALUES (
+            $1, $2, $3, $4, $5, $6,
+            ROUND($4::numeric * $3::numeric / 100, 2),
+            $4::numeric - ROUND($4::numeric * $3::numeric / 100, 2),
+            $5::numeric,
+            ROUND($4::numeric * $3::numeric / 100, 2)
+          )
           ON CONFLICT (order_id) DO NOTHING
           RETURNING *
           `,
-          [orderId, order.store_id, rateNum, subtotal, deliveryFee,
-            discountTotal, commissionAmount, storeAmount, deliveryFee],
+          [orderId, order.store_id, rateText, order.subtotal, order.delivery_fee, order.discount_total],
         );
         commissionRow = inserted.rows[0];
         if (!commissionRow) {
