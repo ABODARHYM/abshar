@@ -52,6 +52,32 @@ BEGIN
   ) THEN
     RAISE EXCEPTION 'Migration 032 stopped: duplicate order ledger entries require reconciliation before unique constraints';
   END IF;
+
+  IF EXISTS (
+    SELECT 1
+    FROM settlements s
+    LEFT JOIN orders o
+      ON o.delivered_at::date BETWEEN s.period_start AND s.period_end
+    LEFT JOIN commissions c
+      ON c.order_id = o.id
+     AND (
+       (s.party_type = 'store' AND s.party_id = c.store_id)
+       OR
+       (s.party_type = 'driver' AND s.party_id = o.driver_id)
+     )
+    WHERE s.status <> 'cancelled'
+    GROUP BY s.id, s.party_type, s.net_amount
+    HAVING COALESCE(SUM(
+      CASE
+        WHEN s.party_type = 'store' THEN c.store_amount
+        WHEN s.party_type = 'driver' THEN c.driver_amount
+        ELSE 0
+      END
+    ), 0) <> s.net_amount
+       OR COUNT(DISTINCT o.currency) > 1
+  ) THEN
+    RAISE EXCEPTION 'Migration 032 stopped: historical settlement totals or currencies do not reconcile to delivered commissions';
+  END IF;
 END $$;
 
 -- Preserve existing active settlement ownership in a traceable junction table.
