@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
-import { PoolClient } from 'pg';
+import type { PoolClient, QueryResult, QueryResultRow } from 'pg';
 import { DatabaseService } from '../../database/database.service';
 import { toOffset } from '../../common/pagination.dto';
 
