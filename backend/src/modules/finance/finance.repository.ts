@@ -592,7 +592,7 @@ export class FinanceRepository {
             AND sci.released_at IS NULL
         )
       `,
-      [partyId, periodStart, periodEnd],
+      [partyId, periodStart, periodEnd, partyType],
     );
     return r.rows[0];
   }
