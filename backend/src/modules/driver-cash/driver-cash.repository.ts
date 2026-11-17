@@ -103,7 +103,7 @@ export class DriverCashRepository {
    * يستدعيه DriverService.
    */
   async recordCashCollection(
-    _client: PoolClient | undefined,
+    client: PoolClient | undefined,
     params: {
       driverId: string;
       orderId: string;
@@ -111,7 +111,8 @@ export class DriverCashRepository {
       currency: string;
     },
   ): Promise<void> {
-    await this.db.query(
+    const executor = client ?? this.db;
+    await executor.query(
       `
       INSERT INTO transactions (
         order_id, account_type, account_id, type, direction, amount, currency, description, created_by, idempotency_key
@@ -123,7 +124,7 @@ export class DriverCashRepository {
       [params.orderId, params.driverId, params.amount, params.currency],
     );
 
-    await this.db.query(
+    await executor.query(
       `
       UPDATE orders
       SET cash_collected_amount = $1, cash_collected_at = now()
@@ -137,7 +138,7 @@ export class DriverCashRepository {
    * سجّل driver_earning (عند التسليم).
    */
   async recordDriverEarning(
-    _client: PoolClient | undefined,
+    client: PoolClient | undefined,
     params: {
       driverId: string;
       orderId: string;
@@ -145,7 +146,8 @@ export class DriverCashRepository {
       currency: string;
     },
   ): Promise<void> {
-    await this.db.query(
+    const executor = client ?? this.db;
+    await executor.query(
       `
       INSERT INTO transactions (
         order_id, account_type, account_id, type, direction, amount, currency, description, created_by, idempotency_key
