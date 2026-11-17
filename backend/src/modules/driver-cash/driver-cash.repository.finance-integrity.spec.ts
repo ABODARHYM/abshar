@@ -67,14 +67,16 @@ describe('DriverCashRepository finance integrity', () => {
     const db = makeDb();
     const repo = new DriverCashRepository(db as any);
 
-    await repo.getSummary('driver-1');
-    await repo.listOutstandingDrivers({ page: 1, limit: 10 });
+    await repo.getSummary('driver-1', 'YER');
+    await repo.listOutstandingDrivers({ page: 1, limit: 10 }, 'YER');
 
     const summarySql = String(db.query.mock.calls[0][0]);
     const outstandingSql = String(db.query.mock.calls[2][0]);
     expect(summarySql).toContain("type = 'cash_remittance'");
+    expect(summarySql).toContain('currency = $2');
     expect(summarySql).toContain("type = 'settlement_payout' AND settlement_id IS NULL");
     expect(outstandingSql).toContain("type = 'cash_remittance'");
+    expect(outstandingSql).toContain('t.currency = $3');
     expect(outstandingSql).toContain("type = 'settlement_payout' AND t.settlement_id IS NULL");
   });
 });
