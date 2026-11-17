@@ -76,7 +76,12 @@ export class AdminAuditLogDto {
   @ApiProperty() action!: string;
   @ApiProperty() entityType!: string;
   @ApiProperty({ nullable: true }) entityId!: string | null;
+  @ApiProperty({ nullable: true }) oldValue!: unknown | null;
+  @ApiProperty({ nullable: true }) newValue!: unknown | null;
   @ApiProperty({ nullable: true }) ipAddress!: string | null;
+  @ApiProperty({ nullable: true }) userAgent!: string | null;
+  @ApiProperty({ nullable: true }) deviceInfo!: string | null;
+  @ApiProperty({ nullable: true }) requestId!: string | null;
   @ApiProperty() createdAt!: string;
 }
 
