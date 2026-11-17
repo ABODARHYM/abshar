@@ -176,6 +176,7 @@ export class FinanceRepository {
         WHERE ${idColumn} = $1
           AND o.status = 'delivered'
           AND o.delivered_at::date BETWEEN $2::date AND $3::date
+          AND ${amountColumn} > 0
           AND NOT EXISTS (
             SELECT 1 FROM settlement_commission_items sci
             WHERE sci.commission_id = c.id
