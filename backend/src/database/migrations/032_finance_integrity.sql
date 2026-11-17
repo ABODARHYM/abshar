@@ -27,7 +27,7 @@ BEGIN
   IF EXISTS (
     SELECT 1
     FROM commissions c
-    JOIN orders o ON o.id = c.order_id
+    JOIN orders o ON o.id = c.order_id AND o.status = 'delivered'
     JOIN settlements s
       ON s.status <> 'cancelled'
      AND o.delivered_at::date BETWEEN s.period_start AND s.period_end
@@ -46,7 +46,8 @@ BEGIN
     SELECT 1
     FROM settlements s
     LEFT JOIN orders o
-      ON o.delivered_at::date BETWEEN s.period_start AND s.period_end
+      ON o.status = 'delivered'
+     AND o.delivered_at::date BETWEEN s.period_start AND s.period_end
     LEFT JOIN commissions c
       ON c.order_id = o.id
      AND (
@@ -78,7 +79,8 @@ SELECT
   CASE WHEN s.party_type = 'store' THEN c.store_amount ELSE c.driver_amount END
 FROM settlements s
 JOIN orders o
-  ON o.delivered_at::date BETWEEN s.period_start AND s.period_end
+  ON o.status = 'delivered'
+ AND o.delivered_at::date BETWEEN s.period_start AND s.period_end
 JOIN commissions c
   ON c.order_id = o.id
  AND (
@@ -97,7 +99,8 @@ FROM (
   SELECT s2.id, MIN(o.currency)::char(3) AS currency
   FROM settlements s2
   JOIN orders o
-    ON o.delivered_at::date BETWEEN s2.period_start AND s2.period_end
+    ON o.status = 'delivered'
+   AND o.delivered_at::date BETWEEN s2.period_start AND s2.period_end
   JOIN commissions c ON c.order_id = o.id
   WHERE (s2.party_type = 'store' AND s2.party_id = c.store_id)
      OR (s2.party_type = 'driver' AND s2.party_id = o.driver_id)
