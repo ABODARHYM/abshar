@@ -23,10 +23,14 @@ export default function AdminLogin() {
       });
 
       const rawResponse = await res.text();
-      let data: any;
+      let data: Record<string, unknown>;
 
       try {
-        data = rawResponse ? JSON.parse(rawResponse) : {};
+        const parsed: unknown = rawResponse ? JSON.parse(rawResponse) : {};
+        if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+          throw new Error('Invalid API response shape');
+        }
+        data = parsed as Record<string, unknown>;
       } catch {
         const contentType = res.headers.get('content-type') || 'غير محدد';
         const requestId = res.headers.get('x-request-id');
@@ -41,12 +45,15 @@ export default function AdminLogin() {
       }
 
       if (!res.ok) {
-        setError(data.message || 'فشل تسجيل الدخول');
+        setError(typeof data.message === 'string' ? data.message : 'فشل تسجيل الدخول');
         setLoading(false);
         return;
       }
 
-      const roles = data.user?.roles || [];
+      const user = data.user as { roles?: unknown } | undefined;
+      const roles = Array.isArray(user?.roles)
+        ? user.roles.filter((role): role is string => typeof role === 'string')
+        : [];
       const allowedRoles = ['admin', 'superAdmin', 'super_admin', 'support', 'finance'];
       const isAdmin = roles.some((r: string) => allowedRoles.includes(r));
 
@@ -56,9 +63,16 @@ export default function AdminLogin() {
         return;
       }
 
-      localStorage.setItem('accessToken', data.tokens.accessToken);
-      localStorage.setItem('refreshToken', data.tokens.refreshToken);
-      localStorage.setItem('user', JSON.stringify(data.user));
+      const tokens = data.tokens as { accessToken?: unknown; refreshToken?: unknown } | undefined;
+      if (typeof tokens?.accessToken !== 'string' || typeof tokens.refreshToken !== 'string' || !user) {
+        setError('استجابة تسجيل الدخول ناقصة: بيانات المستخدم أو الرموز غير مكتملة');
+        setLoading(false);
+        return;
+      }
+
+      localStorage.setItem('accessToken', tokens.accessToken);
+      localStorage.setItem('refreshToken', tokens.refreshToken);
+      localStorage.setItem('user', JSON.stringify(user));
 
       router.push('/');
     } catch (err) {
