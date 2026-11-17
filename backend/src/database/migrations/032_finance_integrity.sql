@@ -64,7 +64,10 @@ BEGIN
         ELSE 0
       END
     ), 0) <> s.net_amount
-       OR COUNT(DISTINCT o.currency) > 1
+       OR COUNT(DISTINCT CASE
+            WHEN s.party_type = 'store' AND c.store_amount > 0 THEN o.currency
+            WHEN s.party_type = 'driver' AND c.driver_amount > 0 THEN o.currency
+          END) > 1
   ) THEN
     RAISE EXCEPTION 'Migration 032 stopped: historical settlement totals or currencies do not reconcile to delivered commissions';
   END IF;
@@ -102,8 +105,11 @@ FROM (
     ON o.status = 'delivered'
    AND o.delivered_at::date BETWEEN s2.period_start AND s2.period_end
   JOIN commissions c ON c.order_id = o.id
-  WHERE (s2.party_type = 'store' AND s2.party_id = c.store_id)
-     OR (s2.party_type = 'driver' AND s2.party_id = o.driver_id)
+  WHERE (
+      (s2.party_type = 'store' AND s2.party_id = c.store_id AND c.store_amount > 0)
+      OR
+      (s2.party_type = 'driver' AND s2.party_id = o.driver_id AND c.driver_amount > 0)
+  )
   GROUP BY s2.id
   HAVING COUNT(DISTINCT o.currency) = 1
 ) matched
