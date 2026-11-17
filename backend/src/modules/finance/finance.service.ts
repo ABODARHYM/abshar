@@ -68,22 +68,10 @@ export class FinanceService {
       notes?: string;
     },
   ): Promise<SettlementDto> {
-    // حساب المستحقات من commissions
-    const totals = await this.repo.getUnsettledCommissions(
-      params.partyType,
-      params.partyId,
-      params.periodStart,
-      params.periodEnd,
-    );
-
-    const gross = Number(totals.gross);
-    const commission = Number(totals.commission);
-    const net = Number(totals.net);
-
-    if (gross === 0) {
+    if (params.periodEnd < params.periodStart) {
       throw new BadRequestException({
         code: ErrorCode.ValidationFailed,
-        message: 'No unsettled commissions in this period',
+        message: 'Settlement period end must not be before its start',
       });
     }
 
@@ -92,12 +80,16 @@ export class FinanceService {
       partyId: params.partyId,
       periodStart: params.periodStart,
       periodEnd: params.periodEnd,
-      grossAmount: gross,
-      commissionAmount: commission,
-      netAmount: net,
       notes: params.notes,
       createdBy: actorId,
     });
+
+    if (!settlement) {
+      throw new BadRequestException({
+        code: ErrorCode.ValidationFailed,
+        message: 'No unsettled commissions are available in this period',
+      });
+    }
 
     return this.toSettlement(settlement);
   }
