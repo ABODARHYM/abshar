@@ -24,7 +24,9 @@ describe('FinanceRepository shared delivery transaction', () => {
           rowCount: 1,
         })
         .mockResolvedValueOnce({ rows: [commission], rowCount: 1 })
+        .mockResolvedValueOnce({ rows: [], rowCount: 0 })
         .mockResolvedValueOnce({ rows: [], rowCount: 1 })
+        .mockResolvedValueOnce({ rows: [], rowCount: 0 })
         .mockResolvedValueOnce({ rows: [], rowCount: 1 })
         .mockResolvedValueOnce({ rows: [], rowCount: 0 })
         .mockResolvedValueOnce({ rows: [], rowCount: 1 }),
@@ -37,6 +39,7 @@ describe('FinanceRepository shared delivery transaction', () => {
     expect(result).toEqual(commission);
     expect(db.transaction).not.toHaveBeenCalled();
     expect(String(client.query.mock.calls[0][0])).toContain('FOR UPDATE');
-    expect(String(client.query.mock.calls[2][0])).toContain('ON CONFLICT DO NOTHING');
+    expect(String(client.query.mock.calls[3][0])).toContain('ON CONFLICT DO NOTHING');
+    expect(String(client.query.mock.calls[5][0])).toContain('ON CONFLICT DO NOTHING');
   });
 });
