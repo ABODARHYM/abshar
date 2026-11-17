@@ -50,12 +50,12 @@ describe('planMigrations', () => {
 
 describe('stripOuterTransactionStatements', () => {
   it('removes a legacy outer wrapper so the runner owns the atomic transaction', () => {
-    const sql = '-- legacy migration\\n\\nBEGIN;\\nCREATE TABLE example (id integer);\\nCOMMIT;\\n';
-    expect(stripOuterTransactionStatements(sql)).toBe('-- legacy migration\\n\\nCREATE TABLE example (id integer);\\n');
+    const sql = '-- legacy migration\n\nBEGIN;\nCREATE TABLE example (id integer);\nCOMMIT;\n';
+    expect(stripOuterTransactionStatements(sql)).toBe('-- legacy migration\n\nCREATE TABLE example (id integer);\n');
   });
 
   it('leaves SQL without an outer wrapper unchanged', () => {
-    const sql = 'CREATE TABLE example (id integer);\\n';
+    const sql = 'CREATE TABLE example (id integer);\n';
     expect(stripOuterTransactionStatements(sql)).toBe(sql);
   });
 });
