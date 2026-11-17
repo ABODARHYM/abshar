@@ -530,11 +530,29 @@ export class FinanceRepository {
       );
 
       if (order.driver_id && Number(commissionRow.driver_amount) > 0) {
-        const existingDriverEarning = await client.query(
-          `SELECT 1 FROM transactions WHERE order_id = $1 AND type = 'driver_earning' LIMIT 1`,
+        const existingDriverEarning = await client.query<{
+          account_type: string;
+          account_id: string | null;
+          direction: string;
+          amount: string;
+          currency: string;
+        }>(
+          `SELECT account_type, account_id, direction, amount::text, currency
+           FROM transactions WHERE order_id = $1 AND type = 'driver_earning' LIMIT 1`,
           [orderId],
         );
-        if (existingDriverEarning.rowCount === 0) {
+        if (existingDriverEarning.rows.length > 0) {
+          const earning = existingDriverEarning.rows[0];
+          if (
+            earning.account_type !== 'driver' ||
+            earning.account_id !== order.driver_id ||
+            earning.direction !== 'credit' ||
+            Number(earning.amount) !== Number(commissionRow.driver_amount) ||
+            earning.currency?.trim() !== currency.trim()
+          ) {
+            throw new ConflictException('An existing driver earning conflicts with the delivered commission');
+          }
+        } else {
           await client.query(
             `
             INSERT INTO transactions (
