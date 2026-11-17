@@ -36,6 +36,7 @@ describe('FinanceService settlement creation', () => {
       periodEnd: '2026-11-07',
       notes: undefined,
       createdBy: 'admin-1',
+      actorRole: null,
     });
     expect(result.id).toBe('settlement-1');
     expect(result.status).toBe('pending');
