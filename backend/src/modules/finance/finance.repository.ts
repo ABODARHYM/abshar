@@ -372,19 +372,11 @@ export class FinanceRepository {
    */
   async computeCommissionForOrder(orderId: string): Promise<any | null> {
     return this.db.transaction(async (client: PoolClient) => {
-      // 1) هل يوجد commission مسبقًا؟
-      const existing = await client.query<{ id: string }>(
-        `SELECT id FROM commissions WHERE order_id = $1 LIMIT 1`,
-        [orderId],
-      );
-      if (existing.rows[0]) {
-        return existing.rows[0];
-      }
-
-      // 2) اجلب الطلب
+      // Re-read the delivered order on every retry so missing ledger rows can be repaired.
       const orderRes = await client.query<{
         id: string;
         store_id: string;
+        driver_id: string | null;
         subtotal: string;
         delivery_fee: string;
         discount_total: string;
@@ -392,7 +384,7 @@ export class FinanceRepository {
         currency: string;
       }>(
         `
-        SELECT id, store_id, subtotal, delivery_fee, discount_total, total, currency
+        SELECT id, store_id, driver_id, subtotal, delivery_fee, discount_total, total, currency
         FROM orders
         WHERE id = $1 AND status = 'delivered'
         LIMIT 1
@@ -402,112 +394,103 @@ export class FinanceRepository {
       const order = orderRes.rows[0];
       if (!order) return null;
 
-      // 3) اجلب نسبة عمولة المتجر
-      const storeRes = await client.query<{ commission_rate: string | null }>(
-        `SELECT commission_rate FROM stores WHERE id = $1`,
-        [order.store_id],
-      );
-      let rate = storeRes.rows[0]?.commission_rate;
-
-      if (rate === null || rate === undefined) {
-        // استخدم الافتراضي من settings
-        const settingRes = await client.query<{ value: any }>(
-          `SELECT value FROM settings WHERE key = 'commission.default_rate_percent' LIMIT 1`,
-        );
-        rate = settingRes.rows[0]?.value ?? 10;
-      }
-
-      const rateNum = parseFloat(String(rate));
-      const subtotal = parseFloat(order.subtotal);
-      const deliveryFee = parseFloat(order.delivery_fee);
-      const discountTotal = parseFloat(order.discount_total);
-
-      // 4) الحسابات
-      const commissionAmount = (subtotal * rateNum) / 100;
-      const storeAmount = subtotal - commissionAmount;
-      const driverAmount = deliveryFee;
-      const platformAmount = commissionAmount;
-
-      // 5) أدخل commission
-      const insertRes = await client.query(
-        `
-        INSERT INTO commissions (
-          order_id, store_id, rate_percent,
-          order_amount, delivery_fee, discount_amount,
-          commission_amount, store_amount, driver_amount, platform_amount
-        )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-        ON CONFLICT (order_id) DO NOTHING
-        RETURNING *
-        `,
-        [
-          orderId,
-          order.store_id,
-          rateNum,
-          subtotal,
-          deliveryFee,
-          discountTotal,
-          commissionAmount,
-          storeAmount,
-          driverAmount,
-          platformAmount,
-        ],
-      );
-
-      // If another concurrent delivery worker inserted this commission first,
-      // return its committed row. The unique order_id constraint is the final guard.
-      if (!insertRes.rows[0]) {
-        const concurrent = await client.query(
-          `SELECT * FROM commissions WHERE order_id = $1 LIMIT 1`,
-          [orderId],
-        );
-        return concurrent.rows[0] ?? null;
-      }
-
-      // 6) سجّل في الـ Ledger
-      // Use the order's currency snapshot; global settings may have changed since the order was placed.
-      const currency = order.currency;
-
-      // Store credit
-      await client.query(
-        `
-        INSERT INTO transactions (
-          order_id, account_type, account_id, type, direction, amount, currency, description
-        )
-        VALUES ($1, 'store', $2, 'store_earning', 'credit', $3, $4, 'Store earning')
-        `,
-        [orderId, order.store_id, storeAmount, currency],
-      );
-
-      // Platform commission
-      await client.query(
-        `
-        INSERT INTO transactions (
-          order_id, account_type, type, direction, amount, currency, description
-        )
-        VALUES ($1, 'platform', 'commission', 'credit', $2, $3, 'Platform commission')
-        `,
-        [orderId, commissionAmount, currency],
-      );
-
-      // Driver earning (يُحتسب عند التسليم أيضًا)
-      const driverRes = await client.query<{ driver_id: string }>(
-        `SELECT driver_id FROM orders WHERE id = $1`,
+      // Read the existing commission first. Do not recalculate historical rates on retries.
+      const existingRes = await client.query(
+        `SELECT * FROM commissions WHERE order_id = $1 LIMIT 1`,
         [orderId],
       );
-      if (driverRes.rows[0]?.driver_id) {
+      let commissionRow = existingRes.rows[0];
+
+      if (!commissionRow) {
+        const storeRes = await client.query<{ commission_rate: string | null }>(
+          `SELECT commission_rate FROM stores WHERE id = $1`,
+          [order.store_id],
+        );
+        let rate = storeRes.rows[0]?.commission_rate;
+        if (rate === null || rate === undefined) {
+          const settingRes = await client.query<{ value: any }>(
+            `SELECT value FROM settings WHERE key = 'commission.default_rate_percent' LIMIT 1`,
+          );
+          rate = settingRes.rows[0]?.value ?? 10;
+        }
+
+        const rateNum = parseFloat(String(rate));
+        const subtotal = Number(order.subtotal);
+        const deliveryFee = Number(order.delivery_fee);
+        const discountTotal = Number(order.discount_total);
+        const commissionAmount = (subtotal * rateNum) / 100;
+        const storeAmount = subtotal - commissionAmount;
+
+        const inserted = await client.query(
+          `
+          INSERT INTO commissions (
+            order_id, store_id, rate_percent,
+            order_amount, delivery_fee, discount_amount,
+            commission_amount, store_amount, driver_amount, platform_amount
+          )
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $7)
+          ON CONFLICT (order_id) DO NOTHING
+          RETURNING *
+          `,
+          [orderId, order.store_id, rateNum, subtotal, deliveryFee,
+            discountTotal, commissionAmount, storeAmount, deliveryFee],
+        );
+        commissionRow = inserted.rows[0];
+        if (!commissionRow) {
+          const concurrent = await client.query(
+            `SELECT * FROM commissions WHERE order_id = $1 LIMIT 1`,
+            [orderId],
+          );
+          commissionRow = concurrent.rows[0];
+        }
+      }
+
+      if (!commissionRow) return null;
+
+      // The order snapshot is authoritative for currency; preserve the driver's identity
+      // as the creator of all delivery-time ledger credits.
+      const currency = order.currency;
+      const creatorId = order.driver_id;
+
+      await client.query(
+        `
+        INSERT INTO transactions (
+          order_id, account_type, account_id, type, direction, amount,
+          currency, description, created_by
+        )
+        VALUES ($1, 'store', $2, 'store_earning', 'credit', $3, $4, 'Store earning', $5)
+        ON CONFLICT DO NOTHING
+        `,
+        [orderId, order.store_id, commissionRow.store_amount, currency, creatorId],
+      );
+
+      await client.query(
+        `
+        INSERT INTO transactions (
+          order_id, account_type, type, direction, amount,
+          currency, description, created_by
+        )
+        VALUES ($1, 'platform', 'commission', 'credit', $2, $3, 'Platform commission', $4)
+        ON CONFLICT DO NOTHING
+        `,
+        [orderId, commissionRow.platform_amount, currency, creatorId],
+      );
+
+      if (order.driver_id && Number(commissionRow.driver_amount) > 0) {
         await client.query(
           `
           INSERT INTO transactions (
-            order_id, account_type, account_id, type, direction, amount, currency, description
+            order_id, account_type, account_id, type, direction, amount,
+            currency, description, created_by
           )
-          VALUES ($1, 'driver', $2, 'driver_earning', 'credit', $3, $4, 'Driver earning')
+          VALUES ($1, 'driver', $2, 'driver_earning', 'credit', $3, $4, 'Driver earning', $5)
+          ON CONFLICT DO NOTHING
           `,
-          [orderId, driverRes.rows[0].driver_id, driverAmount, currency],
+          [orderId, order.driver_id, commissionRow.driver_amount, currency, creatorId],
         );
       }
 
-      return insertRes.rows[0];
+      return commissionRow;
     });
   }
 
