@@ -170,7 +170,7 @@ export class DriverCashRepository {
     const r = await this.db.query<{ id: string }>(
       `
       INSERT INTO transactions (
-        account_type, account_id, type, direction, amount, currency, description
+        account_type, account_id, type, direction, amount, currency, description, created_by
       )
       VALUES ('driver', $1, 'cash_remittance', 'debit', $2, $3, $4, $1)
       RETURNING id::text
