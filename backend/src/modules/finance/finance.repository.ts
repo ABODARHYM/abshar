@@ -288,14 +288,38 @@ export class FinanceRepository {
         if (!current.currency) {
           throw new ConflictException('Settlement currency is missing; reconcile this legacy settlement before marking it paid');
         }
-        await client.query(
-          `INSERT INTO transactions
-            (settlement_id, account_type, account_id, type, direction, amount, currency, description, created_by, idempotency_key)
-           VALUES ($1, $2, $3, 'settlement_payout', 'debit', $4, $5, $6, $7, 'settlement:' || $1::text || ':payout')
-           ON CONFLICT DO NOTHING`,
-          [id, current.party_type, current.party_id, current.net_amount,
-            current.currency, `Settlement payout ${id}`, actorId],
+        const existingPayout = await client.query<{
+          account_type: string;
+          account_id: string | null;
+          amount: string;
+          currency: string;
+        }>(
+          `SELECT account_type, account_id, amount::text, currency
+           FROM transactions
+           WHERE settlement_id = $1 AND type = 'settlement_payout' AND direction = 'debit'
+           FOR UPDATE`,
+          [id],
         );
+        if (existingPayout.rows.length > 0) {
+          const payout = existingPayout.rows[0];
+          if (
+            payout.account_type !== current.party_type ||
+            payout.account_id !== current.party_id ||
+            Number(payout.amount) !== Number(current.net_amount) ||
+            payout.currency?.trim() !== current.currency.trim()
+          ) {
+            throw new ConflictException('An existing settlement payout conflicts with the settlement amount, party, or currency');
+          }
+        } else {
+          await client.query(
+            `INSERT INTO transactions
+              (settlement_id, account_type, account_id, type, direction, amount, currency, description, created_by, idempotency_key)
+             VALUES ($1, $2, $3, 'settlement_payout', 'debit', $4, $5, $6, $7, 'settlement:' || $1::text || ':payout')
+             ON CONFLICT DO NOTHING`,
+            [id, current.party_type, current.party_id, current.net_amount,
+              current.currency, `Settlement payout ${id}`, actorId],
+          );
+        }
       }
 
       if (status === 'cancelled') {
