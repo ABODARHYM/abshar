@@ -66,24 +66,13 @@ export class FinanceService {
       periodStart: string;
       periodEnd: string;
       notes?: string;
+      actorRole?: string | null;
     },
   ): Promise<SettlementDto> {
-    // حساب المستحقات من commissions
-    const totals = await this.repo.getUnsettledCommissions(
-      params.partyType,
-      params.partyId,
-      params.periodStart,
-      params.periodEnd,
-    );
-
-    const gross = Number(totals.gross);
-    const commission = Number(totals.commission);
-    const net = Number(totals.net);
-
-    if (gross === 0) {
+    if (params.periodEnd < params.periodStart) {
       throw new BadRequestException({
         code: ErrorCode.ValidationFailed,
-        message: 'No unsettled commissions in this period',
+        message: 'Settlement period end must not be before its start',
       });
     }
 
@@ -92,18 +81,23 @@ export class FinanceService {
       partyId: params.partyId,
       periodStart: params.periodStart,
       periodEnd: params.periodEnd,
-      grossAmount: gross,
-      commissionAmount: commission,
-      netAmount: net,
       notes: params.notes,
       createdBy: actorId,
+      actorRole: params.actorRole ?? null,
     });
+
+    if (!settlement) {
+      throw new BadRequestException({
+        code: ErrorCode.ValidationFailed,
+        message: 'No unsettled commissions are available in this period',
+      });
+    }
 
     return this.toSettlement(settlement);
   }
 
-  async approveSettlement(actorId: string, id: string): Promise<SettlementDto> {
-    const s = await this.repo.updateSettlementStatus(id, 'approved', actorId);
+  async approveSettlement(actorId: string, actorRole: string | null, id: string): Promise<SettlementDto> {
+    const s = await this.repo.updateSettlementStatus(id, 'approved', actorId, actorRole);
     if (!s) {
       throw new NotFoundException({
         code: ErrorCode.NotFound,
@@ -113,8 +107,8 @@ export class FinanceService {
     return this.toSettlement(s);
   }
 
-  async markSettlementPaid(actorId: string, id: string): Promise<SettlementDto> {
-    const s = await this.repo.updateSettlementStatus(id, 'paid', actorId);
+  async markSettlementPaid(actorId: string, actorRole: string | null, id: string): Promise<SettlementDto> {
+    const s = await this.repo.updateSettlementStatus(id, 'paid', actorId, actorRole);
     if (!s) {
       throw new NotFoundException({
         code: ErrorCode.NotFound,
@@ -124,8 +118,8 @@ export class FinanceService {
     return this.toSettlement(s);
   }
 
-  async cancelSettlement(actorId: string, id: string): Promise<SettlementDto> {
-    const s = await this.repo.updateSettlementStatus(id, 'cancelled', actorId);
+  async cancelSettlement(actorId: string, actorRole: string | null, id: string): Promise<SettlementDto> {
+    const s = await this.repo.updateSettlementStatus(id, 'cancelled', actorId, actorRole);
     if (!s) {
       throw new NotFoundException({
         code: ErrorCode.NotFound,
@@ -189,6 +183,7 @@ export class FinanceService {
       grossAmount: Number(s.gross_amount),
       commissionAmount: Number(s.commission_amount),
       netAmount: Number(s.net_amount),
+      currency: s.currency?.trim?.() ?? null,
       status: s.status,
       notes: s.notes,
       settledAt: s.settled_at ? s.settled_at.toISOString() : null,
