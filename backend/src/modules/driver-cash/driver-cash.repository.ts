@@ -35,6 +35,16 @@ export interface OutstandingDriverRow {
 export class DriverCashRepository {
   constructor(private readonly db: DatabaseService) {}
 
+  /** Keep transaction and pool queries behind one compatible signature. */
+  private queryWithClient<T extends QueryResultRow = QueryResultRow>(
+    client: PoolClient | undefined,
+    text: string,
+    params: unknown[] = [],
+  ): Promise<QueryResult<T>> {
+    if (client) return client.query<T>(text, params);
+    return this.db.query<T>(text, params);
+  }
+
   /**
    * ملخص العهدة للمندوب.
    */
@@ -111,14 +121,14 @@ export class DriverCashRepository {
       currency: string;
     },
   ): Promise<void> {
-    const executor = client ?? this.db;
-    const existing = await executor.query<{
+    const existing = await this.queryWithClient<{
       account_type: string;
       account_id: string | null;
       direction: string;
       amount: string;
       currency: string;
     }>(
+      client,
       `SELECT account_type, account_id, direction, amount::text, currency
        FROM transactions WHERE order_id = $1 AND type = 'cod_collection' LIMIT 1`,
       [params.orderId],
@@ -135,7 +145,8 @@ export class DriverCashRepository {
         throw new ConflictException('An existing COD collection conflicts with the delivered order');
       }
     } else {
-      await executor.query(
+      await this.queryWithClient(
+        client,
         `
         INSERT INTO transactions (
           order_id, account_type, account_id, type, direction, amount, currency, description, created_by, idempotency_key
@@ -148,7 +159,8 @@ export class DriverCashRepository {
       );
     }
 
-    await executor.query(
+    await this.queryWithClient(
+      client,
       `
       UPDATE orders
       SET cash_collected_amount = $1, cash_collected_at = now()
@@ -170,14 +182,15 @@ export class DriverCashRepository {
       currency: string;
     },
   ): Promise<void> {
-    const executor = client ?? this.db;
-    const existing = await executor.query(
+    const existing = await this.queryWithClient(
+      client,
       `SELECT 1 FROM transactions WHERE order_id = $1 AND type = 'driver_earning' LIMIT 1`,
       [params.orderId],
     );
     if (existing.rowCount > 0) return;
 
-    await executor.query(
+    await this.queryWithClient(
+      client,
       `
       INSERT INTO transactions (
         order_id, account_type, account_id, type, direction, amount, currency, description, created_by, idempotency_key
