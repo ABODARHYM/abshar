@@ -370,8 +370,8 @@ export class FinanceRepository {
    * حساب العمولة لطلب مُسلَّم
    * يُستدعى عند التسليم
    */
-  async computeCommissionForOrder(orderId: string): Promise<any | null> {
-    return this.db.transaction(async (client: PoolClient) => {
+  async computeCommissionForOrder(orderId: string, transactionClient?: PoolClient): Promise<any | null> {
+    const execute = async (client: PoolClient): Promise<any | null> => {
       // Re-read the delivered order on every retry so missing ledger rows can be repaired.
       const orderRes = await client.query<{
         id: string;
@@ -494,7 +494,9 @@ export class FinanceRepository {
       }
 
       return commissionRow;
-    });
+    };
+
+    return transactionClient ? execute(transactionClient) : this.db.transaction(execute);
   }
 
   // ═══════════════ Ledger ═══════════════
