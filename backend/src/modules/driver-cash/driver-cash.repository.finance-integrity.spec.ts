@@ -17,10 +17,11 @@ describe('DriverCashRepository finance integrity', () => {
       currency: 'YER',
     });
 
-    expect(client.query).toHaveBeenCalledTimes(2);
+    expect(client.query).toHaveBeenCalledTimes(3);
     expect(db.query).not.toHaveBeenCalled();
-    expect(String(client.query.mock.calls[0][0])).toContain('ON CONFLICT DO NOTHING');
-    expect(String(client.query.mock.calls[1][0])).toContain('UPDATE orders');
+    expect(String(client.query.mock.calls[0][0])).toContain("type = 'cod_collection'");
+    expect(String(client.query.mock.calls[1][0])).toContain('ON CONFLICT DO NOTHING');
+    expect(String(client.query.mock.calls[2][0])).toContain('UPDATE orders');
   });
 
   it('records a new manual cash submission atomically as cash_remittance', async () => {
