@@ -71,8 +71,8 @@ describe('real migration files', () => {
   it('normalizes the legacy 031 wrapper for execution without changing its source checksum', () => {
     const sql = readFileSync(join(dir, '031_store_applications.sql'), 'utf8');
     const normalized = stripOuterTransactionStatements(sql);
-    expect(normalized).not.toMatch(/^\\s*BEGIN\\s*;\\s*$/m);
-    expect(normalized).not.toMatch(/^\\s*COMMIT\\s*;\\s*$/m);
+    expect(normalized).not.toMatch(/^\s*BEGIN\s*;\s*$/m);
+    expect(normalized).not.toMatch(/^\s*COMMIT\s*;\s*$/m);
     expect(checksumOf(sql)).toBe(checksumOf(readFileSync(join(dir, '031_store_applications.sql'), 'utf8')));
   });
 
@@ -87,7 +87,7 @@ describe('real migration files', () => {
       'delivery_zones', 'banners', 'promotions', 'favorites', 'settings', 'audit_logs',
     ];
     for (const table of required) {
-      expect(all).toMatch(new RegExp(`CREATE TABLE ${table}\\s*\\(`));
+      expect(all).toMatch(new RegExp(`CREATE TABLE ${table}\s*\\(`));
     }
   });
 
