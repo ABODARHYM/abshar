@@ -43,7 +43,7 @@ export class DriverCashRepository {
       `
       SELECT
         COALESCE(SUM(CASE WHEN type = 'cod_collection' AND direction = 'credit' THEN amount ELSE 0 END), 0)::text AS total_collected,
-        COALESCE(SUM(CASE WHEN type = 'settlement_payout' AND direction = 'debit' THEN amount ELSE 0 END), 0)::text AS total_submitted,
+        COALESCE(SUM(CASE WHEN direction = 'debit' AND (type = 'cash_remittance' OR (type = 'settlement_payout' AND settlement_id IS NULL)) THEN amount ELSE 0 END), 0)::text AS total_submitted,
         COALESCE(SUM(CASE WHEN type = 'driver_earning' AND direction = 'credit' THEN amount ELSE 0 END), 0)::text AS total_earnings
       FROM transactions
       WHERE account_type = 'driver' AND account_id = $1
@@ -172,7 +172,7 @@ export class DriverCashRepository {
       INSERT INTO transactions (
         account_type, account_id, type, direction, amount, currency, description
       )
-      VALUES ('driver', $1, 'settlement_payout', 'debit', $2, $3, $4)
+      VALUES ('driver', $1, 'cash_remittance', 'debit', $2, $3, $4, $1)
       RETURNING id::text
       `,
       [driverId, amount, currency, note ?? 'Cash submission'],
@@ -227,7 +227,8 @@ export class DriverCashRepository {
         u.phone,
         COALESCE(SUM(CASE
           WHEN t.type = 'cod_collection' AND t.direction = 'credit' THEN t.amount
-          WHEN t.type = 'settlement_payout' AND t.direction = 'debit' THEN -t.amount
+          WHEN t.type = 'cash_remittance' AND t.direction = 'debit' THEN -t.amount
+          WHEN t.type = 'settlement_payout' AND t.direction = 'debit' AND t.settlement_id IS NULL THEN -t.amount
           ELSE 0
         END), 0)::text AS outstanding_cash,
         COALESCE(SUM(CASE
