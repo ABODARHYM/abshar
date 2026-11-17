@@ -193,7 +193,7 @@ export class FinanceRepository {
       if (eligible.rows.length === 0) return null;
       const currencies = [...new Set(eligible.rows.map((r) => r.currency.trim()))];
       if (currencies.length !== 1) {
-        throw new Error('Cannot create one settlement for commissions with different currencies');
+        throw new ConflictException('Cannot create one settlement for commissions with different currencies');
       }
 
       // Keep monetary aggregation in PostgreSQL NUMERIC; do not sum money using JS floats.
