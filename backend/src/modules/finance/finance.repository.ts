@@ -280,7 +280,7 @@ export class FinanceRepository {
           `INSERT INTO transactions
             (settlement_id, account_type, account_id, type, direction, amount, currency, description, created_by, idempotency_key)
            VALUES ($1, $2, $3, 'settlement_payout', 'debit', $4, $5, $6, $7, 'settlement:' || $1::text || ':payout')
-           ON CONFLICT (idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING`,
+           ON CONFLICT DO NOTHING`,
           [id, current.party_type, current.party_id, current.net_amount,
             current.currency, `Settlement payout ${id}`, actorId],
         );
@@ -479,18 +479,24 @@ export class FinanceRepository {
       );
 
       if (order.driver_id && Number(commissionRow.driver_amount) > 0) {
-        await client.query(
-          `
-          INSERT INTO transactions (
-            order_id, account_type, account_id, type, direction, amount,
-            currency, description, created_by, idempotency_key
-          )
-          VALUES ($1, 'driver', $2, 'driver_earning', 'credit', $3, $4, 'Driver earning', $5,
-            'order:' || $1::text || ':driver:driver_earning:credit')
-          ON CONFLICT (idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING
-          `,
-          [orderId, order.driver_id, commissionRow.driver_amount, currency, creatorId],
+        const existingDriverEarning = await client.query(
+          `SELECT 1 FROM transactions WHERE order_id = $1 AND type = 'driver_earning' LIMIT 1`,
+          [orderId],
         );
+        if (existingDriverEarning.rowCount === 0) {
+          await client.query(
+            `
+            INSERT INTO transactions (
+              order_id, account_type, account_id, type, direction, amount,
+              currency, description, created_by, idempotency_key
+            )
+            VALUES ($1, 'driver', $2, 'driver_earning', 'credit', $3, $4, 'Driver earning', $5,
+              'order:' || $1::text || ':driver:driver_earning:credit')
+            ON CONFLICT DO NOTHING
+            `,
+            [orderId, order.driver_id, commissionRow.driver_amount, currency, creatorId],
+          );
+        }
       }
 
       return commissionRow;
