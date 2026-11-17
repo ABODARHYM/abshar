@@ -78,6 +78,8 @@ describe('DriverCashRepository finance integrity', () => {
     expect(summarySql).toContain("type = 'settlement_payout' AND settlement_id IS NULL");
     expect(outstandingSql).toContain("type = 'cash_remittance'");
     expect(outstandingSql).toContain('t.currency = $3');
-    expect(outstandingSql).toContain("type = 'settlement_payout' AND t.settlement_id IS NULL");
+    expect(outstandingSql).toContain(
+      "t.type = 'settlement_payout' AND t.direction = 'debit' AND t.settlement_id IS NULL",
+    );
   });
 });
