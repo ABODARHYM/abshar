@@ -427,6 +427,7 @@ export class FinanceRepository {
           commission_amount, store_amount, driver_amount, platform_amount
         )
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        ON CONFLICT (order_id) DO NOTHING
         RETURNING *
         `,
         [
@@ -442,6 +443,16 @@ export class FinanceRepository {
           platformAmount,
         ],
       );
+
+      // If another concurrent delivery worker inserted this commission first,
+      // return its committed row. The unique order_id constraint is the final guard.
+      if (!insertRes.rows[0]) {
+        const concurrent = await client.query(
+          `SELECT * FROM commissions WHERE order_id = $1 LIMIT 1`,
+          [orderId],
+        );
+        return concurrent.rows[0] ?? null;
+      }
 
       // 6) سجّل في الـ Ledger
       const currencyRes = await client.query<{ value: any }>(
