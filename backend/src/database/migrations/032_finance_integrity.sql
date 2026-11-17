@@ -1,5 +1,5 @@
 -- 032: Finance integrity, commission reservation, idempotent payouts.
--- Safe migration: aborts if historical settlements overlap ambiguously or ledger duplicates exist.
+-- Safe migration: aborts if historical settlements overlap ambiguously or their totals/currencies do not reconcile.
 ALTER TABLE settlements ADD COLUMN IF NOT EXISTS currency char(3);
 ALTER TABLE transactions ADD COLUMN IF NOT EXISTS idempotency_key text;
 
