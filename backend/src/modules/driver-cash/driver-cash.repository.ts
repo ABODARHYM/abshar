@@ -117,6 +117,7 @@ export class DriverCashRepository {
         order_id, account_type, account_id, type, direction, amount, currency, description
       )
       VALUES ($1, 'driver', $2, 'cod_collection', 'credit', $3, $4, 'Cash on delivery collected')
+      ON CONFLICT DO NOTHING
       `,
       [params.orderId, params.driverId, params.amount, params.currency],
     );
@@ -149,6 +150,7 @@ export class DriverCashRepository {
         order_id, account_type, account_id, type, direction, amount, currency, description
       )
       VALUES ($1, 'driver', $2, 'driver_earning', 'credit', $3, $4, 'Driver earning')
+      ON CONFLICT DO NOTHING
       `,
       [params.orderId, params.driverId, params.amount, params.currency],
     );
