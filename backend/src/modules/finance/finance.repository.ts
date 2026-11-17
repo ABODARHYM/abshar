@@ -389,9 +389,10 @@ export class FinanceRepository {
         delivery_fee: string;
         discount_total: string;
         total: string;
+        currency: string;
       }>(
         `
-        SELECT id, store_id, subtotal, delivery_fee, discount_total, total
+        SELECT id, store_id, subtotal, delivery_fee, discount_total, total, currency
         FROM orders
         WHERE id = $1 AND status = 'delivered'
         LIMIT 1
@@ -464,10 +465,8 @@ export class FinanceRepository {
       }
 
       // 6) سجّل في الـ Ledger
-      const currencyRes = await client.query<{ value: any }>(
-        `SELECT value FROM settings WHERE key = 'currency' LIMIT 1`,
-      );
-      const currency = String(currencyRes.rows[0]?.value ?? 'USD').replace(/"/g, '');
+      // Use the order's currency snapshot; global settings may have changed since the order was placed.
+      const currency = order.currency;
 
       // Store credit
       await client.query(
