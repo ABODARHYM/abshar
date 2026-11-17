@@ -289,7 +289,8 @@ export class FinanceRepository {
 
       const updated = await client.query(
         `UPDATE settlements
-         SET status = $1, approved_by = $2,
+         SET status = $1,
+             approved_by = CASE WHEN $1 = 'approved' THEN $2 ELSE approved_by END,
              settled_at = CASE WHEN $1 = 'paid' THEN now() ELSE settled_at END
          WHERE id = $3
          RETURNING id, party_type, party_id, period_start, period_end,
