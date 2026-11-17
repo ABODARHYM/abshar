@@ -1,7 +1,5 @@
 -- 032: Finance integrity, commission reservation, idempotent payouts.
 -- Safe migration: aborts if historical settlements overlap ambiguously or ledger duplicates exist.
-BEGIN;
-
 ALTER TABLE settlements ADD COLUMN IF NOT EXISTS currency char(3);
 
 CREATE TABLE IF NOT EXISTS settlement_commission_items (
@@ -111,4 +109,3 @@ CREATE UNIQUE INDEX IF NOT EXISTS transactions_settlement_payout_unique
     AND type = 'settlement_payout'
     AND direction = 'debit';
 
-COMMIT;
