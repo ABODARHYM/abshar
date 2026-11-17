@@ -1,4 +1,4 @@
-import { checksumOf, MigrationFile, orderMigrationNames, planMigrations } from './migration-utils';
+import { checksumOf, MigrationFile, orderMigrationNames, planMigrations, stripOuterTransactionStatements } from './migration-utils';
 import { readdirSync, readFileSync } from 'fs';
 import { join } from 'path';
 
@@ -44,6 +44,19 @@ describe('planMigrations', () => {
     const b = file('002_b.sql');
     const files = [file('001_a.sql'), b];
     expect(() => planMigrations(files, [{ name: b.name, checksum: b.checksum }])).toThrow(/Renumber/);
+  });
+});
+
+
+describe('stripOuterTransactionStatements', () => {
+  it('removes a legacy outer wrapper so the runner owns the atomic transaction', () => {
+    const sql = '-- legacy migration\\n\\nBEGIN;\\nCREATE TABLE example (id integer);\\nCOMMIT;\\n';
+    expect(stripOuterTransactionStatements(sql)).toBe('-- legacy migration\\n\\nCREATE TABLE example (id integer);\\n');
+  });
+
+  it('leaves SQL without an outer wrapper unchanged', () => {
+    const sql = 'CREATE TABLE example (id integer);\\n';
+    expect(stripOuterTransactionStatements(sql)).toBe(sql);
   });
 });
 
