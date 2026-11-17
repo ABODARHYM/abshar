@@ -230,6 +230,12 @@ export class FinanceRepository {
            VALUES ($1, $2, $3, $4)`,
           [settlement.id, row.id, params.partyType, row.amount],
         );
+        // Keep the original migration-027 reservation table synchronized for compatibility.
+        await client.query(
+          `INSERT INTO settlement_commissions (settlement_id, party_type, party_id, commission_id)
+           VALUES ($1, $2, $3, $4)`,
+          [settlement.id, params.partyType, params.partyId, row.id],
+        );
       }
 
       await client.query(
@@ -241,6 +247,12 @@ export class FinanceRepository {
           grossAmount: gross, commissionAmount: commission, currency,
           commissionCount: eligible.rows.length,
         })],
+      );
+      await client.query(
+        `INSERT INTO settlement_events
+          (settlement_id, from_status, to_status, actor_user_id, note)
+         VALUES ($1, NULL, 'pending', $2, $3)`,
+        [settlement.id, params.createdBy, params.notes ?? null],
       );
       return settlement;
     });
@@ -293,6 +305,12 @@ export class FinanceRepository {
            WHERE settlement_id = $1 AND released_at IS NULL`,
           [id],
         );
+        await client.query(
+          `UPDATE settlement_commissions
+           SET released_at = now()
+           WHERE settlement_id = $1 AND released_at IS NULL`,
+          [id],
+        );
       }
 
       const updated = await client.query(
@@ -315,6 +333,12 @@ export class FinanceRepository {
           JSON.stringify({ status: current.status }),
           JSON.stringify({ status, payoutAmount: status === 'paid' ? Number(current.net_amount) : null,
             currency: current.currency })],
+      );
+      await client.query(
+        `INSERT INTO settlement_events
+          (settlement_id, from_status, to_status, actor_user_id, note)
+         VALUES ($1, $2, $3, $4, NULL)`,
+        [id, current.status, status, actorId],
       );
       return updated.rows[0] ?? null;
     });
