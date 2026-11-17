@@ -187,7 +187,7 @@ export class DriverCashRepository {
       `SELECT 1 FROM transactions WHERE order_id = $1 AND type = 'driver_earning' LIMIT 1`,
       [params.orderId],
     );
-    if (existing.rowCount > 0) return;
+    if (existing.rows.length > 0) return;
 
     await this.queryWithClient(
       client,
