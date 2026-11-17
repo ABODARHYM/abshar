@@ -503,31 +503,79 @@ export class FinanceRepository {
       const currency = order.currency;
       const creatorId = order.driver_id;
 
-      await client.query(
-        `
-        INSERT INTO transactions (
-          order_id, account_type, account_id, type, direction, amount,
-          currency, description, created_by, idempotency_key
-        )
-        VALUES ($1, 'store', $2, 'store_earning', 'credit', $3, $4, 'Store earning', $5,
-          'order:' || $1::text || ':store:store_earning:credit')
-        ON CONFLICT DO NOTHING
-        `,
-        [orderId, order.store_id, commissionRow.store_amount, currency, creatorId],
+      const existingStoreEarning = await client.query<{
+        account_type: string;
+        account_id: string | null;
+        direction: string;
+        amount: string;
+        currency: string;
+      }>(
+        `SELECT account_type, account_id, direction, amount::text, currency
+         FROM transactions WHERE order_id = $1 AND type = 'store_earning' LIMIT 1`,
+        [orderId],
       );
+      if (existingStoreEarning.rows.length > 0) {
+        const earning = existingStoreEarning.rows[0];
+        if (
+          earning.account_type !== 'store' ||
+          earning.account_id !== order.store_id ||
+          earning.direction !== 'credit' ||
+          Number(earning.amount) !== Number(commissionRow.store_amount) ||
+          earning.currency?.trim() !== currency.trim()
+        ) {
+          throw new ConflictException('An existing store earning conflicts with the delivered commission');
+        }
+      } else {
+        await client.query(
+          `
+          INSERT INTO transactions (
+            order_id, account_type, account_id, type, direction, amount,
+            currency, description, created_by, idempotency_key
+          )
+          VALUES ($1, 'store', $2, 'store_earning', 'credit', $3, $4, 'Store earning', $5,
+            'order:' || $1::text || ':store:store_earning:credit')
+          ON CONFLICT DO NOTHING
+          `,
+          [orderId, order.store_id, commissionRow.store_amount, currency, creatorId],
+        );
+      }
 
-      await client.query(
-        `
-        INSERT INTO transactions (
-          order_id, account_type, type, direction, amount,
-          currency, description, created_by, idempotency_key
-        )
-        VALUES ($1, 'platform', 'commission', 'credit', $2, $3, 'Platform commission', $4,
-          'order:' || $1::text || ':platform:commission:credit')
-        ON CONFLICT DO NOTHING
-        `,
-        [orderId, commissionRow.platform_amount, currency, creatorId],
+      const existingPlatformCommission = await client.query<{
+        account_type: string;
+        account_id: string | null;
+        direction: string;
+        amount: string;
+        currency: string;
+      }>(
+        `SELECT account_type, account_id, direction, amount::text, currency
+         FROM transactions WHERE order_id = $1 AND type = 'commission' LIMIT 1`,
+        [orderId],
       );
+      if (existingPlatformCommission.rows.length > 0) {
+        const earning = existingPlatformCommission.rows[0];
+        if (
+          earning.account_type !== 'platform' ||
+          earning.account_id !== null ||
+          earning.direction !== 'credit' ||
+          Number(earning.amount) !== Number(commissionRow.platform_amount) ||
+          earning.currency?.trim() !== currency.trim()
+        ) {
+          throw new ConflictException('An existing platform commission conflicts with the delivered commission');
+        }
+      } else {
+        await client.query(
+          `
+          INSERT INTO transactions (
+            order_id, account_type, type, direction, amount,
+            currency, description, created_by, idempotency_key
+          )
+          VALUES ($1, 'platform', 'commission', 'credit', $2, $3, 'Platform commission', $4,
+            'order:' || $1::text || ':platform:commission:credit')
+          ON CONFLICT DO NOTHING
+          `,
+          [orderId, commissionRow.platform_amount, currency, creatorId],
+        );
+      }
 
       if (order.driver_id && Number(commissionRow.driver_amount) > 0) {
         const existingDriverEarning = await client.query<{
