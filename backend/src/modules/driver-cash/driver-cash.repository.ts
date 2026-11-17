@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
 import { PoolClient } from 'pg';
 import { DatabaseService } from '../../database/database.service';
 import { toOffset } from '../../common/pagination.dto';
@@ -112,17 +112,41 @@ export class DriverCashRepository {
     },
   ): Promise<void> {
     const executor = client ?? this.db;
-    await executor.query(
-      `
-      INSERT INTO transactions (
-        order_id, account_type, account_id, type, direction, amount, currency, description, created_by, idempotency_key
-      )
-      VALUES ($1, 'driver', $2, 'cod_collection', 'credit', $3, $4, 'Cash on delivery collected', $2,
-        'order:' || $1::text || ':driver:cod_collection:credit')
-      ON CONFLICT DO NOTHING
-      `,
-      [params.orderId, params.driverId, params.amount, params.currency],
+    const existing = await executor.query<{
+      account_type: string;
+      account_id: string | null;
+      direction: string;
+      amount: string;
+      currency: string;
+    }>(
+      `SELECT account_type, account_id, direction, amount::text, currency
+       FROM transactions WHERE order_id = $1 AND type = 'cod_collection' LIMIT 1`,
+      [params.orderId],
     );
+    if (existing.rows.length > 0) {
+      const collection = existing.rows[0];
+      if (
+        collection.account_type !== 'driver' ||
+        collection.account_id !== params.driverId ||
+        collection.direction !== 'credit' ||
+        Number(collection.amount) !== params.amount ||
+        collection.currency?.trim() !== params.currency.trim()
+      ) {
+        throw new ConflictException('An existing COD collection conflicts with the delivered order');
+      }
+    } else {
+      await executor.query(
+        `
+        INSERT INTO transactions (
+          order_id, account_type, account_id, type, direction, amount, currency, description, created_by, idempotency_key
+        )
+        VALUES ($1, 'driver', $2, 'cod_collection', 'credit', $3, $4, 'Cash on delivery collected', $2,
+          'order:' || $1::text || ':driver:cod_collection:credit')
+        ON CONFLICT DO NOTHING
+        `,
+        [params.orderId, params.driverId, params.amount, params.currency],
+      );
+    }
 
     await executor.query(
       `
