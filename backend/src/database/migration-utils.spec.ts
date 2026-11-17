@@ -68,6 +68,14 @@ describe('real migration files', () => {
     names.forEach((name, i) => expect(name.startsWith(String(i + 1).padStart(3, '0'))).toBe(true));
   });
 
+  it('normalizes the legacy 031 wrapper for execution without changing its source checksum', () => {
+    const sql = readFileSync(join(dir, '031_store_applications.sql'), 'utf8');
+    const normalized = stripOuterTransactionStatements(sql);
+    expect(normalized).not.toMatch(/^\\s*BEGIN\\s*;\\s*$/m);
+    expect(normalized).not.toMatch(/^\\s*COMMIT\\s*;\\s*$/m);
+    expect(checksumOf(sql)).toBe(checksumOf(readFileSync(join(dir, '031_store_applications.sql'), 'utf8')));
+  });
+
   it('contain every table required by the spec', () => {
     const all = names.map((n) => readFileSync(join(dir, n), 'utf8')).join('\n');
     const required = [
