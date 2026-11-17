@@ -66,6 +66,7 @@ export class FinanceService {
       periodStart: string;
       periodEnd: string;
       notes?: string;
+      actorRole?: string | null;
     },
   ): Promise<SettlementDto> {
     if (params.periodEnd < params.periodStart) {
@@ -82,6 +83,7 @@ export class FinanceService {
       periodEnd: params.periodEnd,
       notes: params.notes,
       createdBy: actorId,
+      actorRole: params.actorRole ?? null,
     });
 
     if (!settlement) {
@@ -94,8 +96,8 @@ export class FinanceService {
     return this.toSettlement(settlement);
   }
 
-  async approveSettlement(actorId: string, id: string): Promise<SettlementDto> {
-    const s = await this.repo.updateSettlementStatus(id, 'approved', actorId);
+  async approveSettlement(actorId: string, actorRole: string | null, id: string): Promise<SettlementDto> {
+    const s = await this.repo.updateSettlementStatus(id, 'approved', actorId, actorRole);
     if (!s) {
       throw new NotFoundException({
         code: ErrorCode.NotFound,
@@ -105,8 +107,8 @@ export class FinanceService {
     return this.toSettlement(s);
   }
 
-  async markSettlementPaid(actorId: string, id: string): Promise<SettlementDto> {
-    const s = await this.repo.updateSettlementStatus(id, 'paid', actorId);
+  async markSettlementPaid(actorId: string, actorRole: string | null, id: string): Promise<SettlementDto> {
+    const s = await this.repo.updateSettlementStatus(id, 'paid', actorId, actorRole);
     if (!s) {
       throw new NotFoundException({
         code: ErrorCode.NotFound,
@@ -116,8 +118,8 @@ export class FinanceService {
     return this.toSettlement(s);
   }
 
-  async cancelSettlement(actorId: string, id: string): Promise<SettlementDto> {
-    const s = await this.repo.updateSettlementStatus(id, 'cancelled', actorId);
+  async cancelSettlement(actorId: string, actorRole: string | null, id: string): Promise<SettlementDto> {
+    const s = await this.repo.updateSettlementStatus(id, 'cancelled', actorId, actorRole);
     if (!s) {
       throw new NotFoundException({
         code: ErrorCode.NotFound,
