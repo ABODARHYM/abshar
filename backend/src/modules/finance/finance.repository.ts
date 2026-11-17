@@ -570,13 +570,14 @@ export class FinanceRepository {
   ): Promise<{ gross: string; commission: string; net: string; count: string }> {
     const amountColumn = partyType === 'store' ? 'c.store_amount' : 'c.driver_amount';
     const idColumn = partyType === 'store' ? 'c.store_id' : 'o.driver_id';
+    const commissionColumn = partyType === 'store' ? 'c.commission_amount' : '0::numeric';
     const r = await this.db.query<{
       gross: string; commission: string; net: string; count: string;
     }>(
       `
       SELECT
         COALESCE(SUM(${amountColumn}), 0)::text AS gross,
-        COALESCE(SUM(CASE WHEN $4 = 'store' THEN c.commission_amount ELSE 0 END), 0)::text AS commission,
+        COALESCE(SUM(${commissionColumn}), 0)::text AS commission,
         COALESCE(SUM(${amountColumn}), 0)::text AS net,
         COUNT(*)::text AS count
       FROM commissions c
@@ -591,7 +592,7 @@ export class FinanceRepository {
             AND sci.released_at IS NULL
         )
       `,
-      [partyId, periodStart, periodEnd, partyType],
+      [partyId, periodStart, periodEnd],
     );
     return r.rows[0];
   }
