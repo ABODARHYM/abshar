@@ -278,11 +278,9 @@ export class FinanceRepository {
         }
         await client.query(
           `INSERT INTO transactions
-            (settlement_id, account_type, account_id, type, direction, amount, currency, description, created_by)
-           VALUES ($1, $2, $3, 'settlement_payout', 'debit', $4, $5, $6, $7)
-           ON CONFLICT (settlement_id)
-             WHERE settlement_id IS NOT NULL AND type = 'settlement_payout' AND direction = 'debit'
-           DO NOTHING`,
+            (settlement_id, account_type, account_id, type, direction, amount, currency, description, created_by, idempotency_key)
+           VALUES ($1, $2, $3, 'settlement_payout', 'debit', $4, $5, $6, $7, 'settlement:' || $1::text || ':payout')
+           ON CONFLICT (idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING`,
           [id, current.party_type, current.party_id, current.net_amount,
             current.currency, `Settlement payout ${id}`, actorId],
         );
@@ -458,10 +456,11 @@ export class FinanceRepository {
         `
         INSERT INTO transactions (
           order_id, account_type, account_id, type, direction, amount,
-          currency, description, created_by
+          currency, description, created_by, idempotency_key
         )
-        VALUES ($1, 'store', $2, 'store_earning', 'credit', $3, $4, 'Store earning', $5)
-        ON CONFLICT DO NOTHING
+        VALUES ($1, 'store', $2, 'store_earning', 'credit', $3, $4, 'Store earning', $5,
+          'order:' || $1::text || ':store:store_earning:credit')
+        ON CONFLICT (idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING
         `,
         [orderId, order.store_id, commissionRow.store_amount, currency, creatorId],
       );
@@ -470,10 +469,11 @@ export class FinanceRepository {
         `
         INSERT INTO transactions (
           order_id, account_type, type, direction, amount,
-          currency, description, created_by
+          currency, description, created_by, idempotency_key
         )
-        VALUES ($1, 'platform', 'commission', 'credit', $2, $3, 'Platform commission', $4)
-        ON CONFLICT DO NOTHING
+        VALUES ($1, 'platform', 'commission', 'credit', $2, $3, 'Platform commission', $4,
+          'order:' || $1::text || ':platform:commission:credit')
+        ON CONFLICT (idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING
         `,
         [orderId, commissionRow.platform_amount, currency, creatorId],
       );
@@ -483,10 +483,11 @@ export class FinanceRepository {
           `
           INSERT INTO transactions (
             order_id, account_type, account_id, type, direction, amount,
-            currency, description, created_by
+            currency, description, created_by, idempotency_key
           )
-          VALUES ($1, 'driver', $2, 'driver_earning', 'credit', $3, $4, 'Driver earning', $5)
-          ON CONFLICT DO NOTHING
+          VALUES ($1, 'driver', $2, 'driver_earning', 'credit', $3, $4, 'Driver earning', $5,
+            'order:' || $1::text || ':driver:driver_earning:credit')
+          ON CONFLICT (idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING
           `,
           [orderId, order.driver_id, commissionRow.driver_amount, currency, creatorId],
         );
