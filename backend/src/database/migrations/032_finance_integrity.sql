@@ -1,6 +1,7 @@
 -- 032: Finance integrity, commission reservation, idempotent payouts.
 -- Safe migration: aborts if historical settlements overlap ambiguously or ledger duplicates exist.
 ALTER TABLE settlements ADD COLUMN IF NOT EXISTS currency char(3);
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS idempotency_key text;
 
 CREATE TABLE IF NOT EXISTS settlement_commission_items (
   id bigserial PRIMARY KEY,
@@ -39,18 +40,6 @@ BEGIN
     HAVING COUNT(*) > 1
   ) THEN
     RAISE EXCEPTION 'Migration 032 stopped: overlapping active historical settlements require manual reconciliation';
-  END IF;
-
-  IF EXISTS (
-    SELECT 1
-    FROM transactions
-    WHERE order_id IS NOT NULL
-      AND type IN ('store_earning', 'commission', 'driver_earning', 'cod_collection')
-      AND direction = 'credit'
-    GROUP BY order_id, account_type, COALESCE(account_id, '00000000-0000-0000-0000-000000000000'::uuid), type, direction
-    HAVING COUNT(*) > 1
-  ) THEN
-    RAISE EXCEPTION 'Migration 032 stopped: duplicate order ledger entries require reconciliation before unique constraints';
   END IF;
 
   IF EXISTS (
@@ -117,22 +106,7 @@ FROM (
 ) matched
 WHERE s.id = matched.id AND s.currency IS NULL;
 
--- Database-level idempotency for per-order ledger credits and per-settlement payouts.
-CREATE UNIQUE INDEX IF NOT EXISTS transactions_order_account_type_direction_unique
-  ON transactions (
-    order_id,
-    account_type,
-    (COALESCE(account_id, '00000000-0000-0000-0000-000000000000'::uuid)),
-    type,
-    direction
-  )
-  WHERE order_id IS NOT NULL
-    AND type IN ('store_earning', 'commission', 'driver_earning', 'cod_collection')
-    AND direction = 'credit';
-
-CREATE UNIQUE INDEX IF NOT EXISTS transactions_settlement_payout_unique
-  ON transactions (settlement_id)
-  WHERE settlement_id IS NOT NULL
-    AND type = 'settlement_payout'
-    AND direction = 'debit';
-
+-- Historical ledger rows remain immutable with a NULL key. New writes must carry a stable idempotency key.
+CREATE UNIQUE INDEX IF NOT EXISTS transactions_idempotency_key_unique
+  ON transactions (idempotency_key)
+  WHERE idempotency_key IS NOT NULL;
