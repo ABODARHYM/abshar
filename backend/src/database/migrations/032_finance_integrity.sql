@@ -47,6 +47,8 @@ BEGIN
     SELECT 1
     FROM transactions
     WHERE order_id IS NOT NULL
+      AND type IN ('store_earning', 'commission', 'driver_earning')
+      AND direction = 'credit'
     GROUP BY order_id, account_type, COALESCE(account_id, '00000000-0000-0000-0000-000000000000'::uuid), type, direction
     HAVING COUNT(*) > 1
   ) THEN
@@ -99,7 +101,9 @@ CREATE UNIQUE INDEX IF NOT EXISTS transactions_order_account_type_direction_uniq
     type,
     direction
   )
-  WHERE order_id IS NOT NULL;
+  WHERE order_id IS NOT NULL
+    AND type IN ('store_earning', 'commission', 'driver_earning')
+    AND direction = 'credit';
 
 CREATE UNIQUE INDEX IF NOT EXISTS transactions_settlement_payout_unique
   ON transactions (settlement_id)
