@@ -24,3 +24,5 @@ BEGIN
       CHECK (original_delivery_fee >= 0) NOT VALID;
   END IF;
 END $$;
+
+ALTER TABLE orders VALIDATE CONSTRAINT orders_original_delivery_fee_nonnegative;
