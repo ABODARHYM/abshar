@@ -230,7 +230,7 @@ export class FinanceRepository {
            VALUES ($1, $2, $3, $4)`,
           [settlement.id, row.id, params.partyType, row.amount],
         );
-        // Keep the original migration-027 reservation table synchronized for compatibility.
+        // Keep the legacy reservation table synchronized for compatibility.
         await client.query(
           `INSERT INTO settlement_commissions (settlement_id, party_type, party_id, commission_id)
            VALUES ($1, $2, $3, $4)`,
