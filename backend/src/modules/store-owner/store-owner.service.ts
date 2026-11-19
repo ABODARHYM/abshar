@@ -469,9 +469,9 @@ export class StoreOwnerService {
           storeId: store.id,
           deliveryArea: full.delivery_address_text ?? '',
         });
-        this.logger.log(`[dispatch] ${full.order_number}: ${result.driversOffered} drivers offered`);
+        console.log(`[dispatch] ${full.order_number}: ${result.driversOffered} drivers offered`);
       } catch (e) {
-        this.logger.error(`[dispatch] failed for ${full.order_number}: ${(e as Error).message}`);
+        console.error(`[dispatch] failed for ${full.order_number}: ${(e as Error).message}`);
       }
     }
 
