@@ -29,7 +29,17 @@ export default function PushSetup() {
     setPermission(Notification.permission);
     navigator.serviceWorker.ready.then(async (reg) => {
       const sub = await reg.pushManager.getSubscription();
-      setSubscribed(!!sub);
+      if (sub && Notification.permission === 'granted') {
+        const json = sub.toJSON();
+        const sync = await authFetch('/api/v1/notifications/push/subscribe', {
+          method: 'POST',
+          body: JSON.stringify({ endpoint: json.endpoint, p256dh: json.keys?.p256dh, auth: json.keys?.auth, userAgent: navigator.userAgent }),
+        });
+        setSubscribed(sync.ok);
+        if (!sync.ok) setError('الاشتراك موجود في الهاتف لكن لم يُحفظ على الخادم. أعد تفعيل الإشعارات.');
+      } else {
+        setSubscribed(false);
+      }
     });
   }, []);
 
