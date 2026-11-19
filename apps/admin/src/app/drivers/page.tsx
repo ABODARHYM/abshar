@@ -125,7 +125,7 @@ export default function DriversPage() {
 
   const copyCredentials = async () => {
     if (!created) return;
-    const text = `اسم المستخدم: ${created.username}\nكلمة المرور المؤقتة: ${created.initialPassword}`;
+    const text = `اسم المستخدم: ${created.username}\nكلمة المرور الأولية: ${created.initialPassword}`;
     try {
       await navigator.clipboard.writeText(text);
     } catch {
@@ -232,7 +232,7 @@ export default function DriversPage() {
                     </div>
                   </div>
                   <div className="rounded-xl bg-[var(--bg-elevated)] p-3 text-xs text-[var(--text-muted)]">
-                    سيتم توليد كلمة مرور مؤقتة قوية تلقائياً. ستظهر مرة واحدة بعد إنشاء الحساب.
+                    سيتم توليد كلمة مرور أولية قوية تلقائياً. ستظهر مرة واحدة بعد إنشاء الحساب.
                   </div>
                   <div className="flex gap-2">
                     <button type="button" className="btn btn-ghost flex-1" onClick={resetCreate} disabled={saving}>إلغاء</button>
@@ -254,7 +254,7 @@ export default function DriversPage() {
                     <div className="font-mono font-bold" dir="ltr">{created.username}</div>
                   </div>
                   <div>
-                    <div className="text-xs text-[var(--text-muted)] mb-1">كلمة المرور المؤقتة</div>
+                    <div className="text-xs text-[var(--text-muted)] mb-1">كلمة المرور الأولية</div>
                     <div className="font-mono font-bold break-all select-all" dir="ltr">{created.initialPassword}</div>
                   </div>
                   <div className="text-xs text-[var(--text-muted)]">حالة الحساب: بانتظار تفعيل المندوب من قائمة الإدارة.</div>
