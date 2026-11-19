@@ -31,7 +31,7 @@ self.addEventListener('push', (event) => {
     vibrate: [200, 100, 200, 100, 200],
     dir: 'rtl',
     lang: 'ar',
-    tag: 'absher-driver',
+    tag: data.tag || 'absher-driver',
     renotify: true,
     requireInteraction: data.priority === 'high' || data.priority === 'urgent',
     color: '#10b981',
