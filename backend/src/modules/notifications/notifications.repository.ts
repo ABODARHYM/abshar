@@ -57,8 +57,8 @@ export class NotificationsRepository {
     });
   }
 
-  async claimPushOutbox(limit = 20): Promise<Array<{ id: string; user_id: string; payload: Record<string, any>; attempts: number }>> {
-    const r = await this.db.query<{ id: string; user_id: string; payload: Record<string, any>; attempts: number }>(
+  async claimPushOutbox(limit = 20): Promise<Array<{ id: string; user_id: string; payload: Record<string, any>; attempts: number; delivered_endpoints: string[] }>> {
+    const r = await this.db.query<{ id: string; user_id: string; payload: Record<string, any>; attempts: number; delivered_endpoints: string[] }>(
       `WITH picked AS (
          SELECT id FROM notification_push_outbox
          WHERE (status = 'pending' AND next_attempt_at <= now())
@@ -71,10 +71,24 @@ export class NotificationsRepository {
        SET status = 'processing', locked_at = now(), attempts = o.attempts + 1, updated_at = now()
        FROM picked
        WHERE o.id = picked.id
-       RETURNING o.id, o.user_id, o.payload, o.attempts`
+       RETURNING o.id, o.user_id, o.payload, o.attempts, o.delivered_endpoints`
       , [limit],
     );
     return r.rows;
+  }
+
+  async markPushOutboxProgress(id: string, acceptedEndpoints: string[]): Promise<void> {
+    if (acceptedEndpoints.length === 0) return;
+    await this.db.query(
+      `UPDATE notification_push_outbox
+       SET delivered_endpoints = ARRAY(
+             SELECT DISTINCT endpoint
+             FROM unnest(delivered_endpoints || $2::text[]) AS endpoint
+           ),
+           updated_at = now()
+       WHERE id = $1`,
+      [id, acceptedEndpoints],
+    );
   }
 
   async markPushOutboxSent(id: string): Promise<void> {
@@ -231,14 +245,38 @@ export class NotificationsRepository {
     storeId: string,
     limit: number,
   ): Promise<{ user_id: string }[]> {
-    // ابحث عن مندوبين متاحين في نفس مدينة المتجر
+    // Do not broadcast city-wide offers to stale or geographically unrelated drivers.
+    // Stores and drivers already expose latitude/longitude in the existing schema.
     const r = await this.db.query<{ user_id: string }>(
       `
-      SELECT DISTINCT d.user_id
+      SELECT d.user_id
       FROM drivers d
       JOIN stores s ON s.id = $1
       WHERE d.availability = 'online'
         AND d.status = 'active'
+        AND s.latitude IS NOT NULL
+        AND s.longitude IS NOT NULL
+        AND d.last_latitude IS NOT NULL
+        AND d.last_longitude IS NOT NULL
+        AND d.last_location_at >= now() - interval '15 minutes'
+        AND (
+          6371 * acos(
+            LEAST(1, GREATEST(-1,
+              cos(radians(s.latitude)) * cos(radians(d.last_latitude))
+              * cos(radians(d.last_longitude) - radians(s.longitude))
+              + sin(radians(s.latitude)) * sin(radians(d.last_latitude))
+            ))
+          )
+        ) <= 30
+      ORDER BY (
+        6371 * acos(
+          LEAST(1, GREATEST(-1,
+            cos(radians(s.latitude)) * cos(radians(d.last_latitude))
+            * cos(radians(d.last_longitude) - radians(s.longitude))
+            + sin(radians(s.latitude)) * sin(radians(d.last_latitude))
+          ))
+        )
+      ) ASC
       LIMIT $2
       `,
       [storeId, limit],
