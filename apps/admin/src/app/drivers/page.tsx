@@ -21,7 +21,7 @@ type CreatedCredentials = {
   fullName: string;
   phone: string;
   username: string;
-  temporaryPassword: string;
+  initialPassword: string;
   status: string;
 };
 
@@ -125,7 +125,7 @@ export default function DriversPage() {
 
   const copyCredentials = async () => {
     if (!created) return;
-    const text = `اسم المستخدم: ${created.username}\nكلمة المرور المؤقتة: ${created.temporaryPassword}`;
+    const text = `اسم المستخدم: ${created.username}\nكلمة المرور المؤقتة: ${created.initialPassword}`;
     try {
       await navigator.clipboard.writeText(text);
     } catch {
@@ -255,7 +255,7 @@ export default function DriversPage() {
                   </div>
                   <div>
                     <div className="text-xs text-[var(--text-muted)] mb-1">كلمة المرور المؤقتة</div>
-                    <div className="font-mono font-bold break-all select-all" dir="ltr">{created.temporaryPassword}</div>
+                    <div className="font-mono font-bold break-all select-all" dir="ltr">{created.initialPassword}</div>
                   </div>
                   <div className="text-xs text-[var(--text-muted)]">حالة الحساب: بانتظار تفعيل المندوب من قائمة الإدارة.</div>
                 </div>
