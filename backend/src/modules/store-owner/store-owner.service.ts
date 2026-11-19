@@ -170,7 +170,15 @@ export class StoreOwnerService {
     },
   ): Promise<MyStoreResponse> {
     const store = await this.requireMyStore(userId);
-    const updated = await this.repo.updateMyStore(store.id, dto);
+    // Keep the store's order-acceptance flag aligned with the owner-facing
+    // open/closed switch unless the API explicitly supplies acceptsOrders.
+    const update = {
+      ...dto,
+      ...(dto.isOpen !== undefined && dto.acceptsOrders === undefined
+        ? { acceptsOrders: dto.isOpen }
+        : {}),
+    };
+    const updated = await this.repo.updateMyStore(store.id, update);
     if (!updated) {
       throw new NotFoundException({
         code: ErrorCode.NotFound,
