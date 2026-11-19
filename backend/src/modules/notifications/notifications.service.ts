@@ -62,7 +62,7 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
       const jobs = await this.repo.claimPushOutbox(20);
       for (const job of jobs) {
         try {
-          const accepted = await this.push.sendToUser(job.user_id, job.payload as PushPayload);
+          const accepted = await this.push.sendToUser(job.user_id, job.payload as PushPayload, true);
           if (accepted > 0) await this.repo.markPushOutboxSent(job.id);
           else await this.repo.markPushOutboxFailed(job.id, job.attempts, 'No active push subscription accepted the notification');
         } catch (error) {

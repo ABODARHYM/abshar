@@ -49,7 +49,7 @@ export class PushService {
   }
 
   /** يرجع عدد الأجهزة التي استلمت الإشعار فعليًا. يحذف الاشتراكات المنتهية (404/410). */
-  async sendToUser(userId: string, payload: PushPayload): Promise<number> {
+  async sendToUser(userId: string, payload: PushPayload, requireAll = false): Promise<number> {
     if (!this.enabled) return 0;
 
     const subs = await this.repo.listPushSubscriptions(userId);
@@ -91,6 +91,9 @@ export class PushService {
     );
     const sent = results.filter(Boolean).length;
     this.logger.log(`Push result for user ${userId}: ${sent}/${subs.length} accepted by push service`);
+    if (requireAll && sent !== subs.length) {
+      throw new Error(`Push delivery incomplete for user ${userId}: ${sent}/${subs.length} accepted`);
+    }
     return sent;
   }
 

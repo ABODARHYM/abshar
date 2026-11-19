@@ -61,4 +61,15 @@ describe('PushService', () => {
     expect(repo.removePushSubscription).toHaveBeenCalledWith('u1', 'dead');
     expect(repo.removePushSubscription).toHaveBeenCalledTimes(1);
   });
+  it('requests an outbox retry when any active device subscription fails', async () => {
+    const repo = makeRepo([
+      { endpoint: 'ok', p256dh: 'p1', auth: 'a1' },
+      { endpoint: 'temporary-failure', p256dh: 'p2', auth: 'a2' },
+    ]);
+    (mocked.sendNotification as jest.Mock)
+      .mockResolvedValueOnce({})
+      .mockRejectedValueOnce(Object.assign(new Error('temporary'), { statusCode: 503 }));
+    const svc = new PushService(repo, enabledCfg);
+    await expect(svc.sendToUser('u1', { title: 't', body: 'b' }, true)).rejects.toThrow('Push delivery incomplete');
+  });
 });
