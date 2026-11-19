@@ -11,6 +11,7 @@ type Driver = {
   phone: string;
   email?: string | null;
   vehicleType?: string | null;
+  zoneName?: string | null;
   status: string;
   availability: string;
   ratingAvg: number;
@@ -179,7 +180,7 @@ export default function DriversPage() {
     {
       key: 'zone',
       label: 'منطقة التوصيل',
-      render: (d: Driver) => <span className="text-xs">{(d as Driver & { zoneName?: string }).zoneName || 'غير محددة'}</span>,
+      render: (d: Driver) => <span className="text-xs">{d.zoneName || 'غير محددة'}</span>,
     },
     {
       key: 'status',
