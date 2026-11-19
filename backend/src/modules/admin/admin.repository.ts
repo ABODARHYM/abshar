@@ -273,6 +273,69 @@ export class AdminRepository {
     return { rows: rowsRes.rows, total };
   }
 
+  async createDriverAccount(params: {
+    fullName: string;
+    phone: string;
+    email: string | null;
+    passwordHash: string;
+    vehicleType: string;
+    vehiclePlate: string | null;
+    actorId: string;
+    actorRole: string | null;
+  }): Promise<{ userId: string }> {
+    return this.db.transaction(async (client) => {
+      const role = await client.query<{ id: number }>(
+        `SELECT id FROM roles WHERE code = 'driver' LIMIT 1`,
+      );
+      if (!role.rows[0]) throw new Error('Default driver role is missing');
+
+      const user = await client.query<{ id: string }>(
+        `
+        INSERT INTO users (email, phone, password_hash, full_name, status, locale)
+        VALUES ($1, $2, $3, $4, 'active', 'ar')
+        RETURNING id
+        `,
+        [params.email, params.phone, params.passwordHash, params.fullName],
+      );
+      const userId = user.rows[0].id;
+
+      await client.query(
+        `INSERT INTO user_roles (user_id, role_id, assigned_by) VALUES ($1, $2, $3)`,
+        [userId, role.rows[0].id, params.actorId],
+      );
+
+      await client.query(
+        `
+        INSERT INTO drivers (user_id, vehicle_type, vehicle_plate, status, availability)
+        VALUES ($1, $2, $3, 'pending', 'offline')
+        `,
+        [userId, params.vehicleType, params.vehiclePlate],
+      );
+
+      await client.query(
+        `
+        INSERT INTO audit_logs
+          (actor_user_id, actor_role, action, entity_type, entity_id, new_value)
+        VALUES ($1, $2, 'driver.create', 'driver', $3, $4::jsonb)
+        `,
+        [
+          params.actorId,
+          params.actorRole,
+          userId,
+          JSON.stringify({
+            fullName: params.fullName,
+            phone: params.phone,
+            email: params.email,
+            vehicleType: params.vehicleType,
+            status: 'pending',
+          }),
+        ],
+      );
+
+      return { userId };
+    });
+  }
+
   async updateDriverStatus(userId: string, status: string): Promise<boolean> {
     const r = await this.db.query(
       `UPDATE drivers SET status = $1 WHERE user_id = $2`,
