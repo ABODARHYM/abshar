@@ -32,7 +32,7 @@ self.addEventListener('push', (event) => {
     dir: 'rtl',
     lang: 'ar',
     tag: data.tag || 'absher-driver',
-    renotify: true,
+    renotify: false,
     requireInteraction: data.priority === 'high' || data.priority === 'urgent',
     color: '#10b981',
     data: {
