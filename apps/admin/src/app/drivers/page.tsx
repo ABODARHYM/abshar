@@ -259,6 +259,7 @@ export default function DriversPage() {
                   </div>
                   <div className="text-xs text-[var(--text-muted)]">حالة الحساب: بانتظار تفعيل المندوب من قائمة الإدارة.</div>
                 </div>
+                {formError && <div role="alert" className="mt-4 rounded-xl bg-red-500/10 border border-red-500/30 p-3 text-sm text-red-500">{formError}</div>}
                 <div className="flex gap-2 mt-5">
                   <button type="button" className="btn btn-ghost flex-1" onClick={() => void copyCredentials()}>نسخ بيانات الدخول</button>
                   <button type="button" className="btn btn-primary flex-1" onClick={resetCreate}>تم، إغلاق</button>
