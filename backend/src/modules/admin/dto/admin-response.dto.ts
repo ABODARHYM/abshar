@@ -51,6 +51,7 @@ export class AdminDriverListItemDto {
   @ApiProperty({ nullable: true }) email!: string | null;
   @ApiProperty({ nullable: true }) phone!: string | null;
   @ApiProperty({ nullable: true }) vehicleType!: string | null;
+  @ApiProperty({ nullable: true }) zoneName!: string | null;
   @ApiProperty() status!: string;
   @ApiProperty() availability!: string;
   @ApiProperty() ratingAvg!: number;
