@@ -76,7 +76,11 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
               job.attempts,
               `Temporary push failure for ${result.failedEndpoints.length} device(s)`,
             );
-          } else if (result.subscriptionCount === 0) {
+          } else if (
+            result.subscriptionCount === 0 &&
+            (job.delivered_endpoints ?? []).length === 0 &&
+            result.acceptedEndpoints.length === 0
+          ) {
             await this.repo.markPushOutboxFailed(
               job.id,
               job.attempts,
