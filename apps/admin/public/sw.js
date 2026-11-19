@@ -27,6 +27,7 @@ self.addEventListener('push', (event) => {
   const options = {
     body: data.body || '',
     icon: data.icon || '/icons/icon-192.png',
+    image: data.image || data.icon || '/icons/icon-192.png',
     badge: '/icons/icon-72.png',
     vibrate: [200, 100, 200, 100, 200],
     dir: 'rtl',
