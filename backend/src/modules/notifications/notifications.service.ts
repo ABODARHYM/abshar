@@ -277,6 +277,22 @@ export class NotificationsService {
   }
 
 
+  async notifyOrderStatusChanged(
+    customerId: string,
+    orderNumber: string,
+    title: string,
+    body: string,
+  ): Promise<void> {
+    await this.send({
+      userId: customerId,
+      type: 'ORDER_STATUS_CHANGED',
+      title,
+      body,
+      category: 'delivery',
+      metadata: { orderNumber },
+    });
+  }
+
   async notifyOrderDelivered(customerId: string, orderNumber: string): Promise<void> {
     await this.send({
       userId: customerId,

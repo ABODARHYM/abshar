@@ -406,6 +406,24 @@ export class DriverService {
       const full = await this.repo.findOrderForDriver(orderId, userId);
       const items = await this.repo.listOrderItems(orderId);
 
+      if (full && toStatus !== 'delivered') {
+        const statusMessages: Record<string, { title: string; body: string }> = {
+          pickedUp: { title: 'تم استلام طلبك', body: `استلم المندوب طلبك ${full.order_number} من المتجر` },
+          driverGoingToCustomer: { title: 'المندوب في الطريق إليك', body: `طلبك ${full.order_number} في طريقه إليك الآن` },
+          driverArrivedCustomer: { title: 'وصل المندوب', body: `وصل المندوب لتسليم طلبك ${full.order_number}` },
+        };
+        const message = statusMessages[toStatus];
+        if (message) {
+          try {
+            await this.notifications.notifyOrderStatusChanged(
+              full.customer_id, full.order_number, message.title, message.body,
+            );
+          } catch (err) {
+            console.warn('[driver] notify status failed:', (err as Error).message);
+          }
+        }
+      }
+
       if (toStatus === 'delivered') {
         // Commission and delivery ledger entries were committed with the order transition.
         if (full) {

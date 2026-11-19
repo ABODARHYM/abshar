@@ -11,6 +11,7 @@ import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { StoreOrderQueryDto } from './dto/store-order-query.dto';
 import { NotificationsService } from '../notifications/notifications.service';
+import { DispatchService } from '../dispatch/dispatch.service';
 import {
   CategoryRow,
   MyStoreRow,
@@ -133,6 +134,7 @@ export class StoreOwnerService {
   constructor(
     private readonly repo: StoreOwnerRepository,
     private readonly notifications: NotificationsService,
+    private readonly dispatch: DispatchService,
   ) {}
 
   async requireMyStore(userId: string): Promise<MyStoreRow> {
@@ -354,18 +356,6 @@ export class StoreOwnerService {
         console.warn('[store-owner] notify accepted failed:', (e as Error).message);
       }
 
-      try {
-        const sent = await this.notifications.broadcastOrderReadyToDrivers(
-          store.id,
-          full.id,
-          full.order_number,
-          'المتجر',
-          '',
-        );
-        console.log(`[dispatch] ${full.order_number} -> ${sent} drivers`);
-      } catch (e) {
-        console.warn('[store-owner] dispatch failed:', (e as Error).message);
-      }
     }
 
     return this.toOrderResponse(full ?? updated, items);
@@ -469,6 +459,19 @@ export class StoreOwnerService {
         await this.notifications.notifyOrderReady(full.customer_id, full.order_number);
       } catch (e) {
         console.warn('[store-owner] notify ready failed:', (e as Error).message);
+      }
+
+      // توزيع الطلب وإشعار المندوبين بعد أن يصبح جاهزاً للاستلام.
+      try {
+        const result = await this.dispatch.dispatchOrder({
+          orderId: full.id,
+          orderNumber: full.order_number,
+          storeId: store.id,
+          deliveryArea: full.delivery_address_text ?? '',
+        });
+        console.log(`[dispatch] ${full.order_number}: ${result.driversOffered} drivers offered`);
+      } catch (e) {
+        console.error(`[dispatch] failed for ${full.order_number}: ${(e as Error).message}`);
       }
     }
 
