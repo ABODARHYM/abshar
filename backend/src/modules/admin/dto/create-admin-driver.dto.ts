@@ -9,7 +9,7 @@ export class CreateAdminDriverDto {
 
   @ApiProperty({ example: '+9677XXXXXXXX' })
   @IsString()
-  @Matches(/^\\+?[0-9]{7,20}$/)
+  @Matches(/^\+?[0-9]{7,20}$/)
   phone!: string;
 
   @ApiPropertyOptional({ example: 'driver@example.com' })
