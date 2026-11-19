@@ -66,6 +66,8 @@ export class NotificationsService {
           body: notification.body,
           actionUrl: notification.action_url ?? undefined,
           icon: notification.icon ?? undefined,
+          priority: notification.priority ?? input.priority ?? 'normal',
+          tag: `absher-${notification.id}`,
         });
       } catch (e) {
         this.logger.warn(`Push failed: ${(e as Error).message}`);
