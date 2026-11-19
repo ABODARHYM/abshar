@@ -1,3 +1,7 @@
+jest.mock('./notifications.gateway', () => ({
+  NotificationsGateway: class NotificationsGateway {},
+}));
+
 import { NotificationsService } from './notifications.service';
 import { NotificationsRepository } from './notifications.repository';
 import { PushService } from './push.service';
