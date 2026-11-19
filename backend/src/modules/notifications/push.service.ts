@@ -51,7 +51,10 @@ export class PushService {
     if (!this.enabled) return 0;
 
     const subs = await this.repo.listPushSubscriptions(userId);
-    if (subs.length === 0) return 0;
+    if (subs.length === 0) {
+      this.logger.warn(`Push skipped: no active subscriptions for user ${userId}`);
+      return 0;
+    }
 
     const data = JSON.stringify({
       title: payload.title,
@@ -80,6 +83,19 @@ export class PushService {
         }
       }),
     );
-    return results.filter(Boolean).length;
+    const sent = results.filter(Boolean).length;
+    this.logger.log(`Push result for user ${userId}: ${sent}/${subs.length} accepted by push service`);
+    return sent;
+  }
+
+  async testToUser(userId: string): Promise<{ subscriptions: number; accepted: number }> {
+    const subs = await this.repo.listPushSubscriptions(userId);
+    if (subs.length === 0) return { subscriptions: 0, accepted: 0 };
+    const accepted = await this.sendToUser(userId, {
+      title: 'اختبار إشعارات ABSHER BI',
+      body: 'إذا وصل هذا التنبيه، فإن إشعارات هذا الجهاز تعمل بنجاح.',
+      actionUrl: '/',
+    });
+    return { subscriptions: subs.length, accepted };
   }
 }
