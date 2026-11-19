@@ -83,8 +83,13 @@ export class PushService {
           data,
           { TTL: 60 * 60 * 24 },
         );
-        await this.repo.markPushUsed(sub.endpoint);
         acceptedEndpoints.push(sub.endpoint);
+        // Usage telemetry must never turn a provider-accepted push into a retry.
+        try {
+          await this.repo.markPushUsed(sub.endpoint);
+        } catch (telemetryError) {
+          this.logger.warn(`Could not update push usage for endpoint: ${(telemetryError as Error).message}`);
+        }
       } catch (err) {
         const e = err as { statusCode?: number; message?: string };
         this.logger.warn(`Push failed (${sub.endpoint.slice(0, 60)}…): ${e.message ?? 'unknown error'}`);
