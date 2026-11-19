@@ -294,6 +294,11 @@ export class AdminService {
 
   // ───── Drivers ─────
 
+  async listDeliveryZones(): Promise<Array<{ id: string; city: string; nameAr: string }>> {
+    const zones = await this.repo.listActiveDeliveryZones();
+    return zones.map((zone) => ({ id: zone.id, city: zone.city, nameAr: zone.name_ar }));
+  }
+
   async listDrivers(query: AdminUserQueryDto): Promise<Paginated<AdminDriverListItemDto>> {
     const { rows, total } = await this.repo.listDrivers(query);
     return buildPage(
@@ -303,6 +308,7 @@ export class AdminService {
         email: d.email,
         phone: d.phone,
         vehicleType: d.vehicle_type,
+        zoneName: d.zone_name ?? null,
         status: d.status,
         availability: d.availability,
         ratingAvg: Number(d.rating_avg),
@@ -340,6 +346,7 @@ export class AdminService {
         passwordHash,
         vehicleType: dto.vehicleType || 'motorcycle',
         vehiclePlate: dto.vehiclePlate?.trim() || null,
+        zoneId: dto.zoneId ?? null,
         actorId,
         actorRole: actorRoles[0] ?? null,
       });
@@ -357,6 +364,9 @@ export class AdminService {
     } catch (error) {
       if ((error as { code?: string }).code === '23505') {
         throw new ConflictException('رقم الهاتف أو البريد الإلكتروني مسجل مسبقاً');
+      }
+      if ((error as { code?: string }).code === 'INVALID_DELIVERY_ZONE') {
+        throw new BadRequestException('منطقة التوصيل غير موجودة أو غير نشطة');
       }
       throw error;
     }
