@@ -64,8 +64,8 @@ export class NotificationsRepository {
          WHERE (status = 'pending' AND next_attempt_at <= now())
             OR (status = 'processing' AND locked_at < now() - interval '2 minutes')
          ORDER BY next_attempt_at ASC, created_at ASC
-         FOR UPDATE SKIP LOCKED
          LIMIT $1
+         FOR UPDATE SKIP LOCKED
        )
        UPDATE notification_push_outbox o
        SET status = 'processing', locked_at = now(), attempts = o.attempts + 1, updated_at = now()
