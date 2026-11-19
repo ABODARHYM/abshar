@@ -323,14 +323,14 @@ export class AdminService {
     phone: string;
     email: string | null;
     username: string;
-    temporaryPassword: string;
+    initialPassword: string;
     status: 'pending';
     vehicleType: string;
   }> {
     const phone = dto.phone.trim();
     const email = dto.email?.trim().toLowerCase() || null;
-    const temporaryPassword = randomBytes(18).toString('base64url');
-    const passwordHash = await bcrypt.hash(temporaryPassword, 12);
+    const initialPassword = randomBytes(18).toString('base64url');
+    const passwordHash = await bcrypt.hash(initialPassword, 12);
 
     try {
       const created = await this.repo.createDriverAccount({
@@ -350,7 +350,7 @@ export class AdminService {
         phone,
         email,
         username: phone,
-        temporaryPassword,
+        initialPassword,
         status: 'pending',
         vehicleType: dto.vehicleType || 'motorcycle',
       };
