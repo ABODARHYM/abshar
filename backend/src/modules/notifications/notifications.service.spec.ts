@@ -52,7 +52,7 @@ describe('NotificationsService durable push delivery', () => {
     const { service, repo, push } = makeService();
     (repo.claimPushOutbox as jest.Mock).mockResolvedValue([{ id: 'job-1', user_id: 'user-1', payload: { title: 't', body: 'b' }, attempts: 1 }]);
     await (service as any).processPushOutbox();
-    expect(push.sendToUser).toHaveBeenCalledWith('user-1', { title: 't', body: 'b' });
+    expect(push.sendToUser).toHaveBeenCalledWith('user-1', { title: 't', body: 'b' }, true);
     expect(repo.markPushOutboxSent).toHaveBeenCalledWith('job-1');
   });
 
