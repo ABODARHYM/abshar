@@ -1,6 +1,15 @@
 const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
+  async rewrites() {
+    const apiOrigin = (process.env.ABSHER_API_ORIGIN || 'https://absher-bi-backend-staging.onrender.com').replace(/\\/$/, '');
+    return [
+      {
+        source: '/api/v1/:path*',
+        destination: `${apiOrigin}/api/v1/:path*`,
+      },
+    ];
+  },
   async headers() {
     return [
       {
