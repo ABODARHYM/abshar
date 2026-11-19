@@ -1,3 +1,8 @@
+-- Add every notification type already emitted by the application but missing from the original enum.
+ALTER TYPE notification_type ADD VALUE IF NOT EXISTS 'ORDER_CANCELLED';
+ALTER TYPE notification_type ADD VALUE IF NOT EXISTS 'ORDER_STATUS_CHANGED';
+ALTER TYPE notification_type ADD VALUE IF NOT EXISTS 'EARNINGS_ADDED';
+ALTER TYPE notification_type ADD VALUE IF NOT EXISTS 'LOYALTY_EARNED';
 -- 037: Durable Web Push outbox
 -- Notification creation and push delivery scheduling commit atomically.
 

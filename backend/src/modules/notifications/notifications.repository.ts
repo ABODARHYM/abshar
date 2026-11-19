@@ -29,7 +29,7 @@ export class NotificationsRepository {
       input.userId,
       input.title,
       input.body,
-      input.type ?? 'info',
+      input.type ?? 'SYSTEM',
       input.category ?? 'general',
       input.priority ?? 'normal',
       input.icon ?? null,
