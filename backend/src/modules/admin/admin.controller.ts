@@ -180,7 +180,7 @@ export class AdminController {
     phone: string;
     email: string | null;
     username: string;
-    temporaryPassword: string;
+    initialPassword: string;
     status: 'pending';
     vehicleType: string;
   }> {
