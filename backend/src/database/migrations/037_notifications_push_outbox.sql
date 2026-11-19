@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS notification_push_outbox (
   status varchar(20) NOT NULL DEFAULT 'pending'
     CHECK (status IN ('pending', 'processing', 'sent', 'failed')),
   attempts integer NOT NULL DEFAULT 0 CHECK (attempts >= 0),
+  delivered_endpoints text[] NOT NULL DEFAULT '{}',
   next_attempt_at timestamptz NOT NULL DEFAULT now(),
   locked_at timestamptz,
   sent_at timestamptz,
