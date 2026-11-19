@@ -45,20 +45,20 @@ export class NotificationsRepository {
 
   async createWithPushOutbox(
     input: CreateNotificationInput,
-    payload: { title: string; body: string; actionUrl?: string; icon?: string; priority?: string; tag: string },
+    payload: { title: string; body: string; actionUrl?: string; icon?: string; priority?: string },
   ): Promise<NotificationRow> {
     return this.db.transaction(async (client) => {
       const notification = await this.create(client, input);
       await client.query(
         `INSERT INTO notification_push_outbox (notification_id, user_id, payload) VALUES ($1, $2, $3::jsonb)`,
-        [notification.id, input.userId, JSON.stringify(payload)],
+        [notification.id, input.userId, JSON.stringify({ ...payload, tag: 'absher-' + notification.id })],
       );
       return notification;
     });
   }
 
   async claimPushOutbox(limit = 20): Promise<Array<{ id: string; user_id: string; payload: Record<string, any>; attempts: number }>> {
-    const r = await this.db.query(
+    const r = await this.db.query<{ id: string; user_id: string; payload: Record<string, any>; attempts: number }>(
       `WITH picked AS (
          SELECT id FROM notification_push_outbox
          WHERE (status = 'pending' AND next_attempt_at <= now())

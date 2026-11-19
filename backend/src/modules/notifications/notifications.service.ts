@@ -84,7 +84,6 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
           actionUrl: input.actionUrl,
           icon: input.icon,
           priority: input.priority ?? 'normal',
-          tag: 'absher-' + input.userId + '-' + Date.now(),
         })
       : await this.repo.create(null, input);
     try {
