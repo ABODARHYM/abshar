@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEmail, IsIn, IsOptional, IsString, Length, Matches, MaxLength } from 'class-validator';
+import { IsEmail, IsIn, IsOptional, IsString, IsUUID, Length, Matches, MaxLength } from 'class-validator';
 
 export class CreateAdminDriverDto {
   @ApiProperty({ example: 'أحمد محمد' })
@@ -18,6 +18,11 @@ export class CreateAdminDriverDto {
   @IsEmail()
   @MaxLength(254)
   email?: string;
+
+  @ApiPropertyOptional({ description: 'Active delivery zone UUID' })
+  @IsOptional()
+  @IsUUID()
+  zoneId?: string;
 
   @ApiPropertyOptional({ enum: ['motorcycle', 'car', 'bicycle', 'scooter'], default: 'motorcycle' })
   @IsOptional()
