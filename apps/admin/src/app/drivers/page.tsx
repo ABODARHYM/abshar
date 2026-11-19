@@ -212,7 +212,7 @@ export default function DriversPage() {
                   </div>
                   <div>
                     <label className="block text-sm font-bold mb-2">رقم الهاتف *</label>
-                    <input className="input w-full" required type="tel" dir="ltr" pattern="\+?[0-9]{7,20}" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="+9677XXXXXXXX" />
+                    <input className="input w-full" required type="tel" dir="ltr" pattern="\+?[0-9]{7,19}" minLength={7} maxLength={20} value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="+9677XXXXXXXX" />
                     <p className="text-[11px] text-[var(--text-muted)] mt-1">سيكون رقم الهاتف هو اسم المستخدم لتسجيل الدخول</p>
                   </div>
                   <div>
