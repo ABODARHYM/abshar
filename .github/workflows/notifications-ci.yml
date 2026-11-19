@@ -1,4 +1,5 @@
 name: Notifications CI
+# Re-run CI after notification lifecycle type-safety fixes
 
 on:
   push:
