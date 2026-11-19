@@ -66,6 +66,8 @@ export class NotificationsService {
           body: notification.body,
           actionUrl: notification.action_url ?? undefined,
           icon: notification.icon ?? undefined,
+          image: notification.icon ?? undefined,
+          priority: notification.priority ?? undefined,
         });
       } catch (e) {
         this.logger.warn(`Push failed: ${(e as Error).message}`);
