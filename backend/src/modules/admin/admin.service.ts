@@ -1,9 +1,12 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { randomBytes } from 'crypto';
+import * as bcrypt from 'bcryptjs';
 import { ErrorCode } from '../../common/error-codes';
 import { buildPage, Paginated } from '../../common/pagination.dto';
 import { AdminRepository } from './admin.repository';
@@ -20,6 +23,7 @@ import {
 } from '../orders/order-state-machine';
 import { NotificationsService } from '../notifications/notifications.service';
 import { AdminUserQueryDto } from './dto/admin-user-query.dto';
+import { CreateAdminDriverDto } from './dto/create-admin-driver.dto';
 import { AdminOrderQueryDto } from './dto/admin-order-query.dto';
 import {
   AdminAuditLogDto,
@@ -307,6 +311,55 @@ export class AdminService {
       total,
       query,
     );
+  }
+
+  async createDriver(
+    actorId: string,
+    actorRoles: string[],
+    dto: CreateAdminDriverDto,
+  ): Promise<{
+    userId: string;
+    fullName: string;
+    phone: string;
+    email: string | null;
+    username: string;
+    temporaryPassword: string;
+    status: 'pending';
+    vehicleType: string;
+  }> {
+    const phone = dto.phone.trim();
+    const email = dto.email?.trim().toLowerCase() || null;
+    const temporaryPassword = randomBytes(18).toString('base64url');
+    const passwordHash = await bcrypt.hash(temporaryPassword, 12);
+
+    try {
+      const created = await this.repo.createDriverAccount({
+        fullName: dto.fullName.trim(),
+        phone,
+        email,
+        passwordHash,
+        vehicleType: dto.vehicleType || 'motorcycle',
+        vehiclePlate: dto.vehiclePlate?.trim() || null,
+        actorId,
+        actorRole: actorRoles[0] ?? null,
+      });
+
+      return {
+        userId: created.userId,
+        fullName: dto.fullName.trim(),
+        phone,
+        email,
+        username: phone,
+        temporaryPassword,
+        status: 'pending',
+        vehicleType: dto.vehicleType || 'motorcycle',
+      };
+    } catch (error) {
+      if ((error as { code?: string }).code === '23505') {
+        throw new ConflictException('رقم الهاتف أو البريد الإلكتروني مسجل مسبقاً');
+      }
+      throw error;
+    }
   }
 
   async updateDriverStatus(
