@@ -64,6 +64,12 @@ export class NotificationsController {
     return this.service.pushPublicKey();
   }
 
+  @Post('push/test')
+  @ApiOperation({ summary: 'Send a diagnostic push notification to current user' })
+  testPush(@CurrentUser() user: AuthUser) {
+    return this.service.testPush(user.id);
+  }
+
   @Post('push/subscribe')
   @ApiOperation({ summary: 'Subscribe to web push' })
   subscribe(@CurrentUser() user: AuthUser, @Body() dto: PushSubscribeDto) {
