@@ -330,6 +330,38 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
     });
   }
 
+  async notifyStoreOrderStatusChanged(
+    storeId: string,
+    orderNumber: string,
+    title: string,
+    body: string,
+  ): Promise<void> {
+    const storeOwnerId = await this.repo.getStoreOwnerId(storeId);
+    if (!storeOwnerId) return;
+    await this.send({
+      userId: storeOwnerId,
+      type: 'ORDER_STATUS_CHANGED',
+      title,
+      body,
+      category: 'delivery',
+      metadata: { orderNumber, storeId },
+    });
+  }
+
+  async notifyStoreOrderCancelled(storeId: string, orderNumber: string, reason: string): Promise<void> {
+    const storeOwnerId = await this.repo.getStoreOwnerId(storeId);
+    if (!storeOwnerId) return;
+    await this.send({
+      userId: storeOwnerId,
+      type: 'ORDER_CANCELLED',
+      title: 'تم إلغاء الطلب',
+      body: `الطلب ${orderNumber} تم إلغاؤه: ${reason}`,
+      category: 'order',
+      priority: 'high',
+      metadata: { orderNumber, storeId, reason },
+    });
+  }
+
   async notifyOrderDelivered(customerId: string, orderNumber: string): Promise<void> {
     await this.send({
       userId: customerId,
