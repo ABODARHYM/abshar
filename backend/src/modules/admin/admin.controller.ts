@@ -161,6 +161,13 @@ export class AdminController {
 
   // ───── Drivers ─────
 
+  @Get('delivery-zones')
+  @RequirePermission('drivers.manage')
+  @ApiOperation({ summary: 'List active delivery zones for driver assignment' })
+  listDeliveryZones(): Promise<Array<{ id: string; city: string; nameAr: string }>> {
+    return this.service.listDeliveryZones();
+  }
+
   @Get('drivers')
   @RequirePermission('drivers.read')
   @ApiOperation({ summary: 'List all drivers' })
