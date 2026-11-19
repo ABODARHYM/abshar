@@ -23,6 +23,9 @@ CREATE TABLE IF NOT EXISTS notification_push_outbox (
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 
+ALTER TABLE notification_push_outbox
+  ADD COLUMN IF NOT EXISTS delivered_endpoints text[] NOT NULL DEFAULT '{}';
+
 CREATE INDEX IF NOT EXISTS notification_push_outbox_pending_idx
   ON notification_push_outbox (next_attempt_at, created_at)
   WHERE status IN ('pending', 'processing');
