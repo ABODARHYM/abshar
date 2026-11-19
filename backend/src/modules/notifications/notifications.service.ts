@@ -361,7 +361,7 @@ export class NotificationsService {
       body: `${storeName} - ${deliveryArea}${distanceText}`,
       category: 'delivery',
       priority: 'high',
-      actionUrl: `/orders/${orderId}`,
+      actionUrl: '/active',
       metadata: {
         orderId,
         orderNumber,
