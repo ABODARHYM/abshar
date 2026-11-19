@@ -17,6 +17,8 @@ type Driver = {
   ratingCount: number;
 };
 
+type DeliveryZone = { id: string; city: string; nameAr: string };
+
 type CreatedCredentials = {
   fullName: string;
   phone: string;
@@ -34,6 +36,7 @@ const VEHICLES = [
 
 export default function DriversPage() {
   const [drivers, setDrivers] = useState<Driver[]>([]);
+  const [zones, setZones] = useState<DeliveryZone[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showCreate, setShowCreate] = useState(false);
@@ -44,6 +47,7 @@ export default function DriversPage() {
     fullName: '',
     phone: '',
     email: '',
+    zoneId: '',
     vehicleType: 'motorcycle',
     vehiclePlate: '',
   });
@@ -66,13 +70,22 @@ export default function DriversPage() {
     }
   }, []);
 
-  useEffect(() => { void loadDrivers(); }, [loadDrivers]);
+  useEffect(() => {
+    void loadDrivers();
+    authFetch('/api/v1/admin/delivery-zones')
+      .then(async (res) => {
+        if (!res.ok) throw new Error('تعذر تحميل مناطق التوصيل');
+        const data = await res.json();
+        setZones(Array.isArray(data) ? data : []);
+      })
+      .catch(() => setZones([]));
+  }, [loadDrivers]);
 
   const resetCreate = () => {
     setShowCreate(false);
     setCreated(null);
     setFormError('');
-    setForm({ fullName: '', phone: '', email: '', vehicleType: 'motorcycle', vehiclePlate: '' });
+    setForm({ fullName: '', phone: '', email: '', zoneId: '', vehicleType: 'motorcycle', vehiclePlate: '' });
   };
 
   const createDriver = async (event: FormEvent<HTMLFormElement>) => {
@@ -86,6 +99,7 @@ export default function DriversPage() {
           fullName: form.fullName.trim(),
           phone: form.phone.trim(),
           ...(form.email.trim() ? { email: form.email.trim() } : {}),
+          ...(form.zoneId ? { zoneId: form.zoneId } : {}),
           vehicleType: form.vehicleType,
           ...(form.vehiclePlate.trim() ? { vehiclePlate: form.vehiclePlate.trim() } : {}),
         }),
@@ -163,6 +177,11 @@ export default function DriversPage() {
       render: (d: Driver) => <span className="text-xs">{VEHICLES.find((v) => v.value === d.vehicleType)?.label || d.vehicleType || '—'}</span>,
     },
     {
+      key: 'zone',
+      label: 'منطقة التوصيل',
+      render: (d: Driver) => <span className="text-xs">{(d as Driver & { zoneName?: string }).zoneName || 'غير محددة'}</span>,
+    },
+    {
       key: 'status',
       label: 'الحالة',
       render: (d: Driver) => (
@@ -218,6 +237,14 @@ export default function DriversPage() {
                   <div>
                     <label className="block text-sm font-bold mb-2">البريد الإلكتروني (اختياري)</label>
                     <input className="input w-full" type="email" dir="ltr" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="driver@example.com" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-bold mb-2">منطقة التوصيل</label>
+                    <select className="input w-full" value={form.zoneId} onChange={(e) => setForm({ ...form, zoneId: e.target.value })}>
+                      <option value="">بدون تحديد منطقة حالياً</option>
+                      {zones.map((zone) => <option key={zone.id} value={zone.id}>{zone.city} — {zone.nameAr}</option>)}
+                    </select>
+                    <p className="text-[11px] text-[var(--text-muted)] mt-1">تُعرض المناطق النشطة المسجلة في النظام فقط.</p>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
