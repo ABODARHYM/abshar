@@ -18,6 +18,8 @@ export default function PushSetup() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [permission, setPermission] = useState<NotificationPermission>('default');
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState('');
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -58,6 +60,20 @@ export default function PushSetup() {
     setLoading(false);
   };
 
+  const testPush = async () => {
+    setTesting(true);
+    setTestResult('جارٍ إرسال إشعار اختبار...');
+    try {
+      const res = await authFetch('/api/v1/notifications/push/test', { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'فشل اختبار الإشعار');
+      if (data.subscriptions === 0) setTestResult('لا يوجد اشتراك محفوظ لهذا الحساب على الخادم. أوقف الإشعارات ثم فعّلها مجدداً.');
+      else if (data.accepted === 0) setTestResult(`وجدنا ${data.subscriptions} اشتراكاً، لكن خدمة الإرسال رفضت الإشعار. راجع سجل الخادم.`);
+      else setTestResult(`قبلت خدمة الإرسال الإشعار (${data.accepted}/${data.subscriptions}). انتظر قليلاً وتحقق من إشعارات الهاتف.`);
+    } catch (e) { setTestResult('تعذر الاختبار: ' + (e as Error).message); }
+    setTesting(false);
+  };
+
   const disable = async () => {
     setLoading(true);
     try {
@@ -87,6 +103,8 @@ export default function PushSetup() {
       <button onClick={subscribed ? disable : enable} disabled={loading} className={`btn btn-full ${subscribed ? 'btn-ghost text-red-400' : 'btn-primary'}`}>
         {loading ? '⏳...' : subscribed ? '🔕 إيقاف' : '🔔 تفعيل'}
       </button>
+      {subscribed && <button onClick={testPush} disabled={testing} className="btn btn-full btn-ghost mt-3">{testing ? '⏳ جارٍ الاختبار' : '🧪 إرسال إشعار تجريبي'}</button>}
+      {testResult && <p className="text-xs mt-3 text-center text-[var(--text-secondary)]">{testResult}</p>}
       {permission === 'denied' && <p className="text-xs text-[var(--text-muted)] mt-2 text-center">افتح إعدادات المتصفح للسماح</p>}
     </div>
   );
