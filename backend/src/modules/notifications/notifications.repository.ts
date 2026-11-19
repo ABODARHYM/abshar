@@ -83,7 +83,7 @@ export class NotificationsRepository {
       `UPDATE notification_push_outbox
        SET delivered_endpoints = ARRAY(
              SELECT DISTINCT endpoint
-             FROM unnest(delivered_endpoints || $2::text[]) AS endpoint
+             FROM unnest(delivered_endpoints || $2::text[]) AS t(endpoint)
            ),
            updated_at = now()
        WHERE id = $1`,
