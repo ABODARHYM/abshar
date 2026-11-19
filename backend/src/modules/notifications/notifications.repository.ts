@@ -167,6 +167,13 @@ export class NotificationsRepository {
     return r.rowCount ?? 0;
   }
 
+  async getStoreOwnerId(storeId: string): Promise<string | null> {
+    const r = await this.db.query<{ owner_user_id: string }>(
+      `SELECT owner_user_id FROM stores WHERE id = $1 AND deleted_at IS NULL LIMIT 1`,
+      [storeId],
+    );
+    return r.rows[0]?.owner_user_id ?? null;
+  }
   async getAvailableDriversForStore(
     storeId: string,
     limit: number,

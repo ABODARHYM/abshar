@@ -207,17 +207,24 @@ export class NotificationsService {
   // 🆕 notifyDriverComing — المندوب في الطريق
   // ═══════════════════════════════════════════════════════════
   async notifyDriverComing(
-    recipientId: string,
+    storeId: string,
     orderNumber: string,
     driverName: string,
   ): Promise<void> {
+    // Resolve the store owner; never address a notification using the store primary key.
+    const storeOwnerId = await this.repo.getStoreOwnerId(storeId);
+    if (!storeOwnerId) {
+      this.logger.warn('Skipping driver-arrival notification: no owner for store ' + storeId);
+      return;
+    }
     await this.send({
-      userId: recipientId,
+      userId: storeOwnerId,
       type: 'DRIVER_ASSIGNED',
       title: '🛵 مندوب في الطريق',
-      body: `${driverName} قادم للطلب ${orderNumber}`,
+      body: `${driverName} قادم لاستلام الطلب ${orderNumber}`,
       category: 'delivery',
-      metadata: { orderNumber, driverName },
+      priority: 'high',
+      metadata: { orderNumber, driverName, storeId, action: 'driver_arriving' },
     });
   }
 
@@ -354,6 +361,7 @@ export class NotificationsService {
       body: `${storeName} - ${deliveryArea}${distanceText}`,
       category: 'delivery',
       priority: 'high',
+      actionUrl: `/orders/${orderId}`,
       metadata: {
         orderId,
         orderNumber,
