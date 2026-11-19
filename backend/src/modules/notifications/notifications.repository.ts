@@ -177,7 +177,7 @@ export class NotificationsRepository {
       SELECT DISTINCT d.user_id
       FROM drivers d
       JOIN stores s ON s.id = $1
-      WHERE d.is_available = true
+      WHERE d.availability = 'online'
         AND d.status = 'active'
       LIMIT $2
       `,

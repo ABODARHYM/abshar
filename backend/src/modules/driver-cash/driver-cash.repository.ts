@@ -151,11 +151,10 @@ export class DriverCashRepository {
         INSERT INTO transactions (
           order_id, account_type, account_id, type, direction, amount, currency, description, created_by, idempotency_key
         )
-        VALUES ($1, 'driver', $2, 'cod_collection', 'credit', $3, $4, 'Cash on delivery collected', $2,
-          'order:' || $1::text || ':driver:cod_collection:credit')
+        VALUES ($1, 'driver', $2, 'cod_collection', 'credit', $3, $4, 'Cash on delivery collected', $2, $5)
         ON CONFLICT DO NOTHING
         `,
-        [params.orderId, params.driverId, params.amount, params.currency],
+        [params.orderId, params.driverId, params.amount, params.currency, `order:${params.orderId}:driver:cod_collection:credit`],
       );
     }
 

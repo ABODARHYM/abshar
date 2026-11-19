@@ -314,10 +314,10 @@ export class FinanceRepository {
           await client.query(
             `INSERT INTO transactions
               (settlement_id, account_type, account_id, type, direction, amount, currency, description, created_by, idempotency_key)
-             VALUES ($1, $2, $3, 'settlement_payout', 'debit', $4, $5, $6, $7, 'settlement:' || $1::text || ':payout')
+             VALUES ($1, $2, $3, 'settlement_payout', 'debit', $4, $5, $6, $7, $8)
              ON CONFLICT DO NOTHING`,
             [id, current.party_type, current.party_id, current.net_amount,
-              current.currency, `Settlement payout ${id}`, actorId],
+              current.currency, `Settlement payout ${id}`, actorId, `settlement:${id}:payout`],
           );
         }
       }
@@ -532,11 +532,10 @@ export class FinanceRepository {
             order_id, account_type, account_id, type, direction, amount,
             currency, description, created_by, idempotency_key
           )
-          VALUES ($1, 'store', $2, 'store_earning', 'credit', $3, $4, 'Store earning', $5,
-            'order:' || $1::text || ':store:store_earning:credit')
+          VALUES ($1, 'store', $2, 'store_earning', 'credit', $3, $4, 'Store earning', $5, $6)
           ON CONFLICT DO NOTHING
           `,
-          [orderId, order.store_id, commissionRow.store_amount, currency, creatorId],
+          [orderId, order.store_id, commissionRow.store_amount, currency, creatorId, `order:${orderId}:store:store_earning:credit`],
         );
       }
 
@@ -569,11 +568,10 @@ export class FinanceRepository {
             order_id, account_type, type, direction, amount,
             currency, description, created_by, idempotency_key
           )
-          VALUES ($1, 'platform', 'commission', 'credit', $2, $3, 'Platform commission', $4,
-            'order:' || $1::text || ':platform:commission:credit')
+          VALUES ($1, 'platform', 'commission', 'credit', $2, $3, 'Platform commission', $4, $5)
           ON CONFLICT DO NOTHING
           `,
-          [orderId, commissionRow.platform_amount, currency, creatorId],
+          [orderId, commissionRow.platform_amount, currency, creatorId, `order:${orderId}:platform:commission:credit`],
         );
       }
 
@@ -607,11 +605,10 @@ export class FinanceRepository {
               order_id, account_type, account_id, type, direction, amount,
               currency, description, created_by, idempotency_key
             )
-            VALUES ($1, 'driver', $2, 'driver_earning', 'credit', $3, $4, 'Driver earning', $5,
-              'order:' || $1::text || ':driver:driver_earning:credit')
+            VALUES ($1, 'driver', $2, 'driver_earning', 'credit', $3, $4, 'Driver earning', $5, $6)
             ON CONFLICT DO NOTHING
             `,
-            [orderId, order.driver_id, commissionRow.driver_amount, currency, creatorId],
+            [orderId, order.driver_id, commissionRow.driver_amount, currency, creatorId, `order:${orderId}:driver:driver_earning:credit`],
           );
         }
       }
