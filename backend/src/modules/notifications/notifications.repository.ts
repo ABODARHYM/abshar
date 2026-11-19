@@ -43,6 +43,59 @@ export class NotificationsRepository {
     return r.rows[0];
   }
 
+  async createWithPushOutbox(
+    input: CreateNotificationInput,
+    payload: { title: string; body: string; actionUrl?: string; icon?: string; priority?: string; tag: string },
+  ): Promise<NotificationRow> {
+    return this.db.transaction(async (client) => {
+      const notification = await this.create(client, input);
+      await client.query(
+        `INSERT INTO notification_push_outbox (notification_id, user_id, payload) VALUES ($1, $2, $3::jsonb)`,
+        [notification.id, input.userId, JSON.stringify(payload)],
+      );
+      return notification;
+    });
+  }
+
+  async claimPushOutbox(limit = 20): Promise<Array<{ id: string; user_id: string; payload: Record<string, any>; attempts: number }>> {
+    const r = await this.db.query(
+      `WITH picked AS (
+         SELECT id FROM notification_push_outbox
+         WHERE (status = 'pending' AND next_attempt_at <= now())
+            OR (status = 'processing' AND locked_at < now() - interval '2 minutes')
+         ORDER BY next_attempt_at ASC, created_at ASC
+         FOR UPDATE SKIP LOCKED
+         LIMIT $1
+       )
+       UPDATE notification_push_outbox o
+       SET status = 'processing', locked_at = now(), attempts = o.attempts + 1, updated_at = now()
+       FROM picked
+       WHERE o.id = picked.id
+       RETURNING o.id, o.user_id, o.payload, o.attempts`
+      , [limit],
+    );
+    return r.rows;
+  }
+
+  async markPushOutboxSent(id: string): Promise<void> {
+    await this.db.query(
+      `UPDATE notification_push_outbox SET status = 'sent', sent_at = now(), locked_at = NULL, last_error = NULL, updated_at = now() WHERE id = $1`,
+      [id],
+    );
+  }
+
+  async markPushOutboxFailed(id: string, attempts: number, error: string): Promise<void> {
+    await this.db.query(
+      `UPDATE notification_push_outbox
+       SET status = CASE WHEN $2 >= 20 THEN 'failed' ELSE 'pending' END,
+           next_attempt_at = CASE WHEN $2 >= 20 THEN next_attempt_at
+             ELSE now() + make_interval(secs => LEAST(3600, 5 * power(2, LEAST($2::int, 10)))::int) END,
+           locked_at = NULL, last_error = LEFT($3, 2000), updated_at = now()
+       WHERE id = $1`
+      , [id, attempts, error],
+    );
+  }
+
   async listMine(
     userId: string,
     q: PaginationQueryDto & { category?: string; unreadOnly?: boolean },

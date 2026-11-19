@@ -1,8 +1,8 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { ErrorCode } from '../../common/error-codes';
 import { PaginationQueryDto, buildPage } from '../../common/pagination.dto';
 import { NotificationsRepository } from './notifications.repository';
-import { PushService } from './push.service';
+import { PushService, PushPayload } from './push.service';
 import { NotificationsGateway } from './notifications.gateway';
 import { PushSubscribeDto } from './notifications.dto';
 import {
@@ -33,8 +33,11 @@ export interface NotificationListResponse {
 }
 
 @Injectable()
-export class NotificationsService {
+export class NotificationsService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(NotificationsService.name);
+
+  private pushOutboxTimer?: ReturnType<typeof setInterval>;
+  private processingPushOutbox = false;
 
   constructor(
     private readonly repo: NotificationsRepository,
@@ -42,8 +45,48 @@ export class NotificationsService {
     private readonly gateway: NotificationsGateway,
   ) {}
 
+  onModuleInit(): void {
+    if (!this.push.isEnabled()) return;
+    this.pushOutboxTimer = setInterval(() => { void this.processPushOutbox(); }, 5000);
+    void this.processPushOutbox();
+  }
+
+  onModuleDestroy(): void {
+    if (this.pushOutboxTimer) clearInterval(this.pushOutboxTimer);
+  }
+
+  private async processPushOutbox(): Promise<void> {
+    if (!this.push.isEnabled() || this.processingPushOutbox) return;
+    this.processingPushOutbox = true;
+    try {
+      const jobs = await this.repo.claimPushOutbox(20);
+      for (const job of jobs) {
+        try {
+          const accepted = await this.push.sendToUser(job.user_id, job.payload as PushPayload);
+          if (accepted > 0) await this.repo.markPushOutboxSent(job.id);
+          else await this.repo.markPushOutboxFailed(job.id, job.attempts, 'No active push subscription accepted the notification');
+        } catch (error) {
+          await this.repo.markPushOutboxFailed(job.id, job.attempts, (error as Error).message);
+        }
+      }
+    } catch (error) {
+      this.logger.error('Push outbox processing failed: ' + (error as Error).message);
+    } finally {
+      this.processingPushOutbox = false;
+    }
+  }
+
   async send(input: CreateNotificationInput): Promise<NotificationRow> {
-    const notification = await this.repo.create(null, input);
+    const notification = input.push !== false && this.push.isEnabled()
+      ? await this.repo.createWithPushOutbox(input, {
+          title: input.title,
+          body: input.body,
+          actionUrl: input.actionUrl,
+          icon: input.icon,
+          priority: input.priority ?? 'normal',
+          tag: 'absher-' + input.userId + '-' + Date.now(),
+        })
+      : await this.repo.create(null, input);
     try {
       this.gateway.emitToUser(input.userId, 'notification', {
         id: notification.id,
@@ -58,20 +101,6 @@ export class NotificationsService {
       });
     } catch (e) {
       this.logger.warn(`WS emit failed: ${(e as Error).message}`);
-    }
-    if (input.push !== false && this.push.isEnabled()) {
-      try {
-        await this.push.sendToUser(input.userId, {
-          title: notification.title,
-          body: notification.body,
-          actionUrl: notification.action_url ?? undefined,
-          icon: notification.icon ?? undefined,
-          priority: notification.priority ?? input.priority ?? 'normal',
-          tag: `absher-${notification.id}`,
-        });
-      } catch (e) {
-        this.logger.warn(`Push failed: ${(e as Error).message}`);
-      }
     }
     return notification;
   }
