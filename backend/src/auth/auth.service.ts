@@ -471,7 +471,7 @@ export class AuthService {
    */
   private buildPhoneLoginCandidates(identifier: string): string[] {
     const candidates = new Set<string>([identifier]);
-    const digits = identifier.replace(/\\D/g, '');
+    const digits = identifier.replace(/\D/g, '');
 
     if (!digits) return [...candidates];
 
@@ -485,7 +485,7 @@ export class AuthService {
       local = digits.slice(1);
     }
 
-    if (/^7\\d{8}$/.test(local)) {
+    if (/^7\d{8}$/.test(local)) {
       candidates.add(local);
       candidates.add('0' + local);
       candidates.add('967' + local);
