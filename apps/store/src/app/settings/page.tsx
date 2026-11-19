@@ -46,7 +46,7 @@ export default function SettingsPage() {
     try {
       const res = await authFetch('/api/v1/store-owner/my-store', {
         method: 'PATCH',
-        body: JSON.stringify({ isOpen: !store.isOpen }),
+        body: JSON.stringify({ isOpen: !store.isOpen, acceptsOrders: !store.isOpen }),
       });
       if (res.ok) loadStore();
     } catch {}
