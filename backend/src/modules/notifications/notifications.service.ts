@@ -413,6 +413,10 @@ export class NotificationsService {
     return { success: true };
   }
 
+  async testPush(userId: string) {
+    return this.push.testToUser(userId);
+  }
+
   pushPublicKey() {
     return {
       publicKey: this.push.getPublicKey(),
