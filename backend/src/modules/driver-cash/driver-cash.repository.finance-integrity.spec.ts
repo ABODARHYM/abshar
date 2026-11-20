@@ -82,4 +82,28 @@ describe('DriverCashRepository finance integrity', () => {
       "t.type = 'settlement_payout' AND t.direction = 'debit' AND t.settlement_id IS NULL",
     );
   });
+  it('rejects an existing driver earning that does not match the requested order credit', async () => {
+    const client = {
+      query: jest.fn().mockResolvedValue({
+        rows: [{
+          account_type: 'driver',
+          account_id: 'another-driver',
+          direction: 'credit',
+          amount: '125.00',
+          currency: 'YER',
+        }],
+        rowCount: 1,
+      }),
+    };
+    const repo = new DriverCashRepository({} as any);
+
+    await expect(repo.recordDriverEarning(client as any, {
+      driverId: 'driver-1',
+      orderId: 'order-1',
+      amount: 125,
+      currency: 'YER',
+    })).rejects.toThrow('existing driver earning conflicts');
+    expect(client.query).toHaveBeenCalledTimes(1);
+  });
+
 });
