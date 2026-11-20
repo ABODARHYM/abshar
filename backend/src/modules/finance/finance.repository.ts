@@ -306,7 +306,7 @@ export class FinanceRepository {
           if (
             payout.account_type !== current.party_type ||
             payout.account_id !== current.party_id ||
-            Number(payout.amount) !== Number(current.net_amount) ||
+            payout.amount !== current.net_amount ||
             payout.currency?.trim() !== current.currency.trim()
           ) {
             throw new ConflictException('An existing settlement payout conflicts with the settlement amount, party, or currency');
@@ -521,7 +521,7 @@ export class FinanceRepository {
           earning.account_type !== 'store' ||
           earning.account_id !== order.store_id ||
           earning.direction !== 'credit' ||
-          Number(earning.amount) !== Number(commissionRow.store_amount) ||
+          earning.amount !== String(commissionRow.store_amount) ||
           earning.currency?.trim() !== currency.trim()
         ) {
           throw new ConflictException('An existing store earning conflicts with the delivered commission');
@@ -556,7 +556,7 @@ export class FinanceRepository {
           earning.account_type !== 'platform' ||
           earning.account_id !== null ||
           earning.direction !== 'credit' ||
-          Number(earning.amount) !== Number(commissionRow.platform_amount) ||
+          earning.amount !== String(commissionRow.platform_amount) ||
           earning.currency?.trim() !== currency.trim()
         ) {
           throw new ConflictException('An existing platform commission conflicts with the delivered commission');
@@ -592,7 +592,7 @@ export class FinanceRepository {
             earning.account_type !== 'driver' ||
             earning.account_id !== order.driver_id ||
             earning.direction !== 'credit' ||
-            Number(earning.amount) !== Number(commissionRow.driver_amount) ||
+            earning.amount !== String(commissionRow.driver_amount) ||
             earning.currency?.trim() !== currency.trim()
           ) {
             throw new ConflictException('An existing driver earning conflicts with the delivered commission');
