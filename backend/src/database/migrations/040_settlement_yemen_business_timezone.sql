@@ -86,6 +86,7 @@ DECLARE
   v_party_id uuid;
   v_period_start date;
   v_period_end date;
+  v_settlement_status settlement_status;
   v_store_id uuid;
   v_driver_id uuid;
   v_order_status order_status;
@@ -102,10 +103,13 @@ BEGIN
     IF OLD.released_at IS NOT NULL OR NEW.released_at IS NULL THEN
       RAISE EXCEPTION 'Settlement commission reservation can only be released once';
     END IF;
+    IF NEW.released_at IS NOT NULL AND v_settlement_status <> 'cancelled' THEN
+      RAISE EXCEPTION 'Settlement commission reservation can only be released when the settlement is cancelled';
+    END IF;
   END IF;
 
-  SELECT party_type, party_id, period_start, period_end
-    INTO v_party_type, v_party_id, v_period_start, v_period_end
+  SELECT party_type, party_id, period_start, period_end, status
+    INTO v_party_type, v_party_id, v_period_start, v_period_end, v_settlement_status
   FROM settlements WHERE id = NEW.settlement_id;
   IF NOT FOUND THEN
     RAISE EXCEPTION 'Settlement not found for commission link';
@@ -145,6 +149,7 @@ DECLARE
   v_settlement_party_id uuid;
   v_period_start date;
   v_period_end date;
+  v_settlement_status settlement_status;
   v_store_id uuid;
   v_driver_id uuid;
   v_store_amount numeric(14,2);
@@ -164,10 +169,13 @@ BEGIN
     IF OLD.released_at IS NOT NULL OR NEW.released_at IS NULL THEN
       RAISE EXCEPTION 'Settlement commission item can only be released once';
     END IF;
+    IF NEW.released_at IS NOT NULL AND v_settlement_status <> 'cancelled' THEN
+      RAISE EXCEPTION 'Settlement commission item can only be released when the settlement is cancelled';
+    END IF;
   END IF;
 
-  SELECT party_type, party_id, period_start, period_end
-    INTO v_settlement_party_type, v_settlement_party_id, v_period_start, v_period_end
+  SELECT party_type, party_id, period_start, period_end, status
+    INTO v_settlement_party_type, v_settlement_party_id, v_period_start, v_period_end, v_settlement_status
   FROM settlements WHERE id = NEW.settlement_id;
   IF NOT FOUND THEN
     RAISE EXCEPTION 'Settlement not found for commission item';
@@ -206,3 +214,46 @@ BEGIN
   RETURN NEW;
 END;
 $$;
+
+-- Settlement financial identity is immutable; status transitions follow the approved state machine.
+CREATE OR REPLACE FUNCTION protect_settlement_financial_identity()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  IF NEW.party_type IS DISTINCT FROM OLD.party_type
+     OR NEW.party_id IS DISTINCT FROM OLD.party_id
+     OR NEW.period_start IS DISTINCT FROM OLD.period_start
+     OR NEW.period_end IS DISTINCT FROM OLD.period_end
+     OR NEW.gross_amount IS DISTINCT FROM OLD.gross_amount
+     OR NEW.commission_amount IS DISTINCT FROM OLD.commission_amount
+     OR NEW.net_amount IS DISTINCT FROM OLD.net_amount
+     OR NEW.created_by IS DISTINCT FROM OLD.created_by
+     OR NEW.created_at IS DISTINCT FROM OLD.created_at
+     OR NEW.notes IS DISTINCT FROM OLD.notes
+     OR (OLD.currency IS NOT NULL AND NEW.currency IS DISTINCT FROM OLD.currency) THEN
+    RAISE EXCEPTION 'Settlement financial identity is immutable';
+  END IF;
+
+  IF NEW.status IS DISTINCT FROM OLD.status AND NOT (
+    (OLD.status = 'pending' AND NEW.status IN ('approved', 'cancelled'))
+    OR (OLD.status = 'approved' AND NEW.status IN ('paid', 'cancelled'))
+  ) THEN
+    RAISE EXCEPTION 'Invalid settlement status transition: % -> %', OLD.status, NEW.status;
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS settlements_protect_financial_identity ON settlements;
+CREATE TRIGGER settlements_protect_financial_identity
+  BEFORE UPDATE ON settlements
+  FOR EACH ROW
+  EXECUTE FUNCTION protect_settlement_financial_identity();
+
+DROP TRIGGER IF EXISTS settlements_append_only_delete ON settlements;
+CREATE TRIGGER settlements_append_only_delete
+  BEFORE DELETE ON settlements
+  FOR EACH ROW
+  EXECUTE FUNCTION prevent_mutation();
