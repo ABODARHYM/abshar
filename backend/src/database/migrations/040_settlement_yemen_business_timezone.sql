@@ -68,12 +68,15 @@ BEGIN
   ) OR EXISTS (
     SELECT 1
     FROM settlement_commissions legacy
+    JOIN commissions c ON c.id = legacy.commission_id
     LEFT JOIN settlement_commission_items item
       ON item.settlement_id = legacy.settlement_id
      AND item.commission_id = legacy.commission_id
      AND item.party_type = legacy.party_type
      AND item.released_at IS NULL
-    WHERE legacy.released_at IS NULL AND item.commission_id IS NULL
+    WHERE legacy.released_at IS NULL
+      AND (CASE WHEN legacy.party_type = 'store' THEN c.store_amount ELSE c.driver_amount END) > 0
+      AND item.commission_id IS NULL
   ) THEN
     RAISE EXCEPTION 'Legacy and canonical settlement reservation records differ; manual reconciliation is required';
   END IF;
