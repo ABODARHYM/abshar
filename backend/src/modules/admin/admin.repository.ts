@@ -366,11 +366,16 @@ export class AdminRepository {
     actorRole: string | null,
   ): Promise<boolean> {
     return this.db.transaction(async (client) => {
-      const driver = await client.query(
-        `UPDATE drivers SET status = $1 WHERE user_id = $2 RETURNING user_id`,
+      const current = await client.query<{ status: string }>(
+        `SELECT status FROM drivers WHERE user_id = $1 FOR UPDATE`,
+        [userId],
+      );
+      if (!current.rows[0]) return false;
+
+      await client.query(
+        `UPDATE drivers SET status = $1 WHERE user_id = $2`,
         [status, userId],
       );
-      if (!driver.rows[0]) return false;
 
       const user = await client.query(
         `UPDATE users SET status = $1 WHERE id = $2 AND deleted_at IS NULL RETURNING id`,
@@ -384,7 +389,7 @@ export class AdminRepository {
         `INSERT INTO audit_logs
           (actor_user_id, actor_role, action, entity_type, entity_id, old_value, new_value)
          VALUES ($1, $2, 'driver.status.update', 'driver', $3, $4::jsonb, $5::jsonb)`,
-        [actorId, actorRole, userId, JSON.stringify({ status: driver.rows[0].status ?? null }), JSON.stringify({ status })],
+        [actorId, actorRole, userId, JSON.stringify({ status: current.rows[0].status }), JSON.stringify({ status })],
       );
       return true;
     });
