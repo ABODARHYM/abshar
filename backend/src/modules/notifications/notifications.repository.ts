@@ -29,7 +29,7 @@ export class NotificationsRepository {
       input.userId,
       input.title,
       input.body,
-      input.type ?? 'info',
+      input.type ?? 'SYSTEM',
       input.category ?? 'general',
       input.priority ?? 'normal',
       input.icon ?? null,
@@ -41,6 +41,73 @@ export class NotificationsRepository {
       : (s: string, p: any[]) => this.db.query(s, p);
     const r = await exec(sql, params);
     return r.rows[0];
+  }
+
+  async createWithPushOutbox(
+    input: CreateNotificationInput,
+    payload: { title: string; body: string; actionUrl?: string; icon?: string; priority?: string },
+  ): Promise<NotificationRow> {
+    return this.db.transaction(async (client) => {
+      const notification = await this.create(client, input);
+      await client.query(
+        `INSERT INTO notification_push_outbox (notification_id, user_id, payload) VALUES ($1, $2, $3::jsonb)`,
+        [notification.id, input.userId, JSON.stringify({ ...payload, tag: 'absher-' + notification.id })],
+      );
+      return notification;
+    });
+  }
+
+  async claimPushOutbox(limit = 20): Promise<Array<{ id: string; user_id: string; payload: Record<string, any>; attempts: number; delivered_endpoints: string[] }>> {
+    const r = await this.db.query<{ id: string; user_id: string; payload: Record<string, any>; attempts: number; delivered_endpoints: string[] }>(
+      `WITH picked AS (
+         SELECT id FROM notification_push_outbox
+         WHERE (status = 'pending' AND next_attempt_at <= now())
+            OR (status = 'processing' AND locked_at < now() - interval '2 minutes')
+         ORDER BY next_attempt_at ASC, created_at ASC
+         LIMIT $1
+         FOR UPDATE SKIP LOCKED
+       )
+       UPDATE notification_push_outbox o
+       SET status = 'processing', locked_at = now(), attempts = o.attempts + 1, updated_at = now()
+       FROM picked
+       WHERE o.id = picked.id
+       RETURNING o.id, o.user_id, o.payload, o.attempts, o.delivered_endpoints`
+      , [limit],
+    );
+    return r.rows;
+  }
+
+  async markPushOutboxProgress(id: string, acceptedEndpoints: string[]): Promise<void> {
+    if (acceptedEndpoints.length === 0) return;
+    await this.db.query(
+      `UPDATE notification_push_outbox
+       SET delivered_endpoints = ARRAY(
+             SELECT DISTINCT endpoint
+             FROM unnest(delivered_endpoints || $2::text[]) AS t(endpoint)
+           ),
+           updated_at = now()
+       WHERE id = $1`,
+      [id, acceptedEndpoints],
+    );
+  }
+
+  async markPushOutboxSent(id: string): Promise<void> {
+    await this.db.query(
+      `UPDATE notification_push_outbox SET status = 'sent', sent_at = now(), locked_at = NULL, last_error = NULL, updated_at = now() WHERE id = $1`,
+      [id],
+    );
+  }
+
+  async markPushOutboxFailed(id: string, attempts: number, error: string): Promise<void> {
+    await this.db.query(
+      `UPDATE notification_push_outbox
+       SET status = CASE WHEN $2 >= 20 THEN 'failed' ELSE 'pending' END,
+           next_attempt_at = CASE WHEN $2 >= 20 THEN next_attempt_at
+             ELSE now() + make_interval(secs => LEAST(3600, 5 * power(2, LEAST($2::int, 10)))::int) END,
+           locked_at = NULL, last_error = LEFT($3, 2000), updated_at = now()
+       WHERE id = $1`
+      , [id, attempts, error],
+    );
   }
 
   async listMine(
@@ -167,18 +234,49 @@ export class NotificationsRepository {
     return r.rowCount ?? 0;
   }
 
+  async getStoreOwnerId(storeId: string): Promise<string | null> {
+    const r = await this.db.query<{ owner_user_id: string }>(
+      `SELECT owner_user_id FROM stores WHERE id = $1 AND deleted_at IS NULL LIMIT 1`,
+      [storeId],
+    );
+    return r.rows[0]?.owner_user_id ?? null;
+  }
   async getAvailableDriversForStore(
     storeId: string,
     limit: number,
   ): Promise<{ user_id: string }[]> {
-    // ابحث عن مندوبين متاحين في نفس مدينة المتجر
+    // Do not broadcast city-wide offers to stale or geographically unrelated drivers.
+    // Stores and drivers already expose latitude/longitude in the existing schema.
     const r = await this.db.query<{ user_id: string }>(
       `
-      SELECT DISTINCT d.user_id
+      SELECT d.user_id
       FROM drivers d
       JOIN stores s ON s.id = $1
-      WHERE d.is_available = true
+      WHERE d.availability = 'online'
         AND d.status = 'active'
+        AND s.latitude IS NOT NULL
+        AND s.longitude IS NOT NULL
+        AND d.last_latitude IS NOT NULL
+        AND d.last_longitude IS NOT NULL
+        AND d.last_location_at >= now() - interval '15 minutes'
+        AND (
+          6371 * acos(
+            LEAST(1, GREATEST(-1,
+              cos(radians(s.latitude)) * cos(radians(d.last_latitude))
+              * cos(radians(d.last_longitude) - radians(s.longitude))
+              + sin(radians(s.latitude)) * sin(radians(d.last_latitude))
+            ))
+          )
+        ) <= 30
+      ORDER BY (
+        6371 * acos(
+          LEAST(1, GREATEST(-1,
+            cos(radians(s.latitude)) * cos(radians(d.last_latitude))
+            * cos(radians(d.last_longitude) - radians(s.longitude))
+            + sin(radians(s.latitude)) * sin(radians(d.last_latitude))
+          ))
+        )
+      ) ASC
       LIMIT $2
       `,
       [storeId, limit],

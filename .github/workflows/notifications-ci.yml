@@ -1,0 +1,57 @@
+name: Notifications CI
+# Re-run CI after notification lifecycle type-safety fixes
+
+on:
+  push:
+    branches:
+      - fix/unified-notifications-phase1-20261119
+  pull_request:
+    branches:
+      - fix/finance-integrity-staging-20261117
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: notifications-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend typecheck, tests, build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test -- --runInBand
+      - run: npm run build
+
+  frontend:
+    name: ${{ matrix.app }} build
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [customer, store, driver, admin]
+    defaults:
+      run:
+        working-directory: apps/${{ matrix.app }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/${{ matrix.app }}/package-lock.json
+      - run: npm ci
+      - run: npm run build

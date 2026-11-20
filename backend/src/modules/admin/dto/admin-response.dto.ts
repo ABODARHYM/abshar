@@ -51,6 +51,7 @@ export class AdminDriverListItemDto {
   @ApiProperty({ nullable: true }) email!: string | null;
   @ApiProperty({ nullable: true }) phone!: string | null;
   @ApiProperty({ nullable: true }) vehicleType!: string | null;
+  @ApiProperty({ nullable: true }) zoneName!: string | null;
   @ApiProperty() status!: string;
   @ApiProperty() availability!: string;
   @ApiProperty() ratingAvg!: number;
@@ -76,7 +77,12 @@ export class AdminAuditLogDto {
   @ApiProperty() action!: string;
   @ApiProperty() entityType!: string;
   @ApiProperty({ nullable: true }) entityId!: string | null;
+  @ApiProperty({ nullable: true }) oldValue!: unknown | null;
+  @ApiProperty({ nullable: true }) newValue!: unknown | null;
   @ApiProperty({ nullable: true }) ipAddress!: string | null;
+  @ApiProperty({ nullable: true }) userAgent!: string | null;
+  @ApiProperty({ nullable: true }) deviceInfo!: string | null;
+  @ApiProperty({ nullable: true }) requestId!: string | null;
   @ApiProperty() createdAt!: string;
 }
 

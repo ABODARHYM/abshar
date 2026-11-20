@@ -23,10 +23,8 @@ export class DriverCashService {
   // ═══════════════ Driver Side ═══════════════
 
   async getSummary(driverId: string): Promise<DriverCashSummaryDto> {
-    const [summary, currency] = await Promise.all([
-      this.repo.getSummary(driverId),
-      this.repo.getCurrency(),
-    ]);
+    const currency = await this.repo.getCurrency();
+    const summary = await this.repo.getSummary(driverId, currency);
 
     const totalCollected = Number(summary.total_collected);
     const totalSubmitted = Number(summary.total_submitted);
@@ -63,7 +61,7 @@ export class DriverCashService {
   ): Promise<CashSubmitResponseDto> {
     const summary = await this.getSummary(driverId);
 
-    if (amount <= 0) {
+    if (!Number.isFinite(amount) || amount <= 0) {
       throw new BadRequestException({
         code: ErrorCode.ValidationFailed,
         message: 'المبلغ يجب أن يكون أكبر من صفر',
@@ -77,7 +75,7 @@ export class DriverCashService {
       });
     }
 
-    const currency = await this.repo.getCurrency();
+    const currency = summary.currency;
     const result = await this.repo.submitCash(driverId, amount, note, currency);
 
     const newSummary = await this.getSummary(driverId);
@@ -96,8 +94,8 @@ export class DriverCashService {
     page: number;
     limit: number;
   }): Promise<Paginated<OutstandingDriverDto>> {
-    const { rows, total } = await this.repo.listOutstandingDrivers(query);
     const currency = await this.repo.getCurrency();
+    const { rows, total } = await this.repo.listOutstandingDrivers(query, currency);
 
     return buildPage(
       rows.map((r) => ({

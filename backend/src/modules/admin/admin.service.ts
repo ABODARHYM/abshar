@@ -1,9 +1,12 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { randomBytes } from 'crypto';
+import * as bcrypt from 'bcryptjs';
 import { ErrorCode } from '../../common/error-codes';
 import { buildPage, Paginated } from '../../common/pagination.dto';
 import { AdminRepository } from './admin.repository';
@@ -20,6 +23,7 @@ import {
 } from '../orders/order-state-machine';
 import { NotificationsService } from '../notifications/notifications.service';
 import { AdminUserQueryDto } from './dto/admin-user-query.dto';
+import { CreateAdminDriverDto } from './dto/create-admin-driver.dto';
 import { AdminOrderQueryDto } from './dto/admin-order-query.dto';
 import {
   AdminAuditLogDto,
@@ -290,6 +294,11 @@ export class AdminService {
 
   // ───── Drivers ─────
 
+  async listDeliveryZones(): Promise<Array<{ id: string; city: string; nameAr: string }>> {
+    const zones = await this.repo.listActiveDeliveryZones();
+    return zones.map((zone) => ({ id: zone.id, city: zone.city, nameAr: zone.name_ar }));
+  }
+
   async listDrivers(query: AdminUserQueryDto): Promise<Paginated<AdminDriverListItemDto>> {
     const { rows, total } = await this.repo.listDrivers(query);
     return buildPage(
@@ -299,6 +308,7 @@ export class AdminService {
         email: d.email,
         phone: d.phone,
         vehicleType: d.vehicle_type,
+        zoneName: d.zone_name ?? null,
         status: d.status,
         availability: d.availability,
         ratingAvg: Number(d.rating_avg),
@@ -307,6 +317,59 @@ export class AdminService {
       total,
       query,
     );
+  }
+
+  async createDriver(
+    actorId: string,
+    actorRoles: string[],
+    dto: CreateAdminDriverDto,
+  ): Promise<{
+    userId: string;
+    fullName: string;
+    phone: string;
+    email: string | null;
+    username: string;
+    initialPassword: string;
+    status: 'pending';
+    vehicleType: string;
+  }> {
+    const phone = dto.phone.trim();
+    const email = dto.email?.trim().toLowerCase() || null;
+    const initialPassword = randomBytes(18).toString('base64url');
+    const passwordHash = await bcrypt.hash(initialPassword, 12);
+
+    try {
+      const created = await this.repo.createDriverAccount({
+        fullName: dto.fullName.trim(),
+        phone,
+        email,
+        passwordHash,
+        vehicleType: dto.vehicleType || 'motorcycle',
+        vehiclePlate: dto.vehiclePlate?.trim() || null,
+        zoneId: dto.zoneId ?? null,
+        actorId,
+        actorRole: actorRoles[0] ?? null,
+      });
+
+      return {
+        userId: created.userId,
+        fullName: dto.fullName.trim(),
+        phone,
+        email,
+        username: phone,
+        initialPassword,
+        status: 'pending',
+        vehicleType: dto.vehicleType || 'motorcycle',
+      };
+    } catch (error) {
+      if ((error as { code?: string }).code === '23505') {
+        throw new ConflictException('رقم الهاتف أو البريد الإلكتروني مسجل مسبقاً');
+      }
+      if ((error as { code?: string }).code === 'INVALID_DELIVERY_ZONE') {
+        throw new BadRequestException('منطقة التوصيل غير موجودة أو غير نشطة');
+      }
+      throw error;
+    }
   }
 
   async updateDriverStatus(
@@ -484,7 +547,12 @@ export class AdminService {
         action: a.action,
         entityType: a.entity_type,
         entityId: a.entity_id,
+        oldValue: a.old_value,
+        newValue: a.new_value,
         ipAddress: a.ip_address,
+        userAgent: a.user_agent,
+        deviceInfo: a.device_info,
+        requestId: a.request_id,
         createdAt: a.created_at.toISOString(),
       })),
       total,

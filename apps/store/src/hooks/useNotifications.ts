@@ -8,6 +8,7 @@ export type NotifType =
   | 'DRIVER_ASSIGNED'
   | 'ORDER_DELIVERED'
   | 'ORDER_CANCELLED'
+  | 'ORDER_STATUS_CHANGED'
   | 'EARNINGS_ADDED'
   | 'LOYALTY_EARNED';
 
@@ -60,11 +61,6 @@ export function useNotifications(opts: {
       }
       handlers.onAny?.({ type, payload: n, title: n.title, body: n.body });
       handlers[type]?.(n);
-      if ('Notification' in window && Notification.permission === 'granted') {
-        try {
-          new Notification(n.title ?? 'إشعار', { body: n.body, icon: '/icon-192.png' });
-        } catch {}
-      }
     });
 
     return () => { s.disconnect(); socketRef.current = null; };

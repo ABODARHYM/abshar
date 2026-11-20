@@ -12,6 +12,14 @@ function urlBase64ToUint8Array(b64: string): Uint8Array {
   return arr;
 }
 
+function subscriptionUsesKey(sub: PushSubscription, publicKey: string): boolean {
+  const current = sub.options?.applicationServerKey;
+  if (!current) return false;
+  const actual = new Uint8Array(current);
+  const expected = urlBase64ToUint8Array(publicKey);
+  return actual.length === expected.length && actual.every((value, index) => value === expected[index]);
+}
+
 export default function PushSetup() {
   const [supported, setSupported] = useState(false);
   const [subscribed, setSubscribed] = useState(false);
@@ -24,11 +32,70 @@ export default function PushSetup() {
     const ok = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
     setSupported(ok);
     if (!ok) return;
-    setPermission(Notification.permission);
-    navigator.serviceWorker.ready.then(async (reg) => {
-      const sub = await reg.pushManager.getSubscription();
-      setSubscribed(!!sub);
-    });
+
+    let disposed = false;
+    const syncSubscription = async () => {
+      try {
+        setPermission(Notification.permission);
+        const reg = await navigator.serviceWorker.ready;
+        const sub = await reg.pushManager.getSubscription();
+        if (!sub || Notification.permission !== 'granted') {
+          if (!disposed) setSubscribed(false);
+          return;
+        }
+        const keyResponse = await authFetch('/api/v1/notifications/push/public-key');
+        if (!keyResponse.ok) throw new Error('تعذر جلب مفتاح الإشعارات الحالي');
+        const { publicKey, enabled } = await keyResponse.json();
+        if (!enabled || !publicKey) throw new Error('الإشعارات غير مفعلة على الخادم');
+        if (!subscriptionUsesKey(sub, publicKey)) {
+          if (!disposed) {
+            setSubscribed(false);
+            setError('اشتراك هذا الجهاز مرتبط بمفتاح إشعارات قديم. اضغط «تفعيل» لإعادة تسجيله بالمفتاح الحالي.');
+          }
+          return;
+        }
+        const json = sub.toJSON();
+        if (!json.endpoint || !json.keys?.p256dh || !json.keys?.auth) {
+          if (!disposed) setError('اشتراك الإشعارات على هذا الجهاز غير مكتمل. أعد تفعيله.');
+          return;
+        }
+        // Re-sync on app start, login return, and tab resume. This repairs
+        // subscriptions that exist in the browser but were lost on the API.
+        const response = await authFetch('/api/v1/notifications/push/subscribe', {
+          method: 'POST',
+          body: JSON.stringify({
+            endpoint: json.endpoint,
+            p256dh: json.keys.p256dh,
+            auth: json.keys.auth,
+            userAgent: navigator.userAgent,
+          }),
+        });
+        if (!disposed) {
+          setSubscribed(response.ok);
+          if (!response.ok && response.status !== 401) {
+            setError('تعذر مزامنة اشتراك الإشعارات مع الخادم. أعد المحاولة من إعدادات الإشعارات.');
+          } else if (response.ok) {
+            setError('');
+          }
+        }
+      } catch (e) {
+        if (!disposed) setError('تعذر التحقق من اشتراك الإشعارات: ' + (e as Error).message);
+      }
+    };
+
+    void syncSubscription();
+    const onResume = () => {
+      if (document.visibilityState === 'visible') void syncSubscription();
+    };
+    window.addEventListener('focus', onResume);
+    window.addEventListener('pageshow', onResume);
+    document.addEventListener('visibilitychange', onResume);
+    return () => {
+      disposed = true;
+      window.removeEventListener('focus', onResume);
+      window.removeEventListener('pageshow', onResume);
+      document.removeEventListener('visibilitychange', onResume);
+    };
   }, []);
 
   const enable = async () => {
@@ -39,14 +106,25 @@ export default function PushSetup() {
       setPermission(perm);
       if (perm !== 'granted') { setError('لم يتم السماح بالإشعارات'); setLoading(false); return; }
       const reg = await navigator.serviceWorker.ready;
-      const kRes = await authFetch('/api/v1/notifications/push/public-key');
-      if (!kRes.ok) { setError('فشل جلب مفتاح الإشعارات'); setLoading(false); return; }
-      const { publicKey, enabled } = await kRes.json();
-      if (!enabled || !publicKey) { setError('الإشعارات غير مفعلة على الخادم'); setLoading(false); return; }
-      const sub = await reg.pushManager.subscribe({
+      const keyResponse = await authFetch('/api/v1/notifications/push/public-key');
+      if (!keyResponse.ok) throw new Error('فشل جلب مفتاح الإشعارات');
+      const { publicKey, enabled } = await keyResponse.json();
+      if (!enabled || !publicKey) throw new Error('الإشعارات غير مفعلة على الخادم');
+      const existing = await reg.pushManager.getSubscription();
+      let sub = existing;
+      if (existing && !subscriptionUsesKey(existing, publicKey)) {
+        const removeResponse = await authFetch('/api/v1/notifications/push/unsubscribe', {
+          method: 'DELETE',
+          body: JSON.stringify({ endpoint: existing.endpoint }),
+        });
+        if (!removeResponse.ok) throw new Error('تعذر تحديث الاشتراك القديم على الخادم؛ لم يتم حذفه من الجهاز');
+        await existing.unsubscribe();
+        sub = null;
+      }
+      sub = sub ?? (await reg.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(publicKey) as any,
-      });
+      }));
       const json = sub.toJSON();
       const sRes = await authFetch('/api/v1/notifications/push/subscribe', {
         method: 'POST',
