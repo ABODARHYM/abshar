@@ -252,6 +252,7 @@ export class OrdersService {
       storeId: store.id,
       currency,
       deliveryFee: finalDeliveryFee,
+      originalDeliveryFee: deliveryFee,
       subtotal,
       discountTotal,
       total,
