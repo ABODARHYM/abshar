@@ -317,6 +317,20 @@ WHERE s.status IN ('pending', 'approved')
   )
 ON CONFLICT (settlement_id, migration_name) DO NOTHING;
 
+WITH settlement_totals AS (
+  SELECT
+    s.id,
+    SUM(CASE WHEN s.party_type = 'store' THEN c.order_amount ELSE c.driver_amount END)::numeric(14,2) AS gross_amount,
+    SUM(CASE WHEN s.party_type = 'store' THEN c.commission_amount ELSE 0 END)::numeric(14,2) AS commission_amount,
+    SUM(CASE WHEN s.party_type = 'store' THEN c.store_amount ELSE c.driver_amount END)::numeric(14,2) AS net_amount
+  FROM settlements s
+  JOIN settlement_commissions sc
+    ON sc.settlement_id = s.id
+   AND sc.released_at IS NULL
+  JOIN commissions c ON c.id = sc.commission_id
+  WHERE s.status <> 'cancelled'
+  GROUP BY s.id, s.party_type
+)
 UPDATE settlements s
 SET gross_amount = totals.gross_amount,
     commission_amount = totals.commission_amount,
