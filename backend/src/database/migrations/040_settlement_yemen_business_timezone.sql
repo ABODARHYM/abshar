@@ -106,9 +106,6 @@ BEGIN
     IF OLD.released_at IS NOT NULL OR NEW.released_at IS NULL THEN
       RAISE EXCEPTION 'Settlement commission reservation can only be released once';
     END IF;
-    IF NEW.released_at IS NOT NULL AND v_settlement_status <> 'cancelled' THEN
-      RAISE EXCEPTION 'Settlement commission reservation can only be released when the settlement is cancelled';
-    END IF;
   END IF;
 
   SELECT party_type, party_id, period_start, period_end, status
@@ -116,6 +113,9 @@ BEGIN
   FROM settlements WHERE id = NEW.settlement_id;
   IF NOT FOUND THEN
     RAISE EXCEPTION 'Settlement not found for commission link';
+  END IF;
+  IF TG_OP = 'UPDATE' AND NEW.released_at IS NOT NULL AND v_settlement_status <> 'cancelled' THEN
+    RAISE EXCEPTION 'Settlement commission reservation can only be released when the settlement is cancelled';
   END IF;
   IF NEW.party_type <> v_party_type OR NEW.party_id IS DISTINCT FROM v_party_id THEN
     RAISE EXCEPTION 'Commission link party does not match settlement';
@@ -172,9 +172,6 @@ BEGIN
     IF OLD.released_at IS NOT NULL OR NEW.released_at IS NULL THEN
       RAISE EXCEPTION 'Settlement commission item can only be released once';
     END IF;
-    IF NEW.released_at IS NOT NULL AND v_settlement_status <> 'cancelled' THEN
-      RAISE EXCEPTION 'Settlement commission item can only be released when the settlement is cancelled';
-    END IF;
   END IF;
 
   SELECT party_type, party_id, period_start, period_end, status
@@ -182,6 +179,9 @@ BEGIN
   FROM settlements WHERE id = NEW.settlement_id;
   IF NOT FOUND THEN
     RAISE EXCEPTION 'Settlement not found for commission item';
+  END IF;
+  IF TG_OP = 'UPDATE' AND NEW.released_at IS NOT NULL AND v_settlement_status <> 'cancelled' THEN
+    RAISE EXCEPTION 'Settlement commission item can only be released when the settlement is cancelled';
   END IF;
   IF NEW.party_type <> v_settlement_party_type THEN
     RAISE EXCEPTION 'Commission item party type does not match settlement';
