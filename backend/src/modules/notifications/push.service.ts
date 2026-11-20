@@ -8,6 +8,8 @@ export interface PushPayload {
   body: string;
   actionUrl?: string;
   icon?: string;
+  image?: string;
+  priority?: string;
 }
 
 /**
@@ -57,6 +59,8 @@ export class PushService {
       title: payload.title,
       body: payload.body,
       icon: payload.icon ?? '/icons/icon-192.png',
+      image: payload.image ?? '/icons/icon-192.png',
+      priority: payload.priority,
       data: { url: payload.actionUrl ?? '/' },
     });
 
