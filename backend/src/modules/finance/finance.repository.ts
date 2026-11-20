@@ -323,6 +323,18 @@ export class FinanceRepository {
         }
       }
 
+      const updated = await client.query(
+        `UPDATE settlements
+         SET status = $1,
+             approved_by = CASE WHEN $1 = 'approved' THEN $2 ELSE approved_by END,
+             settled_at = CASE WHEN $1 = 'paid' THEN now() ELSE settled_at END
+         WHERE id = $3
+         RETURNING id, party_type, party_id, period_start, period_end,
+                   gross_amount, commission_amount, net_amount, currency,
+                   status, notes, settled_at, created_at`,
+        [status, actorId, id],
+      );
+
       if (status === 'cancelled') {
         await client.query(
           `UPDATE settlement_commission_items
@@ -337,18 +349,6 @@ export class FinanceRepository {
           [id],
         );
       }
-
-      const updated = await client.query(
-        `UPDATE settlements
-         SET status = $1,
-             approved_by = CASE WHEN $1 = 'approved' THEN $2 ELSE approved_by END,
-             settled_at = CASE WHEN $1 = 'paid' THEN now() ELSE settled_at END
-         WHERE id = $3
-         RETURNING id, party_type, party_id, period_start, period_end,
-                   gross_amount, commission_amount, net_amount, currency,
-                   status, notes, settled_at, created_at`,
-        [status, actorId, id],
-      );
 
       await client.query(
         `INSERT INTO audit_logs
