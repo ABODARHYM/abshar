@@ -16,6 +16,7 @@ export interface PushDeliveryResult {
   subscriptionCount: number;
   acceptedEndpoints: string[];
   failedEndpoints: string[];
+  failureReasons: string[];
 }
 
 @Injectable()
@@ -54,13 +55,13 @@ export class PushService {
     payload: PushPayload,
     alreadyAccepted: string[] = [],
   ): Promise<PushDeliveryResult> {
-    if (!this.enabled) return { subscriptionCount: 0, acceptedEndpoints: [], failedEndpoints: [] };
+    if (!this.enabled) return { subscriptionCount: 0, acceptedEndpoints: [], failedEndpoints: [], failureReasons: [] };
 
     const subs = await this.repo.listPushSubscriptions(userId);
     const excluded = new Set(alreadyAccepted);
     const pending = subs.filter((sub) => !excluded.has(sub.endpoint));
     if (pending.length === 0) {
-      return { subscriptionCount: subs.length, acceptedEndpoints: [], failedEndpoints: [] };
+      return { subscriptionCount: subs.length, acceptedEndpoints: [], failedEndpoints: [], failureReasons: [] };
     }
 
     const data = JSON.stringify({
@@ -76,6 +77,7 @@ export class PushService {
 
     const acceptedEndpoints: string[] = [];
     const failedEndpoints: string[] = [];
+    const failureReasons: string[] = [];
     await Promise.all(pending.map(async (sub) => {
       try {
         await webpush.sendNotification(
@@ -91,18 +93,29 @@ export class PushService {
           this.logger.warn(`Could not update push usage for endpoint: ${(telemetryError as Error).message}`);
         }
       } catch (err) {
-        const e = err as { statusCode?: number; message?: string };
-        this.logger.warn(`Push failed (${sub.endpoint.slice(0, 60)}…): ${e.message ?? 'unknown error'}`);
-        if (e.statusCode === 410 || e.statusCode === 404) {
+        const e = err as { statusCode?: number; code?: string };
+        const statusCode = Number.isInteger(e.statusCode) ? e.statusCode : undefined;
+        const errorCode = typeof e.code === 'string' && /^[A-Z0-9_]{1,40}$/i.test(e.code)
+          ? e.code
+          : undefined;
+        const reason = statusCode
+          ? `HTTP ${statusCode}`
+          : errorCode
+            ? `Network ${errorCode}`
+            : 'Unknown provider error';
+        // Never log or persist subscription endpoints, provider URLs, or raw error bodies.
+        this.logger.warn(`Push delivery failed: ${reason}`);
+        if (statusCode === 410 || statusCode === 404) {
           await this.repo.removePushSubscription(userId, sub.endpoint);
         } else {
           failedEndpoints.push(sub.endpoint);
+          failureReasons.push(reason);
         }
       }
     }));
 
     this.logger.log(`Push result for user ${userId}: ${acceptedEndpoints.length}/${pending.length} newly accepted`);
-    return { subscriptionCount: subs.length, acceptedEndpoints, failedEndpoints };
+    return { subscriptionCount: subs.length, acceptedEndpoints, failedEndpoints, failureReasons: [...new Set(failureReasons)] };
   }
 
   async sendToUser(userId: string, payload: PushPayload, requireAll = false): Promise<number> {
