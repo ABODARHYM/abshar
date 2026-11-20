@@ -428,12 +428,13 @@ export class FinanceRepository {
         driver_id: string | null;
         subtotal: string;
         delivery_fee: string;
+        original_delivery_fee: string | null;
         discount_total: string;
         total: string;
         currency: string;
       }>(
         `
-        SELECT id, store_id, driver_id, subtotal, delivery_fee, discount_total, total, currency
+        SELECT id, store_id, driver_id, subtotal, delivery_fee, original_delivery_fee, discount_total, total, currency
         FROM orders
         WHERE id = $1 AND status = 'delivered'
         FOR UPDATE
@@ -449,6 +450,10 @@ export class FinanceRepository {
         [orderId],
       );
       let commissionRow = existingRes.rows[0];
+
+      if (!commissionRow && order.original_delivery_fee === null) {
+        throw new ConflictException('Original delivery fee is unknown for this historical order; commission requires manual reconciliation');
+      }
 
       if (!commissionRow) {
         const storeRes = await client.query<{ commission_rate: string | null }>(
@@ -472,20 +477,20 @@ export class FinanceRepository {
           `
           INSERT INTO commissions (
             order_id, store_id, rate_percent,
-            order_amount, delivery_fee, discount_amount,
+            order_amount, delivery_fee, original_delivery_fee, discount_amount,
             commission_amount, store_amount, driver_amount, platform_amount
           )
           VALUES (
-            $1, $2, $3, $4, $5, $6,
+            $1, $2, $3, $4, $5, $6, $7,
             ROUND($4::numeric * $3::numeric / 100, 2),
             $4::numeric - ROUND($4::numeric * $3::numeric / 100, 2),
-            $5::numeric,
+            $7::numeric,
             ROUND($4::numeric * $3::numeric / 100, 2)
           )
           ON CONFLICT (order_id) DO NOTHING
           RETURNING *
           `,
-          [orderId, order.store_id, rateText, order.subtotal, order.delivery_fee, order.discount_total],
+          [orderId, order.store_id, rateText, order.subtotal, order.delivery_fee, order.original_delivery_fee, order.discount_total],
         );
         commissionRow = inserted.rows[0];
         if (!commissionRow) {
@@ -498,6 +503,18 @@ export class FinanceRepository {
       }
 
       if (!commissionRow) return null;
+
+      const originalDeliveryFee = order.original_delivery_fee ?? commissionRow.original_delivery_fee ?? null;
+      if (
+        commissionRow.store_id !== order.store_id ||
+        String(commissionRow.order_amount) !== String(order.subtotal) ||
+        String(commissionRow.delivery_fee) !== String(order.delivery_fee) ||
+        String(commissionRow.discount_amount) !== String(order.discount_total) ||
+        (order.original_delivery_fee !== null &&
+          String(commissionRow.original_delivery_fee) !== String(order.original_delivery_fee))
+      ) {
+        throw new ConflictException('Existing commission does not match the delivered order financial snapshot');
+      }
 
       // The order snapshot is authoritative for currency; preserve the driver's identity
       // as the creator of all delivery-time ledger credits.
