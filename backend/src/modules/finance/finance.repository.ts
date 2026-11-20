@@ -176,7 +176,8 @@ export class FinanceRepository {
         JOIN orders o ON o.id = c.order_id
         WHERE ${idColumn} = $1
           AND o.status = 'delivered'
-          AND o.delivered_at::date BETWEEN $2::date AND $3::date
+          AND o.delivered_at >= ($2::date::timestamp AT TIME ZONE 'Asia/Aden')
+          AND o.delivered_at < (($3::date + 1)::timestamp AT TIME ZONE 'Asia/Aden')
           AND ${amountColumn} > 0
           AND NOT EXISTS (
             SELECT 1 FROM settlement_commission_items sci
