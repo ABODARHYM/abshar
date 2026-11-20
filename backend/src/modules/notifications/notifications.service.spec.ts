@@ -67,7 +67,7 @@ describe('NotificationsService durable push delivery', () => {
     push.sendToUserDetailed.mockResolvedValue({ subscriptionCount: 1, acceptedEndpoints: [], failedEndpoints: ['ep-1'], failureReasons: ['HTTP 503'] });
     (repo.claimPushOutbox as jest.Mock).mockResolvedValue([{ id: 'job-2', user_id: 'user-1', payload: { title: 't', body: 'b' }, attempts: 3 }]);
     await (service as any).processPushOutbox();
-    expect(repo.markPushOutboxFailed).toHaveBeenCalledWith('job-2', 3, expect.stringContaining('Temporary push failure'));
+    expect(repo.markPushOutboxFailed).toHaveBeenCalledWith('job-2', 3, expect.stringContaining('HTTP 503'));
     expect(repo.markPushOutboxSent).not.toHaveBeenCalled();
   });
 
