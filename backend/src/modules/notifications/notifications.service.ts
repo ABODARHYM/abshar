@@ -74,7 +74,7 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
             await this.repo.markPushOutboxFailed(
               job.id,
               job.attempts,
-              `Temporary push failure for ${result.failedEndpoints.length} device(s)`,
+              `Temporary push failure for ${result.failedEndpoints.length} device(s): ${(result.failureReasons ?? []).slice(0, 3).join(', ') || 'Unclassified provider error'}`,
             );
           } else if (
             result.subscriptionCount === 0 &&
