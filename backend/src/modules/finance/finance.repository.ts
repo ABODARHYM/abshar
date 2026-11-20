@@ -510,8 +510,7 @@ export class FinanceRepository {
         String(commissionRow.order_amount) !== String(order.subtotal) ||
         String(commissionRow.delivery_fee) !== String(order.delivery_fee) ||
         String(commissionRow.discount_amount) !== String(order.discount_total) ||
-        (order.original_delivery_fee !== null &&
-          String(commissionRow.original_delivery_fee) !== String(order.original_delivery_fee))
+        String(commissionRow.original_delivery_fee ?? '') !== String(order.original_delivery_fee ?? '')
       ) {
         throw new ConflictException('Existing commission does not match the delivered order financial snapshot');
       }
