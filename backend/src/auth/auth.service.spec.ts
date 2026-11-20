@@ -1,3 +1,7 @@
+jest.mock('@nestjs/jwt', () => ({
+  JwtService: class JwtService {},
+}));
+
 import { UnauthorizedException } from '@nestjs/common';
 import { AuthService } from './auth.service';
 
