@@ -169,6 +169,7 @@ describe('FinanceRepository shared delivery transaction', () => {
     expect(result).toEqual(commission);
     const commissionInsert = client.query.mock.calls[3];
     expect(String(commissionInsert[0])).toContain('original_delivery_fee');
+    expect(String(commissionInsert[0])).toContain('$6::numeric');
     expect(commissionInsert[1][5]).toBe('20.00');
 
     const productDiscountInsert = client.query.mock.calls[11];
