@@ -39,6 +39,7 @@ export class CommissionDto {
   @ApiProperty() ratePercent!: number;
   @ApiProperty() orderAmount!: number;
   @ApiProperty() deliveryFee!: number;
+  @ApiProperty({ nullable: true }) originalDeliveryFee!: number | null;
   @ApiProperty() discountAmount!: number;
   @ApiProperty() commissionAmount!: number;
   @ApiProperty() storeAmount!: number;
