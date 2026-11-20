@@ -255,6 +255,26 @@ BEGIN
   IF NEW.status = 'paid' AND NEW.settled_at IS NULL THEN
     RAISE EXCEPTION 'Paid settlement requires a paid timestamp';
   END IF;
+  IF NEW.status = 'paid' AND NOT EXISTS (
+    SELECT 1 FROM transactions t
+    WHERE t.settlement_id = NEW.id
+      AND t.type = 'settlement_payout'
+      AND t.direction = 'debit'
+      AND t.account_type = NEW.party_type
+      AND t.account_id = NEW.party_id
+      AND t.amount = NEW.net_amount
+      AND t.currency = NEW.currency
+  ) THEN
+    RAISE EXCEPTION 'Paid settlement requires a matching immutable payout ledger entry';
+  END IF;
+  IF NEW.status = 'cancelled' AND EXISTS (
+    SELECT 1 FROM transactions t
+    WHERE t.settlement_id = NEW.id
+      AND t.type = 'settlement_payout'
+      AND t.direction = 'debit'
+  ) THEN
+    RAISE EXCEPTION 'A settlement with a payout cannot be cancelled';
+  END IF;
 
   RETURN NEW;
 END;
