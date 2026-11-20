@@ -1,4 +1,4 @@
-import { checksumOf, MigrationFile, orderMigrationNames, planMigrations } from './migration-utils';
+import { checksumOf, MigrationFile, orderMigrationNames, planMigrations, stripOuterTransactionStatements } from './migration-utils';
 import { readdirSync, readFileSync } from 'fs';
 import { join } from 'path';
 
@@ -47,12 +47,46 @@ describe('planMigrations', () => {
   });
 });
 
+
+describe('stripOuterTransactionStatements', () => {
+  it('removes a legacy outer wrapper so the runner owns the atomic transaction', () => {
+    const sql = '-- legacy migration\n\nBEGIN;\nCREATE TABLE example (id integer);\nCOMMIT;\n';
+    expect(stripOuterTransactionStatements(sql)).toBe('-- legacy migration\n\nCREATE TABLE example (id integer);\n');
+  });
+
+  it('leaves SQL without an outer wrapper unchanged', () => {
+    const sql = 'CREATE TABLE example (id integer);\n';
+    expect(stripOuterTransactionStatements(sql)).toBe(sql);
+  });
+});
+
 describe('real migration files', () => {
   const dir = join(__dirname, 'migrations');
   const names = orderMigrationNames(readdirSync(dir));
 
-  it('are numbered contiguously from 001', () => {
-    names.forEach((name, i) => expect(name.startsWith(String(i + 1).padStart(3, '0'))).toBe(true));
+  it('preserves applied migration 031 and appends forward-only finance and notification migrations', () => {
+    const numbers = names.map((name) => Number(name.slice(0, 3)));
+    expect(numbers.slice(0, 26)).toEqual(Array.from({ length: 26 }, (_, i) => i + 1));
+    expect(numbers.slice(26)).toEqual([31, 32, 33, 34, 35, 36, 37]);
+  });
+
+  it('plans finance migrations after an already-applied 031 without out-of-order work', () => {
+    const baseSql = readFileSync(join(dir, '031_store_applications.sql'), 'utf8');
+    const base = file('031_store_applications.sql', baseSql);
+    const forward = names
+      .filter((name) => Number(name.slice(0, 3)) > 31)
+      .map((name) => file(name, readFileSync(join(dir, name), 'utf8')));
+
+    expect(planMigrations([base, ...forward], [{ name: base.name, checksum: base.checksum }]).pending)
+      .toEqual(forward.map((migration) => migration.name));
+  });
+
+  it('normalizes the legacy 031 wrapper for execution without changing its source checksum', () => {
+    const sql = readFileSync(join(dir, '031_store_applications.sql'), 'utf8');
+    const normalized = stripOuterTransactionStatements(sql);
+    expect(normalized).not.toMatch(/^\s*BEGIN\s*;\s*$/m);
+    expect(normalized).not.toMatch(/^\s*COMMIT\s*;\s*$/m);
+    expect(checksumOf(sql)).not.toBe(checksumOf(normalized));
   });
 
   it('contain every table required by the spec', () => {
