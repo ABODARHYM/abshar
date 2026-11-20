@@ -4,6 +4,11 @@ describe('FinanceRepository shared delivery transaction', () => {
   it('uses the supplied transaction client and locks the delivered order for safe retries', async () => {
     const commission = {
       id: 'commission-1',
+      store_id: 'store-1',
+      order_amount: '100.00',
+      delivery_fee: '20.00',
+      original_delivery_fee: '20.00',
+      discount_amount: '0.00',
       store_amount: '90.00',
       platform_amount: '10.00',
       driver_amount: '20.00',
@@ -17,6 +22,7 @@ describe('FinanceRepository shared delivery transaction', () => {
             driver_id: 'driver-1',
             subtotal: '100.00',
             delivery_fee: '20.00',
+            original_delivery_fee: '20.00',
             discount_total: '0.00',
             total: '120.00',
             currency: 'YER',
@@ -29,7 +35,8 @@ describe('FinanceRepository shared delivery transaction', () => {
         .mockResolvedValueOnce({ rows: [], rowCount: 0 })
         .mockResolvedValueOnce({ rows: [], rowCount: 1 })
         .mockResolvedValueOnce({ rows: [], rowCount: 0 })
-        .mockResolvedValueOnce({ rows: [], rowCount: 1 }),
+        .mockResolvedValueOnce({ rows: [], rowCount: 1 })
+        .mockResolvedValueOnce({ rows: [{ is_valid: true, amount: '0.00' }], rowCount: 1 }),
     };
     const db = { transaction: jest.fn() };
     const repo = new FinanceRepository(db as any);
