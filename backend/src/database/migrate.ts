@@ -11,7 +11,7 @@
 import { readdirSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { Client } from 'pg';
-import { AppliedMigration, MigrationFile, checksumOf, orderMigrationNames, planMigrations } from './migration-utils';
+import { AppliedMigration, MigrationFile, checksumOf, orderMigrationNames, planMigrations, stripOuterTransactionStatements } from './migration-utils';
 
 const LOCK_ID = 727_274; // ثابت لهذا المشروع
 const MIGRATIONS_DIR = join(__dirname, 'migrations');
@@ -66,7 +66,7 @@ async function run(command: string): Promise<void> {
       console.log(`Applying ${name} ...`);
       try {
         await client.query('BEGIN');
-        await client.query(file.sql);
+        await client.query(stripOuterTransactionStatements(file.sql));
         await client.query('INSERT INTO schema_migrations (name, checksum) VALUES ($1, $2)', [file.name, file.checksum]);
         await client.query('COMMIT');
       } catch (error) {
