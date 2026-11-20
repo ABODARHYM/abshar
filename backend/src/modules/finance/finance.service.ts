@@ -202,6 +202,7 @@ export class FinanceService {
       ratePercent: Number(c.rate_percent),
       orderAmount: Number(c.order_amount),
       deliveryFee: Number(c.delivery_fee),
+      originalDeliveryFee: c.original_delivery_fee === null ? null : Number(c.original_delivery_fee),
       discountAmount: Number(c.discount_amount),
       commissionAmount: Number(c.commission_amount),
       storeAmount: Number(c.store_amount),
