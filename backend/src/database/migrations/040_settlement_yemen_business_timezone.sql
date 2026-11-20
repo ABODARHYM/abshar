@@ -219,7 +219,7 @@ END;
 $$;
 
 -- Existing settlement status and payout ledger must agree before enforcing the database guard.
-DO $
+DO $$
 DECLARE
   invalid_settlement uuid;
 BEGIN
@@ -258,7 +258,7 @@ BEGIN
   IF invalid_settlement IS NOT NULL THEN
     RAISE EXCEPTION 'Settlement % net amount does not match its active commission reservations', invalid_settlement;
   END IF;
-END $;
+END $$;
 
 -- Correct legacy settlement totals: gross is pre-commission order value, net is the payable amount.
 -- Keep all linked historical commissions and settlement payouts unchanged.
