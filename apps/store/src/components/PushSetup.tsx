@@ -12,6 +12,14 @@ function urlBase64ToUint8Array(b64: string): Uint8Array {
   return arr;
 }
 
+function subscriptionUsesKey(sub: PushSubscription, publicKey: string): boolean {
+  const current = sub.options?.applicationServerKey;
+  if (!current) return false;
+  const actual = new Uint8Array(current);
+  const expected = urlBase64ToUint8Array(publicKey);
+  return actual.length === expected.length && actual.every((value, index) => value === expected[index]);
+}
+
 export default function PushSetup() {
   const [supported, setSupported] = useState(false);
   const [subscribed, setSubscribed] = useState(false);
@@ -33,6 +41,17 @@ export default function PushSetup() {
         const sub = await reg.pushManager.getSubscription();
         if (!sub || Notification.permission !== 'granted') {
           if (!disposed) setSubscribed(false);
+          return;
+        }
+        const keyResponse = await authFetch('/api/v1/notifications/push/public-key');
+        if (!keyResponse.ok) throw new Error('تعذر جلب مفتاح الإشعارات الحالي');
+        const { publicKey, enabled } = await keyResponse.json();
+        if (!enabled || !publicKey) throw new Error('الإشعارات غير مفعلة على الخادم');
+        if (!subscriptionUsesKey(sub, publicKey)) {
+          if (!disposed) {
+            setSubscribed(false);
+            setError('اشتراك هذا الجهاز مرتبط بمفتاح إشعارات قديم. اضغط «تفعيل» لإعادة تسجيله بالمفتاح الحالي.');
+          }
           return;
         }
         const json = sub.toJSON();
@@ -87,14 +106,25 @@ export default function PushSetup() {
       setPermission(perm);
       if (perm !== 'granted') { setError('لم يتم السماح بالإشعارات'); setLoading(false); return; }
       const reg = await navigator.serviceWorker.ready;
-      const kRes = await authFetch('/api/v1/notifications/push/public-key');
-      if (!kRes.ok) { setError('فشل جلب مفتاح الإشعارات'); setLoading(false); return; }
-      const { publicKey, enabled } = await kRes.json();
-      if (!enabled || !publicKey) { setError('الإشعارات غير مفعلة على الخادم'); setLoading(false); return; }
-      const sub = await reg.pushManager.subscribe({
+      const keyResponse = await authFetch('/api/v1/notifications/push/public-key');
+      if (!keyResponse.ok) throw new Error('فشل جلب مفتاح الإشعارات');
+      const { publicKey, enabled } = await keyResponse.json();
+      if (!enabled || !publicKey) throw new Error('الإشعارات غير مفعلة على الخادم');
+      const existing = await reg.pushManager.getSubscription();
+      let sub = existing;
+      if (existing && !subscriptionUsesKey(existing, publicKey)) {
+        const removeResponse = await authFetch('/api/v1/notifications/push/unsubscribe', {
+          method: 'DELETE',
+          body: JSON.stringify({ endpoint: existing.endpoint }),
+        });
+        if (!removeResponse.ok) throw new Error('تعذر تحديث الاشتراك القديم على الخادم؛ لم يتم حذفه من الجهاز');
+        await existing.unsubscribe();
+        sub = null;
+      }
+      sub = sub ?? (await reg.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(publicKey) as any,
-      });
+      }));
       const json = sub.toJSON();
       const sRes = await authFetch('/api/v1/notifications/push/subscribe', {
         method: 'POST',
