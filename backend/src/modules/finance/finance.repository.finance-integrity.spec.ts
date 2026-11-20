@@ -87,4 +87,37 @@ describe('FinanceRepository shared delivery transaction', () => {
     expect(String(client.query.mock.calls[0][0])).not.toContain('delivered_at::date');
   });
 
+  it('marks a settlement cancelled before releasing its commission reservations', async () => {
+    const client = {
+      query: jest.fn()
+        .mockResolvedValueOnce({
+          rows: [{
+            id: 'settlement-1',
+            party_type: 'store',
+            party_id: 'store-1',
+            status: 'pending',
+            net_amount: '90.00',
+            currency: 'YER',
+          }],
+          rowCount: 1,
+        })
+        .mockResolvedValueOnce({ rows: [{ id: 'settlement-1', status: 'cancelled' }], rowCount: 1 })
+        .mockResolvedValueOnce({ rows: [], rowCount: 1 })
+        .mockResolvedValueOnce({ rows: [], rowCount: 1 })
+        .mockResolvedValueOnce({ rows: [], rowCount: 1 })
+        .mockResolvedValueOnce({ rows: [], rowCount: 1 }),
+    };
+    const db = {
+      transaction: jest.fn(async (work: (tx: any) => Promise<any>) => work(client)),
+    };
+    const repo = new FinanceRepository(db as any);
+
+    const result = await repo.updateSettlementStatus('settlement-1', 'cancelled', 'admin-1', 'admin');
+
+    expect(result.status).toBe('cancelled');
+    expect(String(client.query.mock.calls[1][0])).toContain('UPDATE settlements');
+    expect(String(client.query.mock.calls[2][0])).toContain('UPDATE settlement_commission_items');
+    expect(String(client.query.mock.calls[3][0])).toContain('UPDATE settlement_commissions');
+  });
+
 });
