@@ -399,7 +399,7 @@ export class FinanceRepository {
       SELECT
         c.id, c.order_id, o.order_number,
         c.store_id, s.name_ar AS store_name,
-        c.rate_percent, c.order_amount, c.delivery_fee, c.discount_amount,
+        c.rate_percent, c.order_amount, c.delivery_fee, c.original_delivery_fee, c.discount_amount,
         c.commission_amount, c.store_amount, c.driver_amount, c.platform_amount,
         c.created_at
       FROM commissions c
