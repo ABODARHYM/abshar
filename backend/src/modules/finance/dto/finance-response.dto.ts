@@ -23,6 +23,7 @@ export class SettlementDto {
   @ApiProperty() grossAmount!: number;
   @ApiProperty() commissionAmount!: number;
   @ApiProperty() netAmount!: number;
+  @ApiProperty({ nullable: true }) currency!: string | null;
   @ApiProperty() status!: string;
   @ApiProperty({ nullable: true }) notes!: string | null;
   @ApiProperty({ nullable: true }) settledAt!: string | null;
