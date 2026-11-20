@@ -108,4 +108,22 @@ describe('PushService', () => {
     expect(JSON.stringify(result.failureReasons)).not.toContain(endpoint);
   });
 
+  it('includes the branded image and priority in the browser push payload', async () => {
+    const repo = makeRepo([{ endpoint: 'e1', p256dh: 'p', auth: 'a' }]);
+    (mocked.sendNotification as jest.Mock).mockResolvedValue({});
+    const svc = new PushService(repo, enabledCfg);
+
+    await svc.sendToUserDetailed('u1', {
+      title: 't',
+      body: 'b',
+      icon: '/icons/icon-192.png',
+      image: '/images/order-ready.png',
+      priority: 'high',
+    });
+
+    const payload = JSON.parse((mocked.sendNotification as jest.Mock).mock.calls[0][1]);
+    expect(payload.image).toBe('/images/order-ready.png');
+    expect(payload.priority).toBe('high');
+  });
+
 });
