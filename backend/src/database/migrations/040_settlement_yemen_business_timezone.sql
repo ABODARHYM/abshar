@@ -218,6 +218,48 @@ BEGIN
 END;
 $$;
 
+-- Existing settlement status and payout ledger must agree before enforcing the database guard.
+DO $
+DECLARE
+  invalid_settlement uuid;
+BEGIN
+  SELECT s.id INTO invalid_settlement
+  FROM settlements s
+  WHERE
+    (s.status = 'paid' AND NOT EXISTS (
+      SELECT 1 FROM transactions t
+      WHERE t.settlement_id = s.id
+        AND t.type = 'settlement_payout'
+        AND t.direction = 'debit'
+        AND t.account_type = s.party_type
+        AND t.account_id = s.party_id
+        AND t.amount = s.net_amount
+        AND t.currency = s.currency
+    ))
+    OR (s.status <> 'paid' AND EXISTS (
+      SELECT 1 FROM transactions t
+      WHERE t.settlement_id = s.id AND t.type = 'settlement_payout'
+    ))
+  LIMIT 1;
+
+  IF invalid_settlement IS NOT NULL THEN
+    RAISE EXCEPTION 'Settlement % status does not match its payout ledger; manual reconciliation is required', invalid_settlement;
+  END IF;
+
+  SELECT s.id INTO invalid_settlement
+  FROM settlements s
+  LEFT JOIN settlement_commission_items item
+    ON item.settlement_id = s.id AND item.released_at IS NULL
+  WHERE s.status <> 'cancelled'
+  GROUP BY s.id
+  HAVING COALESCE(SUM(item.amount), 0) <> s.net_amount
+  LIMIT 1;
+
+  IF invalid_settlement IS NOT NULL THEN
+    RAISE EXCEPTION 'Settlement % net amount does not match its active commission reservations', invalid_settlement;
+  END IF;
+END $;
+
 -- Correct legacy settlement totals: gross is pre-commission order value, net is the payable amount.
 -- Keep all linked historical commissions and settlement payouts unchanged.
 WITH settlement_totals AS (
