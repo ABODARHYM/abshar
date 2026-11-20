@@ -329,6 +329,7 @@ export class DriverService {
             order.order_number,
             note ?? reasonCode,
           );
+          await this.notifications.notifyStoreOrderCancelled(order.store_id, order.order_number, note ?? reasonCode);
         } catch (err) {
           console.warn('[driver] notify cancel failed:', (err as Error).message);
         }
@@ -412,18 +413,28 @@ export class DriverService {
           driverGoingToCustomer: { title: 'المندوب في الطريق إليك', body: `طلبك ${full.order_number} في طريقه إليك الآن` },
           driverArrivedCustomer: { title: 'وصل المندوب', body: `وصل المندوب لتسليم طلبك ${full.order_number}` },
         };
+        const storeStatusMessages: Record<string, { title: string; body: string }> = {
+          pickedUp: { title: 'تم استلام الطلب من متجرك', body: `استلم المندوب الطلب ${full.order_number} من متجرك` },
+          driverGoingToCustomer: { title: 'المندوب في طريقه للعميل', body: `بدأ المندوب توصيل الطلب ${full.order_number} إلى العميل` },
+          driverArrivedCustomer: { title: 'وصل المندوب للعميل', body: `وصل المندوب لتسليم الطلب ${full.order_number}` },
+        };
         const message = statusMessages[toStatus];
         if (message) {
           try {
-            await this.notifications.notifyOrderStatusChanged(
-              full.customer_id, full.order_number, message.title, message.body,
-            );
+            await this.notifications.notifyOrderStatusChanged(full.customer_id, full.order_number, message.title, message.body);
           } catch (err) {
-            console.warn('[driver] notify status failed:', (err as Error).message);
+            console.warn('[driver] notify customer status failed:', (err as Error).message);
+          }
+        }
+        const storeMessage = storeStatusMessages[toStatus];
+        if (storeMessage) {
+          try {
+            await this.notifications.notifyStoreOrderStatusChanged(full.store_id, full.order_number, storeMessage.title, storeMessage.body);
+          } catch (err) {
+            console.warn('[driver] notify store status failed:', (err as Error).message);
           }
         }
       }
-
       if (toStatus === 'delivered') {
         // Commission and delivery ledger entries were committed with the order transition.
         if (full) {
@@ -445,6 +456,11 @@ export class DriverService {
         if (full) {
           try {
             await this.notifications.notifyOrderDelivered(full.customer_id, full.order_number);
+            try {
+              await this.notifications.notifyStoreOrderStatusChanged(full.store_id, full.order_number, 'تم تسليم الطلب', `تم تسليم الطلب ${full.order_number} بنجاح`);
+            } catch (storeError) {
+              console.warn('[driver] notify store delivered failed:', (storeError as Error).message);
+            }
 
             // 🆕 إشعار أرباح للمندوب
             try {

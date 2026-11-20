@@ -24,11 +24,59 @@ export default function PushSetup() {
     const ok = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
     setSupported(ok);
     if (!ok) return;
-    setPermission(Notification.permission);
-    navigator.serviceWorker.ready.then(async (reg) => {
-      const sub = await reg.pushManager.getSubscription();
-      setSubscribed(!!sub);
-    });
+
+    let disposed = false;
+    const syncSubscription = async () => {
+      try {
+        setPermission(Notification.permission);
+        const reg = await navigator.serviceWorker.ready;
+        const sub = await reg.pushManager.getSubscription();
+        if (!sub || Notification.permission !== 'granted') {
+          if (!disposed) setSubscribed(false);
+          return;
+        }
+        const json = sub.toJSON();
+        if (!json.endpoint || !json.keys?.p256dh || !json.keys?.auth) {
+          if (!disposed) setError('اشتراك الإشعارات على هذا الجهاز غير مكتمل. أعد تفعيله.');
+          return;
+        }
+        // Re-sync on app start, login return, and tab resume. This repairs
+        // subscriptions that exist in the browser but were lost on the API.
+        const response = await authFetch('/api/v1/notifications/push/subscribe', {
+          method: 'POST',
+          body: JSON.stringify({
+            endpoint: json.endpoint,
+            p256dh: json.keys.p256dh,
+            auth: json.keys.auth,
+            userAgent: navigator.userAgent,
+          }),
+        });
+        if (!disposed) {
+          setSubscribed(response.ok);
+          if (!response.ok && response.status !== 401) {
+            setError('تعذر مزامنة اشتراك الإشعارات مع الخادم. أعد المحاولة من إعدادات الإشعارات.');
+          } else if (response.ok) {
+            setError('');
+          }
+        }
+      } catch (e) {
+        if (!disposed) setError('تعذر التحقق من اشتراك الإشعارات: ' + (e as Error).message);
+      }
+    };
+
+    void syncSubscription();
+    const onResume = () => {
+      if (document.visibilityState === 'visible') void syncSubscription();
+    };
+    window.addEventListener('focus', onResume);
+    window.addEventListener('pageshow', onResume);
+    document.addEventListener('visibilitychange', onResume);
+    return () => {
+      disposed = true;
+      window.removeEventListener('focus', onResume);
+      window.removeEventListener('pageshow', onResume);
+      document.removeEventListener('visibilitychange', onResume);
+    };
   }, []);
 
   const enable = async () => {

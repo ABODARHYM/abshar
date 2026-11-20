@@ -8,13 +8,16 @@ export interface PushPayload {
   body: string;
   actionUrl?: string;
   icon?: string;
+  priority?: string;
+  tag?: string;
 }
 
-/**
- * إرسال Web Push عبر بروتوكول VAPID (مكتبة web-push).
- * يُفعَّل تلقائيًا عند ضبط VAPID_PUBLIC_KEY و VAPID_PRIVATE_KEY؛ وإلا يبقى معطّلًا
- * والنظام يعمل بالـ WebSocket والإشعارات داخل التطبيق.
- */
+export interface PushDeliveryResult {
+  subscriptionCount: number;
+  acceptedEndpoints: string[];
+  failedEndpoints: string[];
+}
+
 @Injectable()
 export class PushService {
   private readonly logger = new Logger(PushService.name);
@@ -38,54 +41,76 @@ export class PushService {
     }
   }
 
-  isEnabled(): boolean {
-    return this.enabled;
-  }
+  isEnabled(): boolean { return this.enabled; }
+  getPublicKey(): string | null { return this.publicKey; }
 
-  getPublicKey(): string | null {
-    return this.publicKey;
-  }
-
-  /** يرجع عدد الأجهزة التي استلمت الإشعار فعليًا. يحذف الاشتراكات المنتهية (404/410). */
-  async sendToUser(userId: string, payload: PushPayload): Promise<number> {
-    if (!this.enabled) return 0;
+  /**
+   * Sends only to endpoints not already accepted for this outbox job.
+   * Successful endpoints are persisted by the outbox before a retry, preventing
+   * partial-success retries from re-alerting devices that already accepted the push.
+   */
+  async sendToUserDetailed(
+    userId: string,
+    payload: PushPayload,
+    alreadyAccepted: string[] = [],
+  ): Promise<PushDeliveryResult> {
+    if (!this.enabled) return { subscriptionCount: 0, acceptedEndpoints: [], failedEndpoints: [] };
 
     const subs = await this.repo.listPushSubscriptions(userId);
-    if (subs.length === 0) {
-      this.logger.warn(`Push skipped: no active subscriptions for user ${userId}`);
-      return 0;
+    const excluded = new Set(alreadyAccepted);
+    const pending = subs.filter((sub) => !excluded.has(sub.endpoint));
+    if (pending.length === 0) {
+      return { subscriptionCount: subs.length, acceptedEndpoints: [], failedEndpoints: [] };
     }
 
     const data = JSON.stringify({
       title: payload.title,
       body: payload.body,
       icon: payload.icon ?? '/icons/icon-192.png',
+      badge: '/icons/icon-72.png',
+      priority: payload.priority ?? 'normal',
+      tag: payload.tag,
+      actionUrl: payload.actionUrl ?? '/',
       data: { url: payload.actionUrl ?? '/' },
     });
 
-    const results = await Promise.all(
-      subs.map(async (sub) => {
+    const acceptedEndpoints: string[] = [];
+    const failedEndpoints: string[] = [];
+    await Promise.all(pending.map(async (sub) => {
+      try {
+        await webpush.sendNotification(
+          { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+          data,
+          { TTL: 60 * 60 * 24 },
+        );
+        acceptedEndpoints.push(sub.endpoint);
+        // Usage telemetry must never turn a provider-accepted push into a retry.
         try {
-          await webpush.sendNotification(
-            { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
-            data,
-            { TTL: 60 * 60 * 24 },
-          );
           await this.repo.markPushUsed(sub.endpoint);
-          return true;
-        } catch (err) {
-          const e = err as { statusCode?: number; message?: string };
-          this.logger.warn(`Push failed (${sub.endpoint.slice(0, 60)}…): ${e.message ?? 'unknown error'}`);
-          if (e.statusCode === 410 || e.statusCode === 404) {
-            await this.repo.removePushSubscription(userId, sub.endpoint);
-          }
-          return false;
+        } catch (telemetryError) {
+          this.logger.warn(`Could not update push usage for endpoint: ${(telemetryError as Error).message}`);
         }
-      }),
-    );
-    const sent = results.filter(Boolean).length;
-    this.logger.log(`Push result for user ${userId}: ${sent}/${subs.length} accepted by push service`);
-    return sent;
+      } catch (err) {
+        const e = err as { statusCode?: number; message?: string };
+        this.logger.warn(`Push failed (${sub.endpoint.slice(0, 60)}…): ${e.message ?? 'unknown error'}`);
+        if (e.statusCode === 410 || e.statusCode === 404) {
+          await this.repo.removePushSubscription(userId, sub.endpoint);
+        } else {
+          failedEndpoints.push(sub.endpoint);
+        }
+      }
+    }));
+
+    this.logger.log(`Push result for user ${userId}: ${acceptedEndpoints.length}/${pending.length} newly accepted`);
+    return { subscriptionCount: subs.length, acceptedEndpoints, failedEndpoints };
+  }
+
+  async sendToUser(userId: string, payload: PushPayload, requireAll = false): Promise<number> {
+    const result = await this.sendToUserDetailed(userId, payload);
+    if (requireAll && result.acceptedEndpoints.length !== result.subscriptionCount) {
+      throw new Error(`Push delivery incomplete for user ${userId}: ${result.acceptedEndpoints.length}/${result.subscriptionCount} accepted`);
+    }
+    return result.acceptedEndpoints.length;
   }
 
   async testToUser(userId: string): Promise<{ subscriptions: number; accepted: number }> {

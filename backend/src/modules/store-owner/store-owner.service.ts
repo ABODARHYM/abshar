@@ -387,6 +387,13 @@ export class StoreOwnerService {
       }
       const items = await this.repo.listOrderItems(orderId);
       const full = await this.repo.findOrderForStore(orderId, store.id);
+      if (full) {
+        try {
+          await this.notifications.notifyOrderStatusChanged(full.customer_id, full.order_number, 'تعذر قبول الطلب', `لم يتم قبول طلبك ${full.order_number}: ${reason}`);
+        } catch (e) {
+          console.warn('[store-owner] notify rejected failed:', (e as Error).message);
+        }
+      }
       return this.toOrderResponse(full ?? updated, items);
     } catch (e) {
       if ((e as Error).message?.includes('Cannot transition')) {
@@ -420,6 +427,13 @@ export class StoreOwnerService {
       }
       const items = await this.repo.listOrderItems(orderId);
       const full = await this.repo.findOrderForStore(orderId, store.id);
+      if (full) {
+        try {
+          await this.notifications.notifyOrderStatusChanged(full.customer_id, full.order_number, 'بدأ المتجر التحضير', `بدأ المتجر تحضير طلبك ${full.order_number}`);
+        } catch (e) {
+          console.warn('[store-owner] notify preparing failed:', (e as Error).message);
+        }
+      }
       return this.toOrderResponse(full ?? updated, items);
     } catch (e) {
       if ((e as Error).message?.includes('Cannot transition')) {
