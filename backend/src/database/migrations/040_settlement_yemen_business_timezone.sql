@@ -1,5 +1,5 @@
 -- 040: Validate settlement reservations using Yemen business dates (Asia/Aden).
--- No historical rows are rewritten. Ambiguous reservations stop this migration for review.
+-- Ambiguous reservations stop this migration. Pending/approved totals are audited before correction; paid rows remain unchanged.
 DO $$
 DECLARE
   mismatch uuid;
