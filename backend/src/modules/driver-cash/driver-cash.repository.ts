@@ -152,7 +152,6 @@ export class DriverCashRepository {
           order_id, account_type, account_id, type, direction, amount, currency, description, created_by, idempotency_key
         )
         VALUES ($1, 'driver', $2, 'cod_collection', 'credit', $3, $4, 'Cash on delivery collected', $2, $5)
-        ON CONFLICT DO NOTHING
         `,
         [params.orderId, params.driverId, params.amount, params.currency, `order:${params.orderId}:driver:cod_collection:credit`],
       );
@@ -181,12 +180,31 @@ export class DriverCashRepository {
       currency: string;
     },
   ): Promise<void> {
-    const existing = await this.queryWithClient(
+    const existing = await this.queryWithClient<{
+      account_type: string;
+      account_id: string | null;
+      direction: string;
+      amount: string;
+      currency: string;
+    }>(
       client,
-      `SELECT 1 FROM transactions WHERE order_id = $1 AND type = 'driver_earning' LIMIT 1`,
+      `SELECT account_type, account_id, direction, amount::text, currency
+       FROM transactions WHERE order_id = $1 AND type = 'driver_earning' LIMIT 1`,
       [params.orderId],
     );
-    if (existing.rows.length > 0) return;
+    if (existing.rows.length > 0) {
+      const earning = existing.rows[0];
+      if (
+        earning.account_type !== 'driver' ||
+        earning.account_id !== params.driverId ||
+        earning.direction !== 'credit' ||
+        Number(earning.amount) !== params.amount ||
+        earning.currency?.trim() !== params.currency.trim()
+      ) {
+        throw new ConflictException('An existing driver earning conflicts with the delivered order');
+      }
+      return;
+    }
 
     await this.queryWithClient(
       client,
