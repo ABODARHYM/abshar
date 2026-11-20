@@ -633,6 +633,7 @@ export class DriverRepository {
       actor: 'customer' | 'store' | 'driver' | 'admin' | 'system';
       reasonCode: string;
     },
+    onDelivered?: (client: PoolClient, order: DriverOrderRow) => Promise<void>,
   ): Promise<DriverOrderRow | null> {
     return this.db.transaction(async (client: PoolClient) => {
       const cur = await client.query<{ status: string; driver_id: string | null }>(
@@ -711,6 +712,12 @@ export class DriverRepository {
         `,
         [orderId, o.status, toStatus, driverId, note ?? null],
       );
+
+      // Financial effects share this transaction with the delivered status.
+      // Any ledger/commission failure rolls the entire transition back.
+      if (toStatus === 'delivered' && onDelivered) {
+        await onDelivered(client, upd.rows[0]);
+      }
 
       // عند التسليم: حرّر السائق
       if (toStatus === 'delivered') {
