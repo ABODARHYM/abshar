@@ -241,6 +241,20 @@ BEGIN
   ) THEN
     RAISE EXCEPTION 'Invalid settlement status transition: % -> %', OLD.status, NEW.status;
   END IF;
+  IF NEW.approved_by IS DISTINCT FROM OLD.approved_by
+     AND NOT (OLD.status = 'pending' AND NEW.status = 'approved' AND NEW.approved_by IS NOT NULL) THEN
+    RAISE EXCEPTION 'Settlement approver can only be set during approval';
+  END IF;
+  IF NEW.settled_at IS DISTINCT FROM OLD.settled_at
+     AND NOT (OLD.status = 'approved' AND NEW.status = 'paid' AND NEW.settled_at IS NOT NULL) THEN
+    RAISE EXCEPTION 'Settlement paid timestamp can only be set during payout';
+  END IF;
+  IF NEW.status = 'approved' AND NEW.approved_by IS NULL THEN
+    RAISE EXCEPTION 'Approved settlement requires an approver';
+  END IF;
+  IF NEW.status = 'paid' AND NEW.settled_at IS NULL THEN
+    RAISE EXCEPTION 'Paid settlement requires a paid timestamp';
+  END IF;
 
   RETURN NEW;
 END;
