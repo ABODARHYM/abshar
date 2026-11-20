@@ -315,7 +315,7 @@ export class FinanceRepository {
             `INSERT INTO transactions
               (settlement_id, account_type, account_id, type, direction, amount, currency, description, created_by, idempotency_key)
              VALUES ($1, $2, $3, 'settlement_payout', 'debit', $4, $5, $6, $7, $8)
-             ON CONFLICT DO NOTHING`,
+             `,
             [id, current.party_type, current.party_id, current.net_amount,
               current.currency, `Settlement payout ${id}`, actorId, `settlement:${id}:payout`],
           );
