@@ -27,30 +27,40 @@ export class DispatchRepository {
     excludeDriverIds?: string[];
     limit: number;
   }): Promise<DriverNearbyRow[]> {
+    // Fail closed: never dispatch when the store coordinates are missing or invalid.
+    if (
+      !Number.isFinite(params.storeLat) ||
+      !Number.isFinite(params.storeLng) ||
+      params.storeLat < -90 || params.storeLat > 90 ||
+      params.storeLng < -180 || params.storeLng > 180 ||
+      !Number.isInteger(params.limit) || params.limit < 1
+    ) {
+      return [];
+    }
+
     const excluded = params.excludeDriverIds ?? [];
     const excludeClause = excluded.length > 0
-      ? `AND d.user_id NOT IN (${excluded.map((_, i) => `$${i + 4}`).join(',')})`
+      ? `AND d.user_id <> ALL($4::uuid[])`
       : '';
 
     const queryParams: unknown[] = [
       params.storeLat,
       params.storeLng,
       params.limit,
-      ...excluded,
+      ...(excluded.length > 0 ? [excluded] : []),
     ];
 
     const r = await this.db.query<DriverNearbyRow>(
       `
-      SELECT
-        d.user_id,
-        u.full_name,
-        d.last_latitude,
-        d.last_longitude,
-        d.availability,
-        d.rating_avg,
-        CASE
-          WHEN d.last_latitude IS NULL OR d.last_longitude IS NULL THEN 9999
-          ELSE (
+      WITH eligible_drivers AS (
+        SELECT
+          d.user_id,
+          u.full_name,
+          d.last_latitude AS latitude,
+          d.last_longitude AS longitude,
+          d.availability,
+          d.rating_avg,
+          (
             6371 * acos(
               LEAST(1, GREATEST(-1,
                 cos(radians($1)) * cos(radians(d.last_latitude)) *
@@ -58,18 +68,31 @@ export class DispatchRepository {
                 sin(radians($1)) * sin(radians(d.last_latitude))
               ))
             )
-          )
-        END::numeric(8,2) AS distance_km
-      FROM drivers d
-      JOIN users u ON u.id = d.user_id
-      WHERE d.status = 'active'
-        AND d.availability IN ('online', 'busy')
-        AND u.deleted_at IS NULL
-        ${excludeClause}
-      ORDER BY
-        (d.availability = 'online') DESC,
-        distance_km ASC,
-        d.rating_avg DESC
+          ) AS distance_km
+        FROM drivers d
+        JOIN users u ON u.id = d.user_id
+        WHERE d.status = 'active'
+          AND d.availability = 'online'
+          AND u.deleted_at IS NULL
+          AND d.last_latitude IS NOT NULL
+          AND d.last_longitude IS NOT NULL
+          AND d.last_location_at IS NOT NULL
+          AND d.last_location_at >= now() - interval '15 minutes'
+          AND d.last_latitude BETWEEN -90 AND 90
+          AND d.last_longitude BETWEEN -180 AND 180
+          ${excludeClause}
+      )
+      SELECT
+        user_id,
+        full_name,
+        latitude,
+        longitude,
+        distance_km::numeric(8,2)::text AS distance_km,
+        rating_avg,
+        availability
+      FROM eligible_drivers
+      WHERE distance_km <= 30
+      ORDER BY distance_km ASC, rating_avg DESC
       LIMIT $3
       `,
       queryParams,
