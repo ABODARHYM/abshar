@@ -84,3 +84,28 @@ CREATE TRIGGER commissions_validate_order_snapshot
   BEFORE INSERT ON commissions
   FOR EACH ROW
   EXECUTE FUNCTION validate_commission_order_snapshot();
+
+-- Commission snapshots and original delivery fees are immutable after creation.
+DROP TRIGGER IF EXISTS commissions_append_only ON commissions;
+CREATE TRIGGER commissions_append_only
+  BEFORE UPDATE OR DELETE ON commissions
+  FOR EACH ROW
+  EXECUTE FUNCTION prevent_mutation();
+
+CREATE OR REPLACE FUNCTION prevent_order_original_delivery_fee_change()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  IF NEW.original_delivery_fee IS DISTINCT FROM OLD.original_delivery_fee THEN
+    RAISE EXCEPTION 'Original delivery fee is immutable after order creation';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS orders_original_delivery_fee_immutable ON orders;
+CREATE TRIGGER orders_original_delivery_fee_immutable
+  BEFORE UPDATE OF original_delivery_fee ON orders
+  FOR EACH ROW
+  EXECUTE FUNCTION prevent_order_original_delivery_fee_change();
