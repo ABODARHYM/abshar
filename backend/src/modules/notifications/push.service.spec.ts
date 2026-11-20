@@ -81,6 +81,7 @@ describe('PushService', () => {
     );
     expect(result.acceptedEndpoints).toEqual(['needs-retry']);
     expect(result.failedEndpoints).toEqual([]);
+    expect(result.failureReasons).toEqual([]);
   });
 
   it('requests an outbox retry when any active device subscription fails', async () => {
@@ -94,4 +95,17 @@ describe('PushService', () => {
     const svc = new PushService(repo, enabledCfg);
     await expect(svc.sendToUser('u1', { title: 't', body: 'b' }, true)).rejects.toThrow('Push delivery incomplete');
   });
+  it('returns sanitized provider status without exposing the subscription endpoint', async () => {
+    const endpoint = 'https://push.example.test/private-subscription-token';
+    const repo = makeRepo([{ endpoint, p256dh: 'p', auth: 'a' }]);
+    (mocked.sendNotification as jest.Mock).mockRejectedValue(
+      Object.assign(new Error(`provider rejected ${endpoint}`), { statusCode: 503 }),
+    );
+    const svc = new PushService(repo, enabledCfg);
+    const result = await svc.sendToUserDetailed('u1', { title: 't', body: 'b' });
+    expect(result.failedEndpoints).toEqual([endpoint]);
+    expect(result.failureReasons).toEqual(['HTTP 503']);
+    expect(JSON.stringify(result.failureReasons)).not.toContain(endpoint);
+  });
+
 });
