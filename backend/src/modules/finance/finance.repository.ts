@@ -521,6 +521,51 @@ export class FinanceRepository {
       const currency = order.currency;
       const creatorId = order.driver_id;
 
+      const ensurePlatformDebit = async (
+        amount: string,
+        description: string,
+        idempotencyKey: string,
+      ): Promise<void> => {
+        if (Number(amount) <= 0) return;
+        const existing = await client.query<{
+          order_id: string;
+          account_type: string;
+          account_id: string | null;
+          type: string;
+          direction: string;
+          amount: string;
+          currency: string;
+        }>(
+          `SELECT order_id, account_type, account_id, type, direction, amount::text, currency
+           FROM transactions WHERE idempotency_key = $1 LIMIT 1`,
+          [idempotencyKey],
+        );
+        if (existing.rows.length > 0) {
+          const debit = existing.rows[0];
+          if (
+            debit.order_id !== orderId ||
+            debit.account_type !== 'platform' ||
+            debit.account_id !== null ||
+            debit.type !== 'discount' ||
+            debit.direction !== 'debit' ||
+            debit.amount !== amount ||
+            debit.currency?.trim() !== currency.trim()
+          ) {
+            throw new ConflictException('An existing platform-funded discount conflicts with the delivered order');
+          }
+          return;
+        }
+
+        await client.query(
+          `INSERT INTO transactions (
+             order_id, account_type, account_id, type, direction, amount,
+             currency, description, created_by, idempotency_key
+           )
+           VALUES ($1, 'platform', NULL, 'discount', 'debit', $2, $3, $4, $5, $6)`,
+          [orderId, amount, currency, description, creatorId, idempotencyKey],
+        );
+      };
+
       const existingStoreEarning = await client.query<{
         account_type: string;
         account_id: string | null;
@@ -626,6 +671,31 @@ export class FinanceRepository {
             [orderId, order.driver_id, commissionRow.driver_amount, currency, creatorId, `order:${orderId}:driver:driver_earning:credit`],
           );
         }
+      }
+
+      // Product discounts are platform-funded; the store's commissionable subtotal is unchanged.
+      await ensurePlatformDebit(
+        order.discount_total,
+        'Platform-funded customer discount',
+        `order:${orderId}:platform:customer_discount:debit`,
+      );
+
+      // Free delivery is also platform-funded. The driver still earns the original fee.
+      if (originalDeliveryFee !== null) {
+        const waivedResult = await client.query<{ is_valid: boolean; amount: string }>(
+          `SELECT
+             $1::numeric >= $2::numeric AS is_valid,
+             GREATEST($1::numeric - $2::numeric, 0)::numeric(12,2)::text AS amount`,
+          [originalDeliveryFee, order.delivery_fee],
+        );
+        if (!waivedResult.rows[0]?.is_valid) {
+          throw new ConflictException('Original delivery fee cannot be lower than the customer delivery fee');
+        }
+        await ensurePlatformDebit(
+          waivedResult.rows[0].amount,
+          'Platform-funded free delivery',
+          `order:${orderId}:platform:free_delivery:debit`,
+        );
       }
 
       return commissionRow;
