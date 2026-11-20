@@ -214,7 +214,6 @@ export class DriverCashRepository {
       )
       VALUES ($1, 'driver', $2, 'driver_earning', 'credit', $3, $4, 'Driver earning', $2,
         'order:' || $1::text || ':driver:driver_earning:credit')
-      ON CONFLICT DO NOTHING
       `,
       [params.orderId, params.driverId, params.amount, params.currency],
     );
