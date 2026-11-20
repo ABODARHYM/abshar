@@ -269,8 +269,11 @@ WITH settlement_totals AS (
     SUM(CASE WHEN s.party_type = 'store' THEN c.commission_amount ELSE 0 END)::numeric(14,2) AS commission_amount,
     SUM(CASE WHEN s.party_type = 'store' THEN c.store_amount ELSE c.driver_amount END)::numeric(14,2) AS net_amount
   FROM settlements s
-  JOIN settlement_commissions sc ON sc.settlement_id = s.id
+  JOIN settlement_commissions sc
+    ON sc.settlement_id = s.id
+   AND sc.released_at IS NULL
   JOIN commissions c ON c.id = sc.commission_id
+  WHERE s.status <> 'cancelled'
   GROUP BY s.id, s.party_type
 )
 UPDATE settlements s
