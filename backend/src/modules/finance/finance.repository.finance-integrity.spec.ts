@@ -127,4 +127,64 @@ describe('FinanceRepository shared delivery transaction', () => {
     expect(String(client.query.mock.calls[3][0])).toContain('UPDATE settlement_commissions');
   });
 
+  it('credits the original delivery fee and records platform-funded product and delivery discounts', async () => {
+    const commission = {
+      id: 'commission-free-delivery',
+      store_id: 'store-1',
+      order_amount: '100.00',
+      delivery_fee: '0.00',
+      original_delivery_fee: '20.00',
+      discount_amount: '10.00',
+      store_amount: '90.00',
+      commission_amount: '10.00',
+      platform_amount: '10.00',
+      driver_amount: '20.00',
+    };
+    const client = {
+      query: jest.fn()
+        .mockResolvedValueOnce({ rows: [{
+          id: 'order-2', store_id: 'store-1', driver_id: 'driver-1',
+          subtotal: '100.00', delivery_fee: '0.00', original_delivery_fee: '20.00',
+          discount_total: '10.00', total: '90.00', currency: 'YER',
+        }], rowCount: 1 })
+        .mockResolvedValueOnce({ rows: [], rowCount: 0 })
+        .mockResolvedValueOnce({ rows: [{ commission_rate: '10.00' }], rowCount: 1 })
+        .mockResolvedValueOnce({ rows: [commission], rowCount: 1 })
+        .mockResolvedValueOnce({ rows: [], rowCount: 0 })
+        .mockResolvedValueOnce({ rows: [], rowCount: 1 })
+        .mockResolvedValueOnce({ rows: [], rowCount: 0 })
+        .mockResolvedValueOnce({ rows: [], rowCount: 1 })
+        .mockResolvedValueOnce({ rows: [], rowCount: 0 })
+        .mockResolvedValueOnce({ rows: [], rowCount: 1 })
+        .mockResolvedValueOnce({ rows: [], rowCount: 0 })
+        .mockResolvedValueOnce({ rows: [], rowCount: 1 })
+        .mockResolvedValueOnce({ rows: [{ is_valid: true, amount: '20.00' }], rowCount: 1 })
+        .mockResolvedValueOnce({ rows: [], rowCount: 0 })
+        .mockResolvedValueOnce({ rows: [], rowCount: 1 }),
+    };
+    const repo = new FinanceRepository({} as any);
+
+    const result = await repo.computeCommissionForOrder('order-2', client as any);
+
+    expect(result).toEqual(commission);
+    const commissionInsert = client.query.mock.calls[3];
+    expect(String(commissionInsert[0])).toContain('original_delivery_fee');
+    expect(commissionInsert[1][5]).toBe('20.00');
+
+    const productDiscountInsert = client.query.mock.calls[11];
+    expect(String(productDiscountInsert[0])).toContain("'discount', 'debit'");
+    expect(productDiscountInsert[1]).toEqual([
+      'order-2', '10.00', 'YER', 'Platform-funded customer discount',
+      'driver-1', 'order:order-2:platform:customer_discount:debit',
+    ]);
+
+    expect(String(client.query.mock.calls[12][0])).toContain('GREATEST');
+    expect(client.query.mock.calls[12][1]).toEqual(['20.00', '0.00']);
+    const freeDeliveryInsert = client.query.mock.calls[14];
+    expect(freeDeliveryInsert[1]).toEqual([
+      'order-2', '20.00', 'YER', 'Platform-funded free delivery',
+      'driver-1', 'order:order-2:platform:free_delivery:debit',
+    ]);
+  });
+
 });
