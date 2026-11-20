@@ -90,6 +90,7 @@ describe('FinanceRepository shared delivery transaction', () => {
     });
 
     expect(result.id).toBe('settlement-1');
+    expect(client.query.mock.calls[2][1].slice(4, 7)).toEqual(['100.00', '10.00', '90.00']);
     expect(String(client.query.mock.calls[0][0])).toContain("AT TIME ZONE 'Asia/Aden'");
     expect(String(client.query.mock.calls[0][0])).not.toContain('delivered_at::date');
   });
