@@ -218,6 +218,31 @@ BEGIN
 END;
 $$;
 
+-- Correct legacy settlement totals: gross is pre-commission order value, net is the payable amount.
+-- Keep all linked historical commissions and settlement payouts unchanged.
+WITH settlement_totals AS (
+  SELECT
+    s.id,
+    SUM(CASE WHEN s.party_type = 'store' THEN c.order_amount ELSE c.driver_amount END)::numeric(14,2) AS gross_amount,
+    SUM(CASE WHEN s.party_type = 'store' THEN c.commission_amount ELSE 0 END)::numeric(14,2) AS commission_amount,
+    SUM(CASE WHEN s.party_type = 'store' THEN c.store_amount ELSE c.driver_amount END)::numeric(14,2) AS net_amount
+  FROM settlements s
+  JOIN settlement_commissions sc ON sc.settlement_id = s.id
+  JOIN commissions c ON c.id = sc.commission_id
+  GROUP BY s.id, s.party_type
+)
+UPDATE settlements s
+SET gross_amount = totals.gross_amount,
+    commission_amount = totals.commission_amount,
+    net_amount = totals.net_amount
+FROM settlement_totals totals
+WHERE s.id = totals.id
+  AND (
+    s.gross_amount IS DISTINCT FROM totals.gross_amount
+    OR s.commission_amount IS DISTINCT FROM totals.commission_amount
+    OR s.net_amount IS DISTINCT FROM totals.net_amount
+  );
+
 -- Settlement financial identity is immutable; status transitions follow the approved state machine.
 CREATE OR REPLACE FUNCTION protect_settlement_financial_identity()
 RETURNS trigger
