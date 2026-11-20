@@ -89,6 +89,14 @@ describe('real migration files', () => {
     expect(checksumOf(sql)).not.toBe(checksumOf(normalized));
   });
 
+
+  it('reconciles only active commission links for non-cancelled settlements', () => {
+    const sql = readFileSync(join(dir, '040_settlement_yemen_business_timezone.sql'), 'utf8');
+    const totals = sql.slice(sql.indexOf('WITH settlement_totals AS'), sql.indexOf('-- Settlement financial identity'));
+    expect(totals).toContain('sc.released_at IS NULL');
+    expect(totals).toContain("WHERE s.status <> 'cancelled'");
+  });
+
   it('contain every table required by the spec', () => {
     const all = names.map((n) => readFileSync(join(dir, n), 'utf8')).join('\n');
     const required = [
