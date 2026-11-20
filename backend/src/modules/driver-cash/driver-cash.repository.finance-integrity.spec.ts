@@ -20,7 +20,7 @@ describe('DriverCashRepository finance integrity', () => {
     expect(client.query).toHaveBeenCalledTimes(3);
     expect(db.query).not.toHaveBeenCalled();
     expect(String(client.query.mock.calls[0][0])).toContain("type = 'cod_collection'");
-    expect(String(client.query.mock.calls[1][0])).toContain('ON CONFLICT DO NOTHING');
+    expect(String(client.query.mock.calls[1][0])).not.toContain('ON CONFLICT DO NOTHING');
     expect(String(client.query.mock.calls[2][0])).toContain('UPDATE orders');
   });
 
