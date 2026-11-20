@@ -11,6 +11,15 @@ const nextConfig = {
     };
     return config;
   },
+  async rewrites() {
+    const apiOrigin = (process.env.ABSHER_API_ORIGIN || 'https://absher-bi-backend-staging.onrender.com');
+    return [
+      {
+        source: '/api/v1/:path*',
+        destination: `${apiOrigin}/api/v1/:path*`,
+      },
+    ];
+  },
   async headers() {
     return [
       {
