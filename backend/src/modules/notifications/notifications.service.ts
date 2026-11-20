@@ -89,12 +89,13 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
           } else {
             await this.repo.markPushOutboxSent(job.id);
           }
-        } catch (error) {
-          await this.repo.markPushOutboxFailed(job.id, job.attempts, (error as Error).message);
+        } catch {
+          // Do not persist provider/transport exception text; it may contain endpoints or secrets.
+          await this.repo.markPushOutboxFailed(job.id, job.attempts, 'Push outbox delivery failed');
         }
       }
-    } catch (error) {
-      this.logger.error('Push outbox processing failed: ' + (error as Error).message);
+    } catch {
+      this.logger.error('Push outbox processing failed');
     } finally {
       this.processingPushOutbox = false;
     }
