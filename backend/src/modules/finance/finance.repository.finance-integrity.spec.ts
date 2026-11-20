@@ -189,4 +189,21 @@ describe('FinanceRepository shared delivery transaction', () => {
     ]);
   });
 
+  it('refuses to invent a driver fee for historical free-delivery orders with unknown originals', async () => {
+    const client = {
+      query: jest.fn()
+        .mockResolvedValueOnce({ rows: [{
+          id: 'legacy-order', store_id: 'store-1', driver_id: 'driver-1',
+          subtotal: '100.00', delivery_fee: '0.00', original_delivery_fee: null,
+          discount_total: '0.00', total: '100.00', currency: 'YER',
+        }], rowCount: 1 })
+        .mockResolvedValueOnce({ rows: [], rowCount: 0 }),
+    };
+    const repo = new FinanceRepository({} as any);
+
+    await expect(repo.computeCommissionForOrder('legacy-order', client as any))
+      .rejects.toThrow('Original delivery fee is unknown');
+    expect(client.query).toHaveBeenCalledTimes(2);
+  });
+
 });
