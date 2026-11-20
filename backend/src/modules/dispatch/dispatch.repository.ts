@@ -195,15 +195,15 @@ export class DispatchRepository {
   async getStoreInfo(storeId: string): Promise<{
     id: string;
     name_ar: string;
-    latitude: string | number;
-    longitude: string | number;
+    latitude: string | number | null;
+    longitude: string | number | null;
     zone_id: string | null;
   } | null> {
     const r = await this.db.query<{
       id: string;
       name_ar: string;
-      latitude: string | number;
-      longitude: string | number;
+      latitude: string | number | null;
+      longitude: string | number | null;
       zone_id: string | null;
     }>(
       `SELECT id, name_ar, latitude, longitude, zone_id FROM stores WHERE id = $1 AND deleted_at IS NULL LIMIT 1`,
