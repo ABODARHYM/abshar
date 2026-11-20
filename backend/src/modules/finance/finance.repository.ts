@@ -533,7 +533,6 @@ export class FinanceRepository {
             currency, description, created_by, idempotency_key
           )
           VALUES ($1, 'store', $2, 'store_earning', 'credit', $3, $4, 'Store earning', $5, $6)
-          ON CONFLICT DO NOTHING
           `,
           [orderId, order.store_id, commissionRow.store_amount, currency, creatorId, `order:${orderId}:store:store_earning:credit`],
         );
@@ -569,7 +568,6 @@ export class FinanceRepository {
             currency, description, created_by, idempotency_key
           )
           VALUES ($1, 'platform', 'commission', 'credit', $2, $3, 'Platform commission', $4, $5)
-          ON CONFLICT DO NOTHING
           `,
           [orderId, commissionRow.platform_amount, currency, creatorId, `order:${orderId}:platform:commission:credit`],
         );
@@ -606,8 +604,7 @@ export class FinanceRepository {
               currency, description, created_by, idempotency_key
             )
             VALUES ($1, 'driver', $2, 'driver_earning', 'credit', $3, $4, 'Driver earning', $5, $6)
-            ON CONFLICT DO NOTHING
-            `,
+              `,
             [orderId, order.driver_id, commissionRow.driver_amount, currency, creatorId, `order:${orderId}:driver:driver_earning:credit`],
           );
         }
