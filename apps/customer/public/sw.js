@@ -31,8 +31,8 @@ self.addEventListener('push', (event) => {
     vibrate: [200, 100, 200, 100, 200],
     dir: 'rtl',
     lang: 'ar',
-    tag: 'absher-customer',
-    renotify: true,
+    tag: data.tag || 'absher-customer',
+    renotify: false,
     requireInteraction: data.priority === 'high' || data.priority === 'urgent',
     color: '#e11d48',
     data: {

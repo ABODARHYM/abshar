@@ -18,29 +18,65 @@ export default function PushSetup() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [permission, setPermission] = useState<NotificationPermission>('default');
-  const [testing, setTesting] = useState(false);
-  const [testResult, setTestResult] = useState('');
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const ok = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
     setSupported(ok);
     if (!ok) return;
-    setPermission(Notification.permission);
-    navigator.serviceWorker.ready.then(async (reg) => {
-      const sub = await reg.pushManager.getSubscription();
-      if (sub && Notification.permission === 'granted') {
+
+    let disposed = false;
+    const syncSubscription = async () => {
+      try {
+        setPermission(Notification.permission);
+        const reg = await navigator.serviceWorker.ready;
+        const sub = await reg.pushManager.getSubscription();
+        if (!sub || Notification.permission !== 'granted') {
+          if (!disposed) setSubscribed(false);
+          return;
+        }
         const json = sub.toJSON();
-        const sync = await authFetch('/api/v1/notifications/push/subscribe', {
+        if (!json.endpoint || !json.keys?.p256dh || !json.keys?.auth) {
+          if (!disposed) setError('اشتراك الإشعارات على هذا الجهاز غير مكتمل. أعد تفعيله.');
+          return;
+        }
+        // Re-sync on app start, login return, and tab resume. This repairs
+        // subscriptions that exist in the browser but were lost on the API.
+        const response = await authFetch('/api/v1/notifications/push/subscribe', {
           method: 'POST',
-          body: JSON.stringify({ endpoint: json.endpoint, p256dh: json.keys?.p256dh, auth: json.keys?.auth, userAgent: navigator.userAgent }),
+          body: JSON.stringify({
+            endpoint: json.endpoint,
+            p256dh: json.keys.p256dh,
+            auth: json.keys.auth,
+            userAgent: navigator.userAgent,
+          }),
         });
-        setSubscribed(sync.ok);
-        if (!sync.ok) setError('الاشتراك موجود في الهاتف لكن لم يُحفظ على الخادم. أعد تفعيل الإشعارات.');
-      } else {
-        setSubscribed(false);
+        if (!disposed) {
+          setSubscribed(response.ok);
+          if (!response.ok && response.status !== 401) {
+            setError('تعذر مزامنة اشتراك الإشعارات مع الخادم. أعد المحاولة من إعدادات الإشعارات.');
+          } else if (response.ok) {
+            setError('');
+          }
+        }
+      } catch (e) {
+        if (!disposed) setError('تعذر التحقق من اشتراك الإشعارات: ' + (e as Error).message);
       }
-    });
+    };
+
+    void syncSubscription();
+    const onResume = () => {
+      if (document.visibilityState === 'visible') void syncSubscription();
+    };
+    window.addEventListener('focus', onResume);
+    window.addEventListener('pageshow', onResume);
+    document.addEventListener('visibilitychange', onResume);
+    return () => {
+      disposed = true;
+      window.removeEventListener('focus', onResume);
+      window.removeEventListener('pageshow', onResume);
+      document.removeEventListener('visibilitychange', onResume);
+    };
   }, []);
 
   const enable = async () => {
@@ -68,20 +104,6 @@ export default function PushSetup() {
       setSubscribed(true);
     } catch (e) { setError('خطأ: ' + (e as Error).message); }
     setLoading(false);
-  };
-
-  const testPush = async () => {
-    setTesting(true);
-    setTestResult('جارٍ إرسال إشعار اختبار...');
-    try {
-      const res = await authFetch('/api/v1/notifications/push/test', { method: 'POST' });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || 'فشل اختبار الإشعار');
-      if (data.subscriptions === 0) setTestResult('لا يوجد اشتراك محفوظ لهذا الحساب على الخادم. أوقف الإشعارات ثم فعّلها مجدداً.');
-      else if (data.accepted === 0) setTestResult(`وجدنا ${data.subscriptions} اشتراكاً، لكن خدمة الإرسال رفضت الإشعار. راجع سجل الخادم.`);
-      else setTestResult(`قبلت خدمة الإرسال الإشعار (${data.accepted}/${data.subscriptions}). تحقق من إشعارات الهاتف.`);
-    } catch (e) { setTestResult('تعذر الاختبار: ' + (e as Error).message); }
-    setTesting(false);
   };
 
   const disable = async () => {
@@ -113,8 +135,6 @@ export default function PushSetup() {
       <button onClick={subscribed ? disable : enable} disabled={loading} className={`btn btn-full ${subscribed ? 'btn-ghost text-red-400' : 'btn-primary'}`}>
         {loading ? '⏳...' : subscribed ? '🔕 إيقاف' : '🔔 تفعيل'}
       </button>
-      {subscribed && <button onClick={testPush} disabled={testing} className="btn btn-full btn-ghost mt-3">{testing ? '⏳ جارٍ الاختبار' : '🧪 إرسال إشعار تجريبي'}</button>}
-      {testResult && <p className="text-xs mt-3 text-center text-[var(--text-secondary)]">{testResult}</p>}
       {permission === 'denied' && <p className="text-xs text-[var(--text-muted)] mt-2 text-center">افتح إعدادات المتصفح للسماح</p>}
     </div>
   );
