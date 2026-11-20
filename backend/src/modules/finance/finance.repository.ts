@@ -484,7 +484,7 @@ export class FinanceRepository {
             $1, $2, $3, $4, $5, $6, $7,
             ROUND($4::numeric * $3::numeric / 100, 2),
             $4::numeric - ROUND($4::numeric * $3::numeric / 100, 2),
-            $7::numeric,
+            $6::numeric,
             ROUND($4::numeric * $3::numeric / 100, 2)
           )
           ON CONFLICT (order_id) DO NOTHING
