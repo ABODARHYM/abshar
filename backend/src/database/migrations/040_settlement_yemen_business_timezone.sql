@@ -260,8 +260,30 @@ BEGIN
   END IF;
 END $$;
 
--- Correct legacy settlement totals: gross is pre-commission order value, net is the payable amount.
--- Keep all linked historical commissions and settlement payouts unchanged.
+-- Preserve a before/after audit for any pending or approved settlement whose
+-- display totals are corrected. Paid settlements are intentionally never rewritten:
+-- their historical financial identity and payout ledger must remain byte-for-byte stable.
+CREATE TABLE IF NOT EXISTS settlement_financial_reconciliation_audit (
+  id bigserial PRIMARY KEY,
+  settlement_id uuid NOT NULL REFERENCES settlements(id),
+  migration_name text NOT NULL,
+  old_gross_amount numeric(14,2) NOT NULL,
+  old_commission_amount numeric(14,2) NOT NULL,
+  old_net_amount numeric(14,2) NOT NULL,
+  new_gross_amount numeric(14,2) NOT NULL,
+  new_commission_amount numeric(14,2) NOT NULL,
+  new_net_amount numeric(14,2) NOT NULL,
+  reconciled_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (settlement_id, migration_name)
+);
+
+DROP TRIGGER IF EXISTS settlement_financial_reconciliation_audit_append_only
+  ON settlement_financial_reconciliation_audit;
+CREATE TRIGGER settlement_financial_reconciliation_audit_append_only
+  BEFORE UPDATE OR DELETE ON settlement_financial_reconciliation_audit
+  FOR EACH ROW EXECUTE FUNCTION prevent_mutation();
+
+-- Correct only pending/approved legacy display totals. Paid settlements are immutable.
 WITH settlement_totals AS (
   SELECT
     s.id,
@@ -276,12 +298,32 @@ WITH settlement_totals AS (
   WHERE s.status <> 'cancelled'
   GROUP BY s.id, s.party_type
 )
+INSERT INTO settlement_financial_reconciliation_audit (
+  settlement_id, migration_name,
+  old_gross_amount, old_commission_amount, old_net_amount,
+  new_gross_amount, new_commission_amount, new_net_amount
+)
+SELECT
+  s.id, '040_settlement_yemen_business_timezone',
+  s.gross_amount, s.commission_amount, s.net_amount,
+  totals.gross_amount, totals.commission_amount, totals.net_amount
+FROM settlements s
+JOIN settlement_totals totals ON totals.id = s.id
+WHERE s.status IN ('pending', 'approved')
+  AND (
+    s.gross_amount IS DISTINCT FROM totals.gross_amount
+    OR s.commission_amount IS DISTINCT FROM totals.commission_amount
+    OR s.net_amount IS DISTINCT FROM totals.net_amount
+  )
+ON CONFLICT (settlement_id, migration_name) DO NOTHING;
+
 UPDATE settlements s
 SET gross_amount = totals.gross_amount,
     commission_amount = totals.commission_amount,
     net_amount = totals.net_amount
 FROM settlement_totals totals
 WHERE s.id = totals.id
+  AND s.status IN ('pending', 'approved')
   AND (
     s.gross_amount IS DISTINCT FROM totals.gross_amount
     OR s.commission_amount IS DISTINCT FROM totals.commission_amount
