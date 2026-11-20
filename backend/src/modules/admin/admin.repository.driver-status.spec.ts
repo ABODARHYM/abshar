@@ -44,7 +44,7 @@ describe('AdminRepository driver account status', () => {
     };
     const repo = new AdminRepository(db as any);
 
-    await expect(repo.updateDriverStatus('driver-user-1', 'suspended')).resolves.toBe(true);
+    await expect(repo.updateDriverStatus('driver-user-1', 'suspended', 'admin-1', 'superAdmin')).resolves.toBe(true);
 
     expect(String(client.query.mock.calls[0][0])).toContain('FOR UPDATE');
     expect(String(client.query.mock.calls[1][0])).toContain('UPDATE drivers');
@@ -65,7 +65,7 @@ describe('AdminRepository driver account status', () => {
     };
     const repo = new AdminRepository(db as any);
 
-    await expect(repo.updateDriverStatus('missing-driver', 'active')).resolves.toBe(false);
+    await expect(repo.updateDriverStatus('missing-driver', 'active', 'admin-1', 'superAdmin')).resolves.toBe(false);
     expect(client.query).toHaveBeenCalledTimes(1);
   });
 });
