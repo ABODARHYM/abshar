@@ -56,7 +56,7 @@ describe('FinanceRepository shared delivery transaction', () => {
       party_id: 'store-1',
       period_start: '2026-11-01',
       period_end: '2026-11-07',
-      gross_amount: '90.00',
+      gross_amount: '100.00',
       commission_amount: '10.00',
       net_amount: '90.00',
       currency: 'YER',
@@ -67,8 +67,8 @@ describe('FinanceRepository shared delivery transaction', () => {
     };
     const client = {
       query: jest.fn()
-        .mockResolvedValueOnce({ rows: [{ id: 'commission-1', amount: '90.00', commission_amount: '10.00', currency: 'YER' }], rowCount: 1 })
-        .mockResolvedValueOnce({ rows: [{ gross: '90.00', commission: '10.00' }], rowCount: 1 })
+        .mockResolvedValueOnce({ rows: [{ id: 'commission-1', amount: '90.00', gross_amount: '100.00', commission_amount: '10.00', currency: 'YER' }], rowCount: 1 })
+        .mockResolvedValueOnce({ rows: [{ gross: '100.00', commission: '10.00', net: '90.00' }], rowCount: 1 })
         .mockResolvedValueOnce({ rows: [settlement], rowCount: 1 })
         .mockResolvedValueOnce({ rows: [], rowCount: 1 })
         .mockResolvedValueOnce({ rows: [], rowCount: 1 })
