@@ -166,11 +166,13 @@ export class FinanceRepository {
       // Lock eligible commission rows so concurrent settlement requests cannot claim the same earnings.
       const idColumn = params.partyType === 'store' ? 'c.store_id' : 'o.driver_id';
       const amountColumn = params.partyType === 'store' ? 'c.store_amount' : 'c.driver_amount';
+      const grossAmountColumn = params.partyType === 'store' ? 'c.order_amount' : 'c.driver_amount';
       const eligible = await client.query<{
-        id: string; amount: string; commission_amount: string; currency: string;
+        id: string; amount: string; gross_amount: string; commission_amount: string; currency: string;
       }>(
         `
         SELECT c.id, ${amountColumn}::text AS amount,
+               ${grossAmountColumn}::text AS gross_amount,
                c.commission_amount::text AS commission_amount, o.currency
         FROM commissions c
         JOIN orders o ON o.id = c.order_id
@@ -198,16 +200,18 @@ export class FinanceRepository {
       }
 
       // Keep monetary aggregation in PostgreSQL NUMERIC; do not sum money using JS floats.
-      const totals = await client.query<{ gross: string; commission: string }>(
+      const totals = await client.query<{ gross: string; commission: string; net: string }>(
         `SELECT
-           COALESCE(SUM(CASE WHEN $2 = 'store' THEN c.store_amount ELSE c.driver_amount END), 0)::text AS gross,
-           COALESCE(SUM(CASE WHEN $2 = 'store' THEN c.commission_amount ELSE 0 END), 0)::text AS commission
+           COALESCE(SUM(CASE WHEN $2 = 'store' THEN c.order_amount ELSE c.driver_amount END), 0)::text AS gross,
+           COALESCE(SUM(CASE WHEN $2 = 'store' THEN c.commission_amount ELSE 0 END), 0)::text AS commission,
+           COALESCE(SUM(CASE WHEN $2 = 'store' THEN c.store_amount ELSE c.driver_amount END), 0)::text AS net
          FROM commissions c
          WHERE c.id = ANY($1::uuid[])`,
         [eligible.rows.map((row) => row.id), params.partyType],
       );
       const gross = totals.rows[0].gross;
       const commission = totals.rows[0].commission;
+      const net = totals.rows[0].net;
       const currency = currencies[0];
       const created = await client.query(
         `
@@ -215,13 +219,13 @@ export class FinanceRepository {
           party_type, party_id, period_start, period_end, gross_amount,
           commission_amount, net_amount, currency, status, notes, created_by
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $5, $7, 'pending', $8, $9)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending', $9, $10)
         RETURNING id, party_type, party_id, period_start, period_end,
                   gross_amount, commission_amount, net_amount, currency,
                   status, notes, settled_at, created_at
         `,
         [params.partyType, params.partyId, params.periodStart, params.periodEnd,
-          gross, commission, currency, params.notes ?? null, params.createdBy],
+          gross, commission, net, currency, params.notes ?? null, params.createdBy],
       );
       const settlement = created.rows[0];
 
@@ -245,7 +249,7 @@ export class FinanceRepository {
          VALUES ($1, $2, 'finance.settlement.create', 'settlement', $3, $4::jsonb)`,
         [params.createdBy, params.actorRole, settlement.id, JSON.stringify({
           partyType: params.partyType, partyId: params.partyId,
-          grossAmount: gross, commissionAmount: commission, currency,
+          grossAmount: gross, commissionAmount: commission, netAmount: net, currency,
           commissionCount: eligible.rows.length,
         })],
       );
