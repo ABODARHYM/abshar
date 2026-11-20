@@ -38,6 +38,15 @@ export class DispatchService {
       this.logger.warn(`Store ${params.storeId} not found`);
       return this.emptyResult(params.orderId);
     }
+    const storeLat = store.latitude == null ? Number.NaN : Number(store.latitude);
+    const storeLng = store.longitude == null ? Number.NaN : Number(store.longitude);
+    if (
+      !Number.isFinite(storeLat) || !Number.isFinite(storeLng) ||
+      storeLat < -90 || storeLat > 90 || storeLng < -180 || storeLng > 180
+    ) {
+      this.logger.warn(`Store ${params.storeId} has missing or invalid coordinates; dispatch skipped`);
+      return this.emptyResult(params.orderId);
+    }
 
     // 2) الجولة الحالية
     const currentRound = await this.repo.getCurrentRound(params.orderId);
@@ -50,8 +59,8 @@ export class DispatchService {
     if (nextRound > MAX_ROUNDS) {
       return this.broadcastToAll({
         ...params,
-        storeLat: Number(store.latitude),
-        storeLng: Number(store.longitude),
+        storeLat,
+        storeLng,
         excludedDriverIds: offeredIds,
         roundNumber: nextRound,
       });
@@ -232,11 +241,17 @@ export class DispatchService {
     limit?: number;
   }): Promise<NearbyDriverDto[]> {
     const store = await this.repo.getStoreInfo(params.storeId);
-    if (!store) return [];
+    if (!store || store.latitude == null || store.longitude == null) return [];
+    const storeLat = Number(store.latitude);
+    const storeLng = Number(store.longitude);
+    if (
+      !Number.isFinite(storeLat) || !Number.isFinite(storeLng) ||
+      storeLat < -90 || storeLat > 90 || storeLng < -180 || storeLng > 180
+    ) return [];
 
     const drivers = await this.repo.findNearbyAvailableDrivers({
-      storeLat: Number(store.latitude),
-      storeLng: Number(store.longitude),
+      storeLat,
+      storeLng,
       limit: params.limit ?? 10,
     });
 
