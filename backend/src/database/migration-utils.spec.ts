@@ -97,6 +97,21 @@ describe('real migration files', () => {
     expect(totals).toContain("WHERE s.status <> 'cancelled'");
   });
 
+  it('audits settlement total corrections and preserves paid settlement records', () => {
+    const sql = readFileSync(join(dir, '040_settlement_yemen_business_timezone.sql'), 'utf8');
+    const auditInsert = sql.indexOf('INSERT INTO settlement_financial_reconciliation_audit');
+    const settlementUpdate = sql.indexOf('UPDATE settlements s', auditInsert);
+    const identityGuard = sql.indexOf('-- Settlement financial identity', settlementUpdate);
+
+    expect(sql).toContain('CREATE TABLE IF NOT EXISTS settlement_financial_reconciliation_audit');
+    expect(sql).toContain('BEFORE UPDATE OR DELETE ON settlement_financial_reconciliation_audit');
+    expect(auditInsert).toBeGreaterThan(-1);
+    expect(settlementUpdate).toBeGreaterThan(auditInsert);
+    const reconciliation = sql.slice(auditInsert, identityGuard);
+    expect(reconciliation).toContain("s.status IN ('pending', 'approved')");
+    expect(reconciliation).not.toContain("s.status = 'paid'");
+  });
+
   it('contain every table required by the spec', () => {
     const all = names.map((n) => readFileSync(join(dir, n), 'utf8')).join('\n');
     const required = [
