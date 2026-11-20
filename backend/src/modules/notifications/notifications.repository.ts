@@ -45,7 +45,7 @@ export class NotificationsRepository {
 
   async createWithPushOutbox(
     input: CreateNotificationInput,
-    payload: { title: string; body: string; actionUrl?: string; icon?: string; priority?: string },
+    payload: { title: string; body: string; actionUrl?: string; icon?: string; image?: string; priority?: string },
   ): Promise<NotificationRow> {
     return this.db.transaction(async (client) => {
       const notification = await this.create(client, input);
