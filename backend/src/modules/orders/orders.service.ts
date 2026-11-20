@@ -252,7 +252,6 @@ export class OrdersService {
       storeId: store.id,
       currency,
       deliveryFee: finalDeliveryFee,
-      originalDeliveryFee: deliveryFee,
       subtotal,
       discountTotal,
       total,
@@ -383,16 +382,13 @@ export class OrdersService {
 
     const items = await this.repo.listItems(updated.id);
 
-    // إشعار المتجر (إن وُجد owner)
+    // Notify the store owner using the store ID; the notification service resolves the owner account.
     try {
-      const ownerUserId = await this.repo.getStoreOwnerId(updated.store_id);
-      if (ownerUserId) {
-        await this.notifications.notifyOrderCancelled(
-          ownerUserId,
-          updated.order_number,
-          note ?? reasonCode,
-        );
-      }
+      await this.notifications.notifyStoreOrderCancelled(
+        updated.store_id,
+        updated.order_number,
+        note ?? reasonCode,
+      );
     } catch (err) {
       console.warn('[orders] cancel notification failed:', (err as Error).message);
     }
