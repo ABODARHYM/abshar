@@ -378,22 +378,18 @@ export class AdminService {
     userId: string,
     status: string,
   ): Promise<{ status: string }> {
-    const ok = await this.repo.updateDriverStatus(userId, status);
+    const ok = await this.repo.updateDriverStatus(
+      userId,
+      status,
+      actorId,
+      actorRoles[0] ?? null,
+    );
     if (!ok) {
       throw new NotFoundException({
         code: ErrorCode.NotFound,
         message: 'Driver not found',
       });
     }
-
-    await this.repo.writeAuditLog({
-      actorUserId: actorId,
-      actorRole: actorRoles[0] ?? null,
-      action: 'driver.status.update',
-      entityType: 'driver',
-      entityId: userId,
-      newValue: { status },
-    });
 
     return { status: 'ok' };
   }
