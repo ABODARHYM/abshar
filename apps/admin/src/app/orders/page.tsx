@@ -24,60 +24,52 @@ export default function OrdersPage() {
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
+  const [error, setError] = useState('');
 
   useEffect(() => {
+    let active = true;
     authFetch('/api/v1/admin/orders?limit=100')
-      .then((r) => r.ok ? r.json() : { items: [] })
-      .then((d) => setOrders(d.items || []))
-      .catch(() => {})
-      .finally(() => setLoading(false));
+      .then(async (r) => {
+        if (!r.ok) {
+          const body = await r.json().catch(() => null);
+          throw new Error(body?.message || body?.error || `تعذر تحميل الطلبات (HTTP ${r.status})`);
+        }
+        return r.json();
+      })
+      .then((d) => { if (active) setOrders(Array.isArray(d.items) ? d.items : []); })
+      .catch((e) => { if (active) setError(e.message || 'تعذر الاتصال بالخادم'); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
   }, []);
 
-  // 🆕 إعادة تحميل عند إشعار WebSocket
   useEffect(() => {
     const handler = () => window.location.reload();
     window.addEventListener('notification:refresh', handler);
     return () => window.removeEventListener('notification:refresh', handler);
   }, []);
 
-
   const filtered = orders.filter((o) => filter === 'all' || o.status === filter);
-
   const columns = [
     { key: 'num', label: 'الطلب', render: (o: any) => <span className="font-mono text-xs font-bold" dir="ltr">#{o.orderNumber}</span> },
     { key: 'customer', label: 'العميل', render: (o: any) => <span className="text-sm">{o.customerName || '—'}</span> },
     { key: 'store', label: 'المتجر', render: (o: any) => <span className="text-sm">{o.storeName || '—'}</span> },
     { key: 'total', label: 'الإجمالي', render: (o: any) => <span className="font-black text-accent">{Number(o.total || 0).toFixed(0)} ر.ي</span> },
-    {
-      key: 'status',
-      label: 'الحالة',
-      render: (o: any) => {
-        const st = STATUS_LABELS[o.status] || { label: o.status, badge: 'badge-gray' };
-        return <span className={`badge ${st.badge} text-[10px]`}>{st.label}</span>;
-      },
-    },
+    { key: 'status', label: 'الحالة', render: (o: any) => { const st = STATUS_LABELS[o.status] || { label: o.status, badge: 'badge-gray' }; return <span className={`badge ${st.badge} text-[10px]`}>{st.label}</span>; } },
     { key: 'actions', label: '', render: () => <span className="text-accent text-xs">←</span> },
   ];
 
   return (
     <div style={{ padding: '24px' }}>
       <AdminHeader title="📦 كل الطلبات" subtitle={`${filtered.length} طلب`} />
+      {error && <div role="alert" className="card mb-4 border border-red-500/40 text-red-600">{error}</div>}
       <div className="mb-4 flex gap-2 flex-wrap">
         {['all', 'pending', 'accepted', 'preparing', 'ready', 'driverAssigned', 'delivered', 'cancelled'].map((f) => (
-          <button key={f} onClick={() => setFilter(f)}
-            className={`btn btn-sm ${filter === f ? 'btn-primary' : 'btn-ghost'}`}>
+          <button key={f} onClick={() => setFilter(f)} className={`btn btn-sm ${filter === f ? 'btn-primary' : 'btn-ghost'}`}>
             {f === 'all' ? 'الكل' : STATUS_LABELS[f]?.label || f}
           </button>
         ))}
       </div>
-      <AdminTable
-        columns={columns}
-        data={filtered}
-        keyField="id"
-        loading={loading}
-        emptyMessage="لا توجد طلبات"
-        onRowClick={(o: any) => router.push(`/orders/${o.id}`)}
-      />
+      <AdminTable columns={columns} data={filtered} keyField="id" loading={loading} emptyMessage={error ? 'تعذر تحميل الطلبات' : 'لا توجد طلبات'} onRowClick={(o: any) => router.push(`/orders/${o.id}`)} />
     </div>
   );
 }
