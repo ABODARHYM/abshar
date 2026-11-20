@@ -15,6 +15,11 @@ ALTER TABLE commissions
   CHECK (original_delivery_fee IS NULL OR original_delivery_fee >= 0) NOT VALID;
 ALTER TABLE commissions
   VALIDATE CONSTRAINT commissions_original_delivery_fee_nonnegative_check;
+ALTER TABLE commissions
+  ADD CONSTRAINT commissions_original_delivery_fee_not_below_customer_fee_check
+  CHECK (original_delivery_fee IS NULL OR original_delivery_fee >= delivery_fee) NOT VALID;
+ALTER TABLE commissions
+  VALIDATE CONSTRAINT commissions_original_delivery_fee_not_below_customer_fee_check;
 
 ALTER TABLE orders
   ADD CONSTRAINT orders_original_delivery_fee_not_below_customer_fee_check
