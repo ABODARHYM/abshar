@@ -34,8 +34,10 @@ describe('AdminRepository driver account status', () => {
   it('updates driver and login-user statuses in one transaction', async () => {
     const client = {
       query: jest.fn()
-        .mockResolvedValueOnce({ rows: [{ user_id: 'driver-user-1' }], rowCount: 1 })
-        .mockResolvedValueOnce({ rows: [{ id: 'driver-user-1' }], rowCount: 1 }),
+        .mockResolvedValueOnce({ rows: [{ status: 'active' }], rowCount: 1 })
+        .mockResolvedValueOnce({ rows: [], rowCount: 1 })
+        .mockResolvedValueOnce({ rows: [{ id: 'driver-user-1' }], rowCount: 1 })
+        .mockResolvedValueOnce({ rows: [], rowCount: 1 }),
     };
     const db = {
       transaction: jest.fn(async (work: (tx: any) => Promise<any>) => work(client)),
@@ -44,10 +46,14 @@ describe('AdminRepository driver account status', () => {
 
     await expect(repo.updateDriverStatus('driver-user-1', 'suspended')).resolves.toBe(true);
 
-    expect(String(client.query.mock.calls[0][0])).toContain('UPDATE drivers');
-    expect(String(client.query.mock.calls[1][0])).toContain('UPDATE users');
-    expect(client.query.mock.calls[0][1]).toEqual(['suspended', 'driver-user-1']);
+    expect(String(client.query.mock.calls[0][0])).toContain('FOR UPDATE');
+    expect(String(client.query.mock.calls[1][0])).toContain('UPDATE drivers');
+    expect(String(client.query.mock.calls[2][0])).toContain('UPDATE users');
+    expect(String(client.query.mock.calls[3][0])).toContain('INSERT INTO audit_logs');
     expect(client.query.mock.calls[1][1]).toEqual(['suspended', 'driver-user-1']);
+    expect(client.query.mock.calls[2][1]).toEqual(['suspended', 'driver-user-1']);
+    expect(JSON.parse(client.query.mock.calls[3][1][3])).toEqual({ status: 'active' });
+    expect(JSON.parse(client.query.mock.calls[3][1][4])).toEqual({ status: 'suspended' });
   });
 
   it('does not change the login user when no driver profile exists', async () => {
