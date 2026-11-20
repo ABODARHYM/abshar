@@ -95,6 +95,22 @@ describe('FinanceRepository shared delivery transaction', () => {
     expect(String(client.query.mock.calls[0][0])).not.toContain('delivered_at::date');
   });
 
+
+  it('uses Yemen business dates when calculating unsettled commission totals', async () => {
+    const db = { query: jest.fn().mockResolvedValue({
+      rows: [{ gross: '90.00', commission: '10.00', net: '90.00', count: '1' }],
+    }) };
+    const repo = new FinanceRepository(db as any);
+
+    const result = await repo.getUnsettledCommissions('store', 'store-1', '2026-11-01', '2026-11-07');
+
+    expect(result.count).toBe('1');
+    const sql = String(db.query.mock.calls[0][0]);
+    expect(sql).toContain("AT TIME ZONE 'Asia/Aden'");
+    expect(sql).not.toContain('delivered_at::date');
+    expect(db.query.mock.calls[0][1]).toEqual(['store-1', '2026-11-01', '2026-11-07', 'store']);
+  });
+
   it('marks a settlement cancelled before releasing its commission reservations', async () => {
     const client = {
       query: jest.fn()
