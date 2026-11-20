@@ -359,7 +359,12 @@ export class AdminRepository {
     });
   }
 
-  async updateDriverStatus(userId: string, status: string): Promise<boolean> {
+  async updateDriverStatus(
+    userId: string,
+    status: string,
+    actorId: string,
+    actorRole: string | null,
+  ): Promise<boolean> {
     return this.db.transaction(async (client) => {
       const driver = await client.query(
         `UPDATE drivers SET status = $1 WHERE user_id = $2 RETURNING user_id`,
@@ -374,6 +379,13 @@ export class AdminRepository {
       if (!user.rows[0]) {
         throw new Error('Driver user record is missing; status update rolled back');
       }
+
+      await client.query(
+        `INSERT INTO audit_logs
+          (actor_user_id, actor_role, action, entity_type, entity_id, old_value, new_value)
+         VALUES ($1, $2, 'driver.status.update', 'driver', $3, $4::jsonb, $5::jsonb)`,
+        [actorId, actorRole, userId, JSON.stringify({ status: driver.rows[0].status ?? null }), JSON.stringify({ status })],
+      );
       return true;
     });
   }
