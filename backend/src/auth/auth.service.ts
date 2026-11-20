@@ -263,7 +263,8 @@ export class AuthService {
           `,
           [stored.family_id],
         );
-        throw new UnauthorizedException('Refresh token reuse detected');
+        // Return a sentinel so the family revocation commits before we reject reuse.
+        return { reuseDetected: true as const };
       }
 
       if (stored.expires_at.getTime() <= Date.now()) {
@@ -319,10 +320,15 @@ export class AuthService {
       );
 
       return {
+        reuseDetected: false as const,
         userId: stored.user_id,
         newRawRefresh,
       };
     });
+
+    if (rotated.reuseDetected) {
+      throw new UnauthorizedException('Refresh token reuse detected');
+    }
 
     const user = await this.loadAuthUser(rotated.userId);
     const accessToken = await this.signAccessToken(user.id);
