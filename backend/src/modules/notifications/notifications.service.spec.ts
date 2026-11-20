@@ -96,4 +96,21 @@ describe('NotificationsService durable push delivery', () => {
     expect(repo.getStoreOwnerId).toHaveBeenCalledWith('store-1');
     expect(repo.createWithPushOutbox).toHaveBeenCalledWith(expect.objectContaining({ userId: 'store-owner-user-1' }), expect.any(Object));
   });
+  it('does not persist raw transport exceptions that could expose endpoints or secrets', async () => {
+    const { service, repo, push } = makeService();
+    push.sendToUserDetailed.mockRejectedValue(new Error('private endpoint token=secret'));
+    (repo.claimPushOutbox as jest.Mock).mockResolvedValue([{
+      id: 'job-private', user_id: 'user-1', payload: { title: 't', body: 'b' }, attempts: 2,
+    }]);
+
+    await (service as any).processPushOutbox();
+
+    expect(repo.markPushOutboxFailed).toHaveBeenCalledWith(
+      'job-private',
+      2,
+      'Push outbox delivery failed',
+    );
+    expect(JSON.stringify(repo.markPushOutboxFailed.mock.calls)).not.toContain('secret');
+  });
+
 });
