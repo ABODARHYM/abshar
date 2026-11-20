@@ -314,7 +314,7 @@ export class AdminRepository {
       const user = await client.query<{ id: string }>(
         `
         INSERT INTO users (email, phone, password_hash, full_name, status, locale)
-        VALUES ($1, $2, $3, $4, 'active', 'ar')
+        VALUES ($1, $2, $3, $4, 'pending', 'ar')
         RETURNING id
         `,
         [params.email, params.phone, params.passwordHash, params.fullName],
@@ -360,11 +360,22 @@ export class AdminRepository {
   }
 
   async updateDriverStatus(userId: string, status: string): Promise<boolean> {
-    const r = await this.db.query(
-      `UPDATE drivers SET status = $1 WHERE user_id = $2`,
-      [status, userId],
-    );
-    return (r.rowCount ?? 0) > 0;
+    return this.db.transaction(async (client) => {
+      const driver = await client.query(
+        `UPDATE drivers SET status = $1 WHERE user_id = $2 RETURNING user_id`,
+        [status, userId],
+      );
+      if (!driver.rows[0]) return false;
+
+      const user = await client.query(
+        `UPDATE users SET status = $1 WHERE id = $2 AND deleted_at IS NULL RETURNING id`,
+        [status, userId],
+      );
+      if (!user.rows[0]) {
+        throw new Error('Driver user record is missing; status update rolled back');
+      }
+      return true;
+    });
   }
 
   // ───── Orders ─────
