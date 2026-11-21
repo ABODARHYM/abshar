@@ -23,10 +23,8 @@ export class DriverCashService {
   // ═══════════════ Driver Side ═══════════════
 
   async getSummary(driverId: string): Promise<DriverCashSummaryDto> {
-    const [summary, currency] = await Promise.all([
-      this.repo.getSummary(driverId),
-      this.repo.getCurrency(),
-    ]);
+    const currency = await this.repo.getCurrency();
+    const summary = await this.repo.getSummary(driverId, currency);
 
     const totalCollected = Number(summary.total_collected);
     const totalSubmitted = Number(summary.total_submitted);
@@ -61,23 +59,17 @@ export class DriverCashService {
     amount: number,
     note: string | null,
   ): Promise<CashSubmitResponseDto> {
-    const summary = await this.getSummary(driverId);
+    const currency = await this.repo.getCurrency();
 
-    if (amount <= 0) {
+    if (!Number.isFinite(amount) || amount <= 0) {
       throw new BadRequestException({
         code: ErrorCode.ValidationFailed,
         message: 'المبلغ يجب أن يكون أكبر من صفر',
       });
     }
 
-    if (amount > summary.outstandingCash) {
-      throw new BadRequestException({
-        code: ErrorCode.ValidationFailed,
-        message: `المبلغ أكبر من العهدة المعلّقة (${summary.outstandingCash} ${summary.currency})`,
-      });
-    }
-
-    const currency = await this.repo.getCurrency();
+    // The repository rechecks the balance as NUMERIC while holding the driver lock.
+    // Avoid a stale or floating-point pre-check here.
     const result = await this.repo.submitCash(driverId, amount, note, currency);
 
     const newSummary = await this.getSummary(driverId);
@@ -96,8 +88,8 @@ export class DriverCashService {
     page: number;
     limit: number;
   }): Promise<Paginated<OutstandingDriverDto>> {
-    const { rows, total } = await this.repo.listOutstandingDrivers(query);
     const currency = await this.repo.getCurrency();
+    const { rows, total } = await this.repo.listOutstandingDrivers(query, currency);
 
     return buildPage(
       rows.map((r) => ({

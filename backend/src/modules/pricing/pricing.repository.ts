@@ -1,11 +1,22 @@
 import { Injectable } from '@nestjs/common';
 import { DatabaseService } from '../../database/database.service';
 
+export interface DistanceTierRow {
+  id: string;
+  zone_id: string;
+  min_distance_km: string | number;
+  max_distance_km: string | number | null;
+  delivery_fee: string | number;
+  is_active: boolean;
+}
+
 export interface ZoneRow {
   id: string;
   city: string;
   name_ar: string;
   name_en: string;
+  city_id?: string | null;
+  district_id?: string | null;
   base_delivery_fee: string | number;
   fee_per_km: string | number;
   min_order_amount: string | number;
@@ -19,6 +30,24 @@ export interface ZoneRow {
 export class PricingRepository {
   constructor(private readonly db: DatabaseService) {}
 
+  async getStoreQuoteDetails(storeId: string): Promise<{
+    id: string; latitude: string | number; longitude: string | number;
+    delivery_fee: string | number; min_order_amount: string | number; currency: string;
+  } | null> {
+    const store = await this.db.query<{
+      id: string; latitude: string | number; longitude: string | number;
+      delivery_fee: string | number; min_order_amount: string | number;
+    }>(
+      `SELECT id, latitude, longitude, delivery_fee, min_order_amount
+       FROM stores WHERE id = $1 AND deleted_at IS NULL LIMIT 1`,
+      [storeId],
+    );
+    if (!store.rows[0]) return null;
+    const currency = await this.db.query<{ value: unknown }>(
+      `SELECT value FROM settings WHERE key = 'currency' LIMIT 1`,
+    );
+    return { ...store.rows[0], currency: String(currency.rows[0]?.value ?? 'USD').replace(/"/g, '') };
+  }
   /**
    * ابحث عن zone مناسق حسب إحداثيات (اختياري: city).
    * حالياً: نختار zone يطابق city (لو متوفر)، وإلا نختار أول zone نشط.
@@ -31,7 +60,7 @@ export class PricingRepository {
     if (params.city) {
       const r = await this.db.query<ZoneRow>(
         `
-        SELECT id, city, name_ar, name_en,
+        SELECT id, city, name_ar, name_en, city_id, district_id,
                base_delivery_fee, fee_per_km, min_order_amount,
                free_delivery_threshold, surge_multiplier, fuel_surcharge,
                is_active
@@ -48,7 +77,7 @@ export class PricingRepository {
     // Fallback: أول zone نشط
     const r = await this.db.query<ZoneRow>(
       `
-      SELECT id, city, name_ar, name_en,
+      SELECT id, city, name_ar, name_en, city_id, district_id,
              base_delivery_fee, fee_per_km, min_order_amount,
              free_delivery_threshold, surge_multiplier, fuel_surcharge,
              is_active
@@ -61,10 +90,83 @@ export class PricingRepository {
     return r.rows[0] ?? null;
   }
 
+
+  async findAddressForUser(addressId: string, userId: string): Promise<{
+    zone_id: string | null;
+    latitude: string | number;
+    longitude: string | number;
+  } | null> {
+    const r = await this.db.query<{
+      zone_id: string | null;
+      latitude: string | number;
+      longitude: string | number;
+    }>(
+      `SELECT zone_id, latitude, longitude
+       FROM addresses
+       WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL
+       LIMIT 1`,
+      [addressId, userId],
+    );
+    return r.rows[0] ?? null;
+  }
+  async listActiveDistanceTiers(zoneId: string): Promise<DistanceTierRow[]> {
+    const r = await this.db.query<DistanceTierRow>(
+      `SELECT id, zone_id, min_distance_km, max_distance_km, delivery_fee, is_active
+       FROM delivery_zone_distance_tiers
+       WHERE zone_id = $1 AND is_active = true
+       ORDER BY min_distance_km ASC`,
+      [zoneId],
+    );
+    return r.rows;
+  }
+
+  async createDistanceTier(input: {
+    zoneId: string; minDistanceKm: number; maxDistanceKm: number | null; deliveryFee: number;
+  }): Promise<DistanceTierRow> {
+    const r = await this.db.query<DistanceTierRow>(
+      `INSERT INTO delivery_zone_distance_tiers
+       (zone_id, min_distance_km, max_distance_km, delivery_fee)
+       VALUES ($1, $2, $3, $4)
+       RETURNING id, zone_id, min_distance_km, max_distance_km, delivery_fee, is_active`,
+      [input.zoneId, input.minDistanceKm, input.maxDistanceKm, input.deliveryFee],
+    );
+    return r.rows[0];
+  }
+
+  async updateDistanceTier(id: string, fields: {
+    minDistanceKm?: number; maxDistanceKm?: number | null; deliveryFee?: number; isActive?: boolean;
+  }): Promise<DistanceTierRow | null> {
+    const columns: Array<[string, unknown]> = [
+      ['min_distance_km', fields.minDistanceKm],
+      ['max_distance_km', fields.maxDistanceKm],
+      ['delivery_fee', fields.deliveryFee],
+      ['is_active', fields.isActive],
+    ];
+    const sets: string[] = [];
+    const values: unknown[] = [];
+    for (const [column, value] of columns) {
+      if (value !== undefined) { values.push(value); sets.push(`${column} = ${values.length}`); }
+    }
+    if (!sets.length) {
+      const current = await this.db.query<DistanceTierRow>(
+        `SELECT id, zone_id, min_distance_km, max_distance_km, delivery_fee, is_active
+         FROM delivery_zone_distance_tiers WHERE id = $1 LIMIT 1`, [id]);
+      return current.rows[0] ?? null;
+    }
+    values.push(id);
+    const r = await this.db.query<DistanceTierRow>(
+      `UPDATE delivery_zone_distance_tiers SET ${sets.join(', ')}, updated_at = now()
+       WHERE id = ${values.length}
+       RETURNING id, zone_id, min_distance_km, max_distance_km, delivery_fee, is_active`,
+      values,
+    );
+    return r.rows[0] ?? null;
+  }
+
   async getZoneById(id: string): Promise<ZoneRow | null> {
     const r = await this.db.query<ZoneRow>(
       `
-      SELECT id, city, name_ar, name_en,
+      SELECT id, city, name_ar, name_en, city_id, district_id,
              base_delivery_fee, fee_per_km, min_order_amount,
              free_delivery_threshold, surge_multiplier, fuel_surcharge,
              is_active
@@ -80,7 +182,7 @@ export class PricingRepository {
   async listActiveZones(): Promise<ZoneRow[]> {
     const r = await this.db.query<ZoneRow>(
       `
-      SELECT id, city, name_ar, name_en,
+      SELECT id, city, name_ar, name_en, city_id, district_id,
              base_delivery_fee, fee_per_km, min_order_amount,
              free_delivery_threshold, surge_multiplier, fuel_surcharge,
              is_active
@@ -174,7 +276,7 @@ export class PricingRepository {
       UPDATE delivery_zones
       SET ${sets.join(', ')}, updated_at = now()
       WHERE id = $${i}
-      RETURNING id, city, name_ar, name_en,
+      RETURNING id, city, name_ar, name_en, city_id, district_id,
                 base_delivery_fee, fee_per_km, min_order_amount,
                 free_delivery_threshold, surge_multiplier, fuel_surcharge,
                 is_active

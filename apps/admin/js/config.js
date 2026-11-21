@@ -2,7 +2,7 @@
    ABSHER BI — config.js
    الإعدادات العامة + مفاتيح التخزين
    ============================================================ */
-const API_BASE_URL = 'http://127.0.0.1:3000/api/v1';
+const API_BASE_URL = '/api/v1';
 
 const STORAGE = {
   accessToken:  'absher_access_token',

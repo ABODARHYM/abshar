@@ -6,6 +6,7 @@ import {
 import { ErrorCode } from '../../common/error-codes';
 import {
   AddressesRepository,
+  AddressInput,
   AddressRow,
 } from './addresses.repository';
 import { CreateAddressDto } from './dto/create-address.dto';
@@ -57,18 +58,38 @@ export class AddressesService {
     userId: string,
     dto: CreateAddressDto,
   ): Promise<AddressResponse> {
+    let input: AddressInput = dto;
+
     if (dto.zoneId) {
-      const exists = await this.repo.zoneExists(dto.zoneId);
-      if (!exists) {
+      const zone = await this.repo.findActiveZoneGeography(dto.zoneId);
+      const cityId = dto.cityId !== undefined ? dto.cityId : zone?.city_id ?? null;
+      const districtId = dto.districtId !== undefined ? dto.districtId : zone?.district_id ?? null;
+
+      const valid = await this.repo.validateAddressGeography({
+        cityId,
+        districtId,
+        areaId: dto.areaId,
+        zoneId: dto.zoneId,
+      });
+      if (!valid) {
         throw new BadRequestException({
           code: ErrorCode.ValidationFailed,
-          message: 'Delivery zone not found or inactive',
-          details: [{ field: 'zoneId', constraints: ['not found'] }],
+          message: 'منطقة التوصيل لا تتطابق مع المدينة أو الحي أو المنطقة المحددة.',
+          details: [{ field: 'zoneId', constraints: ['geography mismatch or inactive zone'] }],
         });
       }
+
+      // Backfill missing city/district from the selected active zone.
+      input = { ...dto, cityId, districtId };
+    } else if (dto.cityId || dto.districtId || dto.areaId) {
+      throw new BadRequestException({
+        code: ErrorCode.ValidationFailed,
+        message: 'يجب تحديد منطقة التوصيل المتوافقة مع العنوان.',
+        details: [{ field: 'zoneId', constraints: ['required with geographic fields'] }],
+      });
     }
 
-    const row = await this.repo.create(userId, dto);
+    const row = await this.repo.create(userId, input);
     return this.toResponse(row);
   }
 
@@ -85,18 +106,52 @@ export class AddressesService {
       });
     }
 
-    if (dto.zoneId) {
-      const exists = await this.repo.zoneExists(dto.zoneId);
-      if (!exists) {
+    const nextZoneId = dto.zoneId ?? existing.zone_id;
+    let nextCityId = dto.cityId !== undefined ? dto.cityId : existing.city_id;
+    let nextDistrictId = dto.districtId !== undefined ? dto.districtId : existing.district_id;
+    const nextAreaId = dto.areaId !== undefined ? dto.areaId : existing.area_id;
+
+    if (nextZoneId) {
+      const zone = await this.repo.findActiveZoneGeography(nextZoneId);
+      if (dto.cityId === undefined && !nextCityId) {
+        nextCityId = zone?.city_id ?? null;
+      }
+      if (dto.districtId === undefined && !nextDistrictId) {
+        nextDistrictId = zone?.district_id ?? null;
+      }
+
+      const valid = await this.repo.validateAddressGeography({
+        cityId: nextCityId,
+        districtId: nextDistrictId,
+        areaId: nextAreaId,
+        zoneId: nextZoneId,
+      });
+      if (!valid) {
         throw new BadRequestException({
           code: ErrorCode.ValidationFailed,
-          message: 'Delivery zone not found or inactive',
-          details: [{ field: 'zoneId', constraints: ['not found'] }],
+          message: 'منطقة التوصيل لا تتطابق مع المدينة أو الحي أو المنطقة المحددة.',
+          details: [{ field: 'zoneId', constraints: ['geography mismatch or inactive zone'] }],
         });
       }
+    } else if (nextCityId || nextDistrictId || nextAreaId) {
+      throw new BadRequestException({
+        code: ErrorCode.ValidationFailed,
+        message: 'يجب تحديد منطقة التوصيل المتوافقة مع العنوان.',
+        details: [{ field: 'zoneId', constraints: ['required with geographic fields'] }],
+      });
     }
 
-    const updated = await this.repo.update(id, userId, dto);
+    const updateInput: AddressInput = nextZoneId
+      ? {
+          ...dto,
+          zoneId: nextZoneId,
+          cityId: nextCityId,
+          districtId: nextDistrictId,
+          areaId: nextAreaId,
+        }
+      : dto;
+
+    const updated = await this.repo.update(id, userId, updateInput);
     if (!updated) {
       throw new NotFoundException({
         code: ErrorCode.NotFound,

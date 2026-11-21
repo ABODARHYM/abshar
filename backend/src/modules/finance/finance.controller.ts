@@ -138,28 +138,28 @@ export class FinanceController {
     @CurrentUser() user: AuthUser,
     @Body() dto: CreateSettlementDto,
   ) {
-    return this.service.createSettlement(user.id, dto);
+    return this.service.createSettlement(user.id, { ...dto, actorRole: user.roles[0] ?? null });
   }
 
   @Patch('settlements/:id/approve')
   @RequirePermission('settlements.manage')
   @ApiOperation({ summary: 'Approve settlement (admin)' })
   approve(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
-    return this.service.approveSettlement(user.id, id);
+    return this.service.approveSettlement(user.id, user.roles[0] ?? null, id);
   }
 
   @Patch('settlements/:id/paid')
   @RequirePermission('settlements.manage')
   @ApiOperation({ summary: 'Mark settlement as paid (admin)' })
   markPaid(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
-    return this.service.markSettlementPaid(user.id, id);
+    return this.service.markSettlementPaid(user.id, user.roles[0] ?? null, id);
   }
 
   @Patch('settlements/:id/cancel')
   @RequirePermission('settlements.manage')
   @ApiOperation({ summary: 'Cancel settlement (admin)' })
   cancel(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
-    return this.service.cancelSettlement(user.id, id);
+    return this.service.cancelSettlement(user.id, user.roles[0] ?? null, id);
   }
 
   // ═══ Admin: Commissions ═══

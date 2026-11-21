@@ -27,12 +27,13 @@ self.addEventListener('push', (event) => {
   const options = {
     body: data.body || '',
     icon: data.icon || '/icons/icon-192.png',
+    image: data.image || data.icon || '/icons/icon-192.png',
     badge: '/icons/icon-72.png',
     vibrate: [200, 100, 200, 100, 200],
     dir: 'rtl',
     lang: 'ar',
-    tag: 'absher-admin',
-    renotify: true,
+    tag: data.tag || 'absher-admin',
+    renotify: false,
     requireInteraction: data.priority === 'high' || data.priority === 'urgent',
     color: '#a855f7',
     data: {

@@ -1,8 +1,8 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { ErrorCode } from '../../common/error-codes';
 import { PaginationQueryDto, buildPage } from '../../common/pagination.dto';
 import { NotificationsRepository } from './notifications.repository';
-import { PushService } from './push.service';
+import { PushService, PushPayload } from './push.service';
 import { NotificationsGateway } from './notifications.gateway';
 import { PushSubscribeDto } from './notifications.dto';
 import {
@@ -33,8 +33,11 @@ export interface NotificationListResponse {
 }
 
 @Injectable()
-export class NotificationsService {
+export class NotificationsService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(NotificationsService.name);
+
+  private pushOutboxTimer?: ReturnType<typeof setInterval>;
+  private processingPushOutbox = false;
 
   constructor(
     private readonly repo: NotificationsRepository,
@@ -42,8 +45,73 @@ export class NotificationsService {
     private readonly gateway: NotificationsGateway,
   ) {}
 
+  onModuleInit(): void {
+    if (!this.push.isEnabled()) return;
+    this.pushOutboxTimer = setInterval(() => { void this.processPushOutbox(); }, 5000);
+    void this.processPushOutbox();
+  }
+
+  onModuleDestroy(): void {
+    if (this.pushOutboxTimer) clearInterval(this.pushOutboxTimer);
+  }
+
+  private async processPushOutbox(): Promise<void> {
+    if (!this.push.isEnabled() || this.processingPushOutbox) return;
+    this.processingPushOutbox = true;
+    try {
+      const jobs = await this.repo.claimPushOutbox(20);
+      for (const job of jobs) {
+        try {
+          const result = await this.push.sendToUserDetailed(
+            job.user_id,
+            job.payload as PushPayload,
+            job.delivered_endpoints ?? [],
+          );
+          if (result.acceptedEndpoints.length > 0) {
+            await this.repo.markPushOutboxProgress(job.id, result.acceptedEndpoints);
+          }
+          if (result.failedEndpoints.length > 0) {
+            await this.repo.markPushOutboxFailed(
+              job.id,
+              job.attempts,
+              `Temporary push failure for ${result.failedEndpoints.length} device(s): ${(result.failureReasons ?? []).slice(0, 3).join(', ') || 'Unclassified provider error'}`,
+            );
+          } else if (
+            result.subscriptionCount === 0 &&
+            (job.delivered_endpoints ?? []).length === 0 &&
+            result.acceptedEndpoints.length === 0
+          ) {
+            await this.repo.markPushOutboxFailed(
+              job.id,
+              job.attempts,
+              'No active push subscription available',
+            );
+          } else {
+            await this.repo.markPushOutboxSent(job.id);
+          }
+        } catch {
+          // Do not persist provider/transport exception text; it may contain endpoints or secrets.
+          await this.repo.markPushOutboxFailed(job.id, job.attempts, 'Push outbox delivery failed');
+        }
+      }
+    } catch {
+      this.logger.error('Push outbox processing failed');
+    } finally {
+      this.processingPushOutbox = false;
+    }
+  }
+
   async send(input: CreateNotificationInput): Promise<NotificationRow> {
-    const notification = await this.repo.create(null, input);
+    const notification = input.push !== false && this.push.isEnabled()
+      ? await this.repo.createWithPushOutbox(input, {
+          title: input.title,
+          body: input.body,
+          actionUrl: input.actionUrl,
+          icon: input.icon,
+          image: input.icon,
+          priority: input.priority ?? 'normal',
+        })
+      : await this.repo.create(null, input);
     try {
       this.gateway.emitToUser(input.userId, 'notification', {
         id: notification.id,
@@ -58,18 +126,6 @@ export class NotificationsService {
       });
     } catch (e) {
       this.logger.warn(`WS emit failed: ${(e as Error).message}`);
-    }
-    if (input.push !== false && this.push.isEnabled()) {
-      try {
-        await this.push.sendToUser(input.userId, {
-          title: notification.title,
-          body: notification.body,
-          actionUrl: notification.action_url ?? undefined,
-          icon: notification.icon ?? undefined,
-        });
-      } catch (e) {
-        this.logger.warn(`Push failed: ${(e as Error).message}`);
-      }
     }
     return notification;
   }
@@ -205,17 +261,24 @@ export class NotificationsService {
   // 🆕 notifyDriverComing — المندوب في الطريق
   // ═══════════════════════════════════════════════════════════
   async notifyDriverComing(
-    recipientId: string,
+    storeId: string,
     orderNumber: string,
     driverName: string,
   ): Promise<void> {
+    // Resolve the store owner; never address a notification using the store primary key.
+    const storeOwnerId = await this.repo.getStoreOwnerId(storeId);
+    if (!storeOwnerId) {
+      this.logger.warn('Skipping driver-arrival notification: no owner for store ' + storeId);
+      return;
+    }
     await this.send({
-      userId: recipientId,
+      userId: storeOwnerId,
       type: 'DRIVER_ASSIGNED',
       title: '🛵 مندوب في الطريق',
-      body: `${driverName} قادم للطلب ${orderNumber}`,
+      body: `${driverName} قادم لاستلام الطلب ${orderNumber}`,
       category: 'delivery',
-      metadata: { orderNumber, driverName },
+      priority: 'high',
+      metadata: { orderNumber, driverName, storeId, action: 'driver_arriving' },
     });
   }
 
@@ -277,6 +340,54 @@ export class NotificationsService {
   }
 
 
+  async notifyOrderStatusChanged(
+    customerId: string,
+    orderNumber: string,
+    title: string,
+    body: string,
+  ): Promise<void> {
+    await this.send({
+      userId: customerId,
+      type: 'ORDER_STATUS_CHANGED',
+      title,
+      body,
+      category: 'delivery',
+      metadata: { orderNumber },
+    });
+  }
+
+  async notifyStoreOrderStatusChanged(
+    storeId: string,
+    orderNumber: string,
+    title: string,
+    body: string,
+  ): Promise<void> {
+    const storeOwnerId = await this.repo.getStoreOwnerId(storeId);
+    if (!storeOwnerId) return;
+    await this.send({
+      userId: storeOwnerId,
+      type: 'ORDER_STATUS_CHANGED',
+      title,
+      body,
+      category: 'delivery',
+      metadata: { orderNumber, storeId },
+    });
+  }
+
+  async notifyStoreOrderCancelled(storeId: string, orderNumber: string, reason: string): Promise<void> {
+    const storeOwnerId = await this.repo.getStoreOwnerId(storeId);
+    if (!storeOwnerId) return;
+    await this.send({
+      userId: storeOwnerId,
+      type: 'ORDER_CANCELLED',
+      title: 'تم إلغاء الطلب',
+      body: `الطلب ${orderNumber} تم إلغاؤه: ${reason}`,
+      category: 'order',
+      priority: 'high',
+      metadata: { orderNumber, storeId, reason },
+    });
+  }
+
   async notifyOrderDelivered(customerId: string, orderNumber: string): Promise<void> {
     await this.send({
       userId: customerId,
@@ -336,6 +447,7 @@ export class NotificationsService {
       body: `${storeName} - ${deliveryArea}${distanceText}`,
       category: 'delivery',
       priority: 'high',
+      actionUrl: '/active',
       metadata: {
         orderId,
         orderNumber,
@@ -411,6 +523,10 @@ export class NotificationsService {
   ) {
     await this.repo.saveDeviceToken(userId, token, platform);
     return { success: true };
+  }
+
+  async testPush(userId: string) {
+    return this.push.testToUser(userId);
   }
 
   pushPublicKey() {

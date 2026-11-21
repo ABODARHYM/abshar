@@ -139,6 +139,7 @@ export class AuthService {
 
   async login(dto: LoginDto, meta: RequestMeta = {}): Promise<AuthResponse> {
     const identifier = dto.identifier.trim();
+    const phoneCandidates = this.buildPhoneLoginCandidates(identifier);
 
     const result = await this.db.query<{
       id: string;
@@ -164,11 +165,11 @@ export class AuthService {
       WHERE deleted_at IS NULL
         AND (
           email = $1::citext
-          OR phone = $1::varchar
+          OR phone = ANY($2::varchar[])
         )
       LIMIT 1
       `,
-      [identifier],
+      [identifier, phoneCandidates],
     );
 
     if (result.rows.length === 0) {
@@ -262,7 +263,8 @@ export class AuthService {
           `,
           [stored.family_id],
         );
-        throw new UnauthorizedException('Refresh token reuse detected');
+        // Return a sentinel so the family revocation commits before we reject reuse.
+        return { reuseDetected: true as const };
       }
 
       if (stored.expires_at.getTime() <= Date.now()) {
@@ -318,10 +320,15 @@ export class AuthService {
       );
 
       return {
+        reuseDetected: false as const,
         userId: stored.user_id,
         newRawRefresh,
       };
     });
+
+    if (rotated.reuseDetected) {
+      throw new UnauthorizedException('Refresh token reuse detected');
+    }
 
     const user = await this.loadAuthUser(rotated.userId);
     const accessToken = await this.signAccessToken(user.id);
@@ -462,6 +469,36 @@ export class AuthService {
       roles: row.roles || [],
       permissions: row.permissions || [],
     };
+  }
+
+  /**
+   * Accept Yemen phone numbers stored locally or with the +967 country code.
+   * Email identifiers remain unchanged and continue to use the email lookup.
+   */
+  private buildPhoneLoginCandidates(identifier: string): string[] {
+    const candidates = new Set<string>([identifier]);
+    const digits = identifier.replace(/\D/g, '');
+
+    if (!digits) return [...candidates];
+
+    candidates.add(digits);
+    candidates.add('+' + digits);
+
+    let local = digits;
+    if (digits.startsWith('967') && digits.length === 12) {
+      local = digits.slice(3);
+    } else if (digits.startsWith('0') && digits.length === 10) {
+      local = digits.slice(1);
+    }
+
+    if (/^7\d{8}$/.test(local)) {
+      candidates.add(local);
+      candidates.add('0' + local);
+      candidates.add('967' + local);
+      candidates.add('+967' + local);
+    }
+
+    return [...candidates];
   }
 
   private async recordFailedLogin(

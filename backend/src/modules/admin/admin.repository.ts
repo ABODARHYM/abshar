@@ -260,9 +260,11 @@ export class AdminRepository {
       SELECT
         d.user_id, u.full_name, u.email, u.phone,
         d.vehicle_type, d.status, d.availability,
-        d.rating_avg, d.rating_count
+        d.rating_avg, d.rating_count, z.name_ar AS zone_name
+      
       FROM drivers d
       JOIN users u ON u.id = d.user_id
+      LEFT JOIN delivery_zones z ON z.id = d.zone_id
       ${whereSql}
       ORDER BY d.created_at DESC
       LIMIT $${i++} OFFSET $${i++}
@@ -273,12 +275,124 @@ export class AdminRepository {
     return { rows: rowsRes.rows, total };
   }
 
-  async updateDriverStatus(userId: string, status: string): Promise<boolean> {
-    const r = await this.db.query(
-      `UPDATE drivers SET status = $1 WHERE user_id = $2`,
-      [status, userId],
+  async listActiveDeliveryZones(): Promise<Array<{ id: string; city: string; name_ar: string }>> {
+    const r = await this.db.query<{ id: string; city: string; name_ar: string }>(
+      `SELECT id, city, name_ar FROM delivery_zones WHERE is_active = true ORDER BY city, name_ar`,
     );
-    return (r.rowCount ?? 0) > 0;
+    return r.rows;
+  }
+
+  async createDriverAccount(params: {
+    fullName: string;
+    phone: string;
+    email: string | null;
+    passwordHash: string;
+    vehicleType: string;
+    vehiclePlate: string | null;
+    zoneId: string | null;
+    actorId: string;
+    actorRole: string | null;
+  }): Promise<{ userId: string }> {
+    return this.db.transaction(async (client) => {
+      if (params.zoneId) {
+        const zone = await client.query(
+          `SELECT id FROM delivery_zones WHERE id = $1 AND is_active = true LIMIT 1`,
+          [params.zoneId],
+        );
+        if (!zone.rows[0]) {
+          const error = new Error('منطقة التوصيل غير موجودة أو غير نشطة') as Error & { code?: string };
+          error.code = 'INVALID_DELIVERY_ZONE';
+          throw error;
+        }
+      }
+
+      const role = await client.query<{ id: number }>(
+        `SELECT id FROM roles WHERE code = 'driver' LIMIT 1`,
+      );
+      if (!role.rows[0]) throw new Error('Default driver role is missing');
+
+      const user = await client.query<{ id: string }>(
+        `
+        INSERT INTO users (email, phone, password_hash, full_name, status, locale)
+        VALUES ($1, $2, $3, $4, 'pending', 'ar')
+        RETURNING id
+        `,
+        [params.email, params.phone, params.passwordHash, params.fullName],
+      );
+      const userId = user.rows[0].id;
+
+      await client.query(
+        `INSERT INTO user_roles (user_id, role_id, assigned_by) VALUES ($1, $2, $3)`,
+        [userId, role.rows[0].id, params.actorId],
+      );
+
+      await client.query(
+        `
+        INSERT INTO drivers (user_id, zone_id, vehicle_type, vehicle_plate, status, availability)
+        VALUES ($1, $2, $3, $4, 'pending', 'offline')
+        `,
+        [userId, params.zoneId, params.vehicleType, params.vehiclePlate],
+      );
+
+      await client.query(
+        `
+        INSERT INTO audit_logs
+          (actor_user_id, actor_role, action, entity_type, entity_id, new_value)
+        VALUES ($1, $2, 'driver.create', 'driver', $3, $4::jsonb)
+        `,
+        [
+          params.actorId,
+          params.actorRole,
+          userId,
+          JSON.stringify({
+            fullName: params.fullName,
+            phone: params.phone,
+            email: params.email,
+            vehicleType: params.vehicleType,
+            zoneId: params.zoneId,
+            status: 'pending',
+          }),
+        ],
+      );
+
+      return { userId };
+    });
+  }
+
+  async updateDriverStatus(
+    userId: string,
+    status: string,
+    actorId: string,
+    actorRole: string | null,
+  ): Promise<boolean> {
+    return this.db.transaction(async (client) => {
+      const current = await client.query<{ status: string }>(
+        `SELECT status FROM drivers WHERE user_id = $1 FOR UPDATE`,
+        [userId],
+      );
+      if (!current.rows[0]) return false;
+
+      await client.query(
+        `UPDATE drivers SET status = $1, availability = 'offline' WHERE user_id = $2`,
+        [status, userId],
+      );
+
+      const user = await client.query(
+        `UPDATE users SET status = $1 WHERE id = $2 AND deleted_at IS NULL RETURNING id`,
+        [status, userId],
+      );
+      if (!user.rows[0]) {
+        throw new Error('Driver user record is missing; status update rolled back');
+      }
+
+      await client.query(
+        `INSERT INTO audit_logs
+          (actor_user_id, actor_role, action, entity_type, entity_id, old_value, new_value)
+         VALUES ($1, $2, 'driver.status.update', 'driver', $3, $4::jsonb, $5::jsonb)`,
+        [actorId, actorRole, userId, JSON.stringify({ status: current.rows[0].status }), JSON.stringify({ status })],
+      );
+      return true;
+    });
   }
 
   // ───── Orders ─────
@@ -380,7 +494,7 @@ export class AdminRepository {
     const rowsRes = await this.db.query(
       `
       SELECT id, actor_user_id, actor_role, action, entity_type, entity_id,
-             ip_address, created_at
+             old_value, new_value, ip_address, user_agent, device_info, request_id, created_at
       FROM audit_logs
       ${whereSql}
       ORDER BY created_at DESC

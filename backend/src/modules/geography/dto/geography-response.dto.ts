@@ -1,5 +1,21 @@
 import { ApiProperty } from '@nestjs/swagger';
 
+export class GovernorateResponseDto {
+  @ApiProperty() id!: string;
+  @ApiProperty() countryCode!: string;
+  @ApiProperty() nameAr!: string;
+  @ApiProperty() nameEn!: string;
+  @ApiProperty() slug!: string;
+}
+
+export class AdministrativeDistrictResponseDto {
+  @ApiProperty() id!: string;
+  @ApiProperty() governorateId!: string;
+  @ApiProperty() nameAr!: string;
+  @ApiProperty() nameEn!: string;
+  @ApiProperty() slug!: string;
+}
+
 export class CityResponseDto {
   @ApiProperty() id!: string;
   @ApiProperty() countryCode!: string;

@@ -11,6 +11,7 @@ import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { StoreOrderQueryDto } from './dto/store-order-query.dto';
 import { NotificationsService } from '../notifications/notifications.service';
+import { DispatchService } from '../dispatch/dispatch.service';
 import {
   CategoryRow,
   MyStoreRow,
@@ -133,6 +134,7 @@ export class StoreOwnerService {
   constructor(
     private readonly repo: StoreOwnerRepository,
     private readonly notifications: NotificationsService,
+    private readonly dispatch: DispatchService,
   ) {}
 
   async requireMyStore(userId: string): Promise<MyStoreRow> {
@@ -170,7 +172,15 @@ export class StoreOwnerService {
     },
   ): Promise<MyStoreResponse> {
     const store = await this.requireMyStore(userId);
-    const updated = await this.repo.updateMyStore(store.id, dto);
+    // Keep the store's order-acceptance flag aligned with the owner-facing
+    // open/closed switch unless the API explicitly supplies acceptsOrders.
+    const update = {
+      ...dto,
+      ...(dto.isOpen !== undefined && dto.acceptsOrders === undefined
+        ? { acceptsOrders: dto.isOpen }
+        : {}),
+    };
+    const updated = await this.repo.updateMyStore(store.id, update);
     if (!updated) {
       throw new NotFoundException({
         code: ErrorCode.NotFound,
@@ -346,18 +356,6 @@ export class StoreOwnerService {
         console.warn('[store-owner] notify accepted failed:', (e as Error).message);
       }
 
-      try {
-        const sent = await this.notifications.broadcastOrderReadyToDrivers(
-          store.id,
-          full.id,
-          full.order_number,
-          'المتجر',
-          '',
-        );
-        console.log(`[dispatch] ${full.order_number} -> ${sent} drivers`);
-      } catch (e) {
-        console.warn('[store-owner] dispatch failed:', (e as Error).message);
-      }
     }
 
     return this.toOrderResponse(full ?? updated, items);
@@ -389,6 +387,13 @@ export class StoreOwnerService {
       }
       const items = await this.repo.listOrderItems(orderId);
       const full = await this.repo.findOrderForStore(orderId, store.id);
+      if (full) {
+        try {
+          await this.notifications.notifyOrderStatusChanged(full.customer_id, full.order_number, 'تعذر قبول الطلب', `لم يتم قبول طلبك ${full.order_number}: ${reason}`);
+        } catch (e) {
+          console.warn('[store-owner] notify rejected failed:', (e as Error).message);
+        }
+      }
       return this.toOrderResponse(full ?? updated, items);
     } catch (e) {
       if ((e as Error).message?.includes('Cannot transition')) {
@@ -422,6 +427,13 @@ export class StoreOwnerService {
       }
       const items = await this.repo.listOrderItems(orderId);
       const full = await this.repo.findOrderForStore(orderId, store.id);
+      if (full) {
+        try {
+          await this.notifications.notifyOrderStatusChanged(full.customer_id, full.order_number, 'بدأ المتجر التحضير', `بدأ المتجر تحضير طلبك ${full.order_number}`);
+        } catch (e) {
+          console.warn('[store-owner] notify preparing failed:', (e as Error).message);
+        }
+      }
       return this.toOrderResponse(full ?? updated, items);
     } catch (e) {
       if ((e as Error).message?.includes('Cannot transition')) {
@@ -461,6 +473,19 @@ export class StoreOwnerService {
         await this.notifications.notifyOrderReady(full.customer_id, full.order_number);
       } catch (e) {
         console.warn('[store-owner] notify ready failed:', (e as Error).message);
+      }
+
+      // توزيع الطلب وإشعار المندوبين بعد أن يصبح جاهزاً للاستلام.
+      try {
+        const result = await this.dispatch.dispatchOrder({
+          orderId: full.id,
+          orderNumber: full.order_number,
+          storeId: store.id,
+          deliveryArea: full.delivery_address_text ?? '',
+        });
+        console.log(`[dispatch] ${full.order_number}: ${result.driversOffered} drivers offered`);
+      } catch (e) {
+        console.error(`[dispatch] failed for ${full.order_number}: ${(e as Error).message}`);
       }
     }
 
@@ -503,6 +528,13 @@ export class StoreOwnerService {
         code: ErrorCode.NotFound,
         message: 'Order not found',
       });
+    }
+
+    // Remove outstanding driver offers and their notifications after a successful cancellation.
+    try {
+      await this.dispatch.cancelDispatch(orderId);
+    } catch {
+      console.warn('[store-owner] dispatch cleanup failed after cancellation');
     }
 
     const items = await this.repo.listOrderItems(orderId);

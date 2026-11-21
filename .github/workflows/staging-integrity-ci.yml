@@ -1,0 +1,126 @@
+name: Staging Integrity CI
+
+on:
+  push:
+    branches:
+      - fix/staging-integrity-completion-20261120
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: staging-integrity-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend tests, typecheck, build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test -- --runInBand
+      - run: npm run build
+
+  migrations:
+    name: Apply all migrations to disposable PostgreSQL
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_DB: absher_bi
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d absher_bi"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - name: Run complete migration chain against disposable database
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/absher_bi
+          DATABASE_SSL: "false"
+        run: npx ts-node src/database/migrate.ts up
+      - name: Verify Smart Dispatch offer indexes
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/absher_bi
+        run: |
+          node <<'NODE'
+          const { Client } = require('pg');
+          (async () => {
+            const client = new Client({ connectionString: process.env.DATABASE_URL });
+            await client.connect();
+            try {
+              const result = await client.query(`
+                SELECT indexname, indexdef FROM pg_indexes
+                WHERE schemaname = 'public' AND indexname IN (
+                  'driver_assignments_one_active_per_order',
+                  'driver_assignments_one_accepted_per_order',
+                  'driver_assignments_one_offer_per_driver_per_order'
+                )
+              `);
+              const indexes = new Map(result.rows.map((row) => [row.indexname, row.indexdef]));
+              if (indexes.has('driver_assignments_one_active_per_order')) {
+                throw new Error('Legacy single-active-offer index still exists');
+              }
+              if (!indexes.get('driver_assignments_one_accepted_per_order')?.includes("status = 'accepted'")) {
+                throw new Error('Single accepted-driver guard is missing or invalid');
+              }
+              if (!indexes.get('driver_assignments_one_offer_per_driver_per_order')?.includes("status = 'offered'")) {
+                throw new Error('Per-driver offer idempotency guard is missing or invalid');
+              }
+              console.log('Smart Dispatch multi-offer indexes verified');
+            } finally {
+              await client.end();
+            }
+          })().catch((error) => { console.error(error); process.exit(1); });
+          NODE
+
+  frontends:
+    name: ${{ matrix.app }} production build
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [customer, store, driver, admin]
+    defaults:
+      run:
+        working-directory: apps/${{ matrix.app }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/${{ matrix.app }}/package-lock.json
+      - run: npm ci
+      - name: Build frontend
+        env:
+          ABSHER_API_ORIGIN: https://absher-bi-backend-staging.onrender.com
+        run: npm run build

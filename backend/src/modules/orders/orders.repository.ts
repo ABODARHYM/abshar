@@ -53,6 +53,7 @@ export class OrdersRepository {
       storeId: string;
       currency: string;
       deliveryFee: number;
+      originalDeliveryFee: number;
       subtotal: number;
       discountTotal: number;
       total: number;
@@ -85,17 +86,17 @@ export class OrdersRepository {
         `
         INSERT INTO orders (
           customer_id, store_id, status, payment_method, payment_status,
-          currency, subtotal, delivery_fee, discount_total, total,
+          currency, subtotal, delivery_fee, original_delivery_fee, discount_total, total,
           customer_notes, delivery_address_id, delivery_address_text,
           delivery_latitude, delivery_longitude,
           recipient_name, recipient_phone, idempotency_key, coupon_id
         )
         VALUES (
           $1, $2, 'pending', 'cash_on_delivery', 'pending',
-          $3, $4, $5, $6, $7,
-          $8, $9, $10,
-          $11, $12,
-          $13, $14, $15, $16
+          $3, $4, $5, $6, $7, $8,
+          $9, $10, $11,
+          $12, $13,
+          $14, $15, $16, $17
         )
         RETURNING *
         `,
@@ -105,6 +106,7 @@ export class OrdersRepository {
           payload.currency,
           payload.subtotal,
           payload.deliveryFee,
+          payload.originalDeliveryFee,
           payload.discountTotal,
           payload.total,
           payload.customerNotes ?? null,
@@ -361,6 +363,7 @@ export class OrdersRepository {
     landmark: string | null;
     latitude: string | number;
     longitude: string | number;
+    zone_id: string | null;
     user_id: string;
     deleted_at: Date | null;
   } | null> {
@@ -373,12 +376,13 @@ export class OrdersRepository {
       landmark: string | null;
       latitude: string | number;
       longitude: string | number;
+      zone_id: string | null;
       user_id: string;
       deleted_at: Date | null;
     }>(
       `
       SELECT id, address_line, building, floor, apartment, landmark,
-             latitude, longitude, user_id, deleted_at
+             latitude, longitude, zone_id, user_id, deleted_at
       FROM addresses WHERE id = $1 AND user_id = $2 LIMIT 1
       `,
       [addressId, userId],

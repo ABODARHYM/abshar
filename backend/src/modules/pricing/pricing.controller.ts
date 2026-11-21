@@ -1,10 +1,13 @@
 import {
+  BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseUUIDPipe,
   Patch,
+  Post,
   Query,
   UseGuards,
 } from '@nestjs/common';
@@ -42,11 +45,14 @@ import {
 class QuoteQueryDto {
   @ApiProperty() @IsUUID() storeId!: string;
 
-  @ApiProperty() @Type(() => Number) @IsNumber() @Min(-90) @Max(90)
-  addressLat!: number;
+  @ApiPropertyOptional() @IsOptional() @IsUUID()
+  zoneId?: string;
 
-  @ApiProperty() @Type(() => Number) @IsNumber() @Min(-180) @Max(180)
-  addressLng!: number;
+  @ApiPropertyOptional() @IsOptional() @Type(() => Number) @IsNumber() @Min(-90) @Max(90)
+  addressLat?: number;
+
+  @ApiPropertyOptional() @IsOptional() @Type(() => Number) @IsNumber() @Min(-180) @Max(180)
+  addressLng?: number;
 
   @ApiPropertyOptional({ default: 0 })
   @IsOptional() @Type(() => Number) @IsNumber() @Min(0)
@@ -55,6 +61,33 @@ class QuoteQueryDto {
   @ApiPropertyOptional()
   @IsOptional() @IsUUID()
   addressId?: string;
+}
+
+class CreateDistanceTierDto {
+  @ApiProperty() @Type(() => Number) @IsNumber() @Min(0)
+  minDistanceKm!: number;
+
+  @ApiPropertyOptional({ nullable: true }) @IsOptional()
+  @Type(() => Number) @IsNumber() @Min(0)
+  maxDistanceKm?: number | null;
+
+  @ApiProperty() @Type(() => Number) @IsNumber() @Min(0)
+  deliveryFee!: number;
+}
+
+class UpdateDistanceTierDto {
+  @ApiPropertyOptional() @IsOptional() @Type(() => Number) @IsNumber() @Min(0)
+  minDistanceKm?: number;
+
+  @ApiPropertyOptional({ nullable: true }) @IsOptional()
+  @Type(() => Number) @IsNumber() @Min(0)
+  maxDistanceKm?: number | null;
+
+  @ApiPropertyOptional() @IsOptional() @Type(() => Number) @IsNumber() @Min(0)
+  deliveryFee?: number;
+
+  @ApiPropertyOptional() @IsOptional() @IsBoolean()
+  isActive?: boolean;
 }
 
 class UpdateZoneDto {
@@ -122,38 +155,40 @@ export class PricingController {
     description: 'حساب سعر التوصيل لموقع معيّن بدون إنشاء طلب',
   })
   @ApiResponse({ status: 200, type: DeliveryQuoteDto })
-  async quote(@Query() query: QuoteQueryDto): Promise<DeliveryQuoteDto> {
-    // نحتاج بيانات المتجر
-    const store = await this.service['repo']['db'].query<{
-      id: string;
-      latitude: string | number;
-      longitude: string | number;
-      delivery_fee: string | number;
-      min_order_amount: string | number;
-    }>(
-      `SELECT id, latitude, longitude, delivery_fee, min_order_amount FROM stores WHERE id = $1 AND deleted_at IS NULL LIMIT 1`,
-      [query.storeId],
-    );
-    if (!store.rows[0]) {
-      throw new Error('Store not found');
-    }
-    const s = store.rows[0];
+  async quote(
+    @Query() query: QuoteQueryDto,
+    @CurrentUser() user: AuthUser,
+  ): Promise<DeliveryQuoteDto> {
+    let zoneId = query.zoneId;
+    let addressLat = query.addressLat;
+    let addressLng = query.addressLng;
 
-    const currency = await this.service['repo']['db'].query<{ value: any }>(
-      `SELECT value FROM settings WHERE key = 'currency' LIMIT 1`,
-    );
-    const currencyStr = String(currency.rows[0]?.value ?? 'USD').replace(/"/g, '');
+    if (query.addressId) {
+      const address = await this.service.getAddressForQuote(query.addressId, user.id);
+      if (zoneId && zoneId !== address.zoneId) {
+        throw new BadRequestException({
+          message: 'منطقة التوصيل لا تتطابق مع العنوان المحدد.',
+        });
+      }
+      zoneId = address.zoneId;
+      addressLat = address.addressLat;
+      addressLng = address.addressLng;
+    }
+
+    if (!zoneId || addressLat === undefined || addressLng === undefined) {
+      throw new BadRequestException({
+        message: 'يجب تحديد عنوان محفوظ أو منطقة التوصيل وإحداثيات العنوان.',
+      });
+    }
+
+    const store = await this.service.getStoreQuoteDetails(query.storeId);
 
     return this.service.quote({
-      storeId: s.id,
-      storeLat: Number(s.latitude),
-      storeLng: Number(s.longitude),
-      storeDeliveryFee: Number(s.delivery_fee),
-      storeMinOrderAmount: Number(s.min_order_amount),
-      addressLat: query.addressLat,
-      addressLng: query.addressLng,
+      ...store,
+      zoneId,
+      addressLat,
+      addressLng,
       subtotal: query.subtotal ?? 0,
-      currency: currencyStr,
     });
   }
 
@@ -182,6 +217,42 @@ export class PricingController {
     @Body() dto: UpdateZoneDto,
   ): Promise<ZoneResponseDto> {
     return this.service.updateZone(id, dto);
+  }
+
+
+  @Get('zones/:id/distance-tiers')
+  @RequirePermission('zones.manage')
+  listDistanceTiers(@Param('id', ParseUUIDPipe) id: string) {
+    return this.service.listDistanceTiers(id);
+  }
+
+  @Post('zones/:id/distance-tiers')
+  @RequirePermission('zones.manage')
+  createDistanceTier(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: CreateDistanceTierDto,
+  ) {
+    return this.service.createDistanceTier({
+      zoneId: id,
+      minDistanceKm: dto.minDistanceKm,
+      maxDistanceKm: dto.maxDistanceKm ?? null,
+      deliveryFee: dto.deliveryFee,
+    });
+  }
+
+  @Patch('distance-tiers/:id')
+  @RequirePermission('zones.manage')
+  updateDistanceTier(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateDistanceTierDto,
+  ) {
+    return this.service.updateDistanceTier(id, dto);
+  }
+
+  @Delete('distance-tiers/:id')
+  @RequirePermission('zones.manage')
+  deactivateDistanceTier(@Param('id', ParseUUIDPipe) id: string) {
+    return this.service.deactivateDistanceTier(id);
   }
 
   // ═══ Settings (Admin) ═══
