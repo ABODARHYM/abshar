@@ -52,7 +52,7 @@ function NewAddressContent() {
   const [error, setError] = useState('');
   const [debugLog, setDebugLog] = useState<string[]>([]);
   const availableDeliveryZones = deliveryZones.filter((z) =>
-    (!z.cityId || z.cityId === cityId) && (!z.districtId || z.districtId === districtId),
+    (!cityId || !z.cityId || z.cityId === cityId) && (!districtId || !z.districtId || z.districtId === districtId),
   );
 
   // تسجيل تشخيصي
