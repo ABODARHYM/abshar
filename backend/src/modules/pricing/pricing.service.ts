@@ -120,6 +120,26 @@ export class PricingService {
     };
   }
 
+  async getAddressForQuote(addressId: string, userId: string) {
+    const address = await this.repo.findAddressForUser(addressId, userId);
+    if (!address) {
+      throw new NotFoundException({
+        code: ErrorCode.NotFound,
+        message: 'عنوان التوصيل غير موجود أو لا يتبع حسابك.',
+      });
+    }
+    if (!address.zone_id) {
+      throw new BadRequestException({
+        code: ErrorCode.ValidationFailed,
+        message: 'عنوان التوصيل غير مرتبط بمنطقة توصيل.',
+      });
+    }
+    return {
+      zoneId: address.zone_id,
+      addressLat: Number(address.latitude),
+      addressLng: Number(address.longitude),
+    };
+  }
   /**
    * حساب سعر توصيل معروض للعميل (بدون إنشاء طلب).
    */
