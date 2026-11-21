@@ -12,6 +12,7 @@ const MENU = [
   { href: '/drivers', label: 'المندوبون', icon: '🛵' },
   { href: '/orders', label: 'الطلبات', icon: '📦' },
   { href: '/coupons', label: 'الكوبونات', icon: '🎫' },
+  { href: '/pricing', label: 'تعرفة التوصيل', icon: '🚚' },
   { href: '/settlements', label: 'التسويات المالية', icon: '💰' },
   { href: '/reports', label: 'التقارير', icon: '📈' },
   { href: '/audit', label: 'Audit Logs', icon: '📝' },
