@@ -59,7 +59,7 @@ export class DriverCashService {
     amount: number,
     note: string | null,
   ): Promise<CashSubmitResponseDto> {
-    const summary = await this.getSummary(driverId);
+    const currency = await this.repo.getCurrency();
 
     if (!Number.isFinite(amount) || amount <= 0) {
       throw new BadRequestException({
@@ -68,14 +68,8 @@ export class DriverCashService {
       });
     }
 
-    if (amount > summary.outstandingCash) {
-      throw new BadRequestException({
-        code: ErrorCode.ValidationFailed,
-        message: `المبلغ أكبر من العهدة المعلّقة (${summary.outstandingCash} ${summary.currency})`,
-      });
-    }
-
-    const currency = summary.currency;
+    // The repository rechecks the balance as NUMERIC while holding the driver lock.
+    // Avoid a stale or floating-point pre-check here.
     const result = await this.repo.submitCash(driverId, amount, note, currency);
 
     const newSummary = await this.getSummary(driverId);
