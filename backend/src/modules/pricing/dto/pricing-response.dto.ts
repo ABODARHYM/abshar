@@ -21,6 +21,8 @@ export class DeliveryQuoteDto {
 export class ZoneResponseDto {
   @ApiProperty() id!: string;
   @ApiProperty() city!: string;
+  @ApiProperty({ nullable: true }) cityId!: string | null;
+  @ApiProperty({ nullable: true }) districtId!: string | null;
   @ApiProperty() nameAr!: string;
   @ApiProperty() nameEn!: string;
   @ApiProperty() baseDeliveryFee!: number;
