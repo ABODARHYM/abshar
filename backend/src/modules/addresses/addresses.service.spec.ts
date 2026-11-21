@@ -3,7 +3,10 @@ import { AddressesService } from './addresses.service';
 
 describe('AddressesService geography validation', () => {
   it('rejects creating an address when the selected zone does not match its geography', async () => {
-    const repo = { validateAddressGeography: jest.fn().mockResolvedValue(false) };
+    const repo = {
+      findActiveZoneGeography: jest.fn().mockResolvedValue({ city_id: 'city-1', district_id: 'district-1' }),
+      validateAddressGeography: jest.fn().mockResolvedValue(false),
+    };
     const service = new AddressesService(repo as any);
 
     await expect(service.create('customer-1', {
@@ -23,6 +26,7 @@ describe('AddressesService geography validation', () => {
         id: 'address-1', zone_id: 'zone-1', city_id: 'city-1',
         district_id: 'district-1', area_id: 'area-1',
       }),
+      findActiveZoneGeography: jest.fn().mockResolvedValue({ city_id: 'city-2', district_id: 'district-2' }),
       validateAddressGeography: jest.fn().mockResolvedValue(false),
     };
     const service = new AddressesService(repo as any);
@@ -32,6 +36,38 @@ describe('AddressesService geography validation', () => {
     })).rejects.toBeInstanceOf(BadRequestException);
     expect(repo.validateAddressGeography).toHaveBeenCalledWith({
       cityId: 'city-1', districtId: 'district-1', areaId: 'area-1', zoneId: 'zone-2',
+    });
+  });
+
+  it('backfills missing city and district when assigning a zone to a legacy address', async () => {
+    const updatedAt = new Date();
+    const row = {
+      id: 'address-legacy', user_id: 'customer-1', label: 'المنزل',
+      address_line: 'شارع الجامعة', building: null, floor: null, apartment: null,
+      landmark: null, latitude: 15.4, longitude: 45.3, zone_id: 'zone-1',
+      city_id: 'city-1', district_id: 'district-1', area_id: null,
+      is_default: false, created_at: updatedAt, updated_at: updatedAt,
+    };
+    const repo = {
+      findByIdForUser: jest.fn().mockResolvedValue({
+        id: 'address-legacy', zone_id: null, city_id: null,
+        district_id: null, area_id: null,
+      }),
+      findActiveZoneGeography: jest.fn().mockResolvedValue({
+        city_id: 'city-1', district_id: 'district-1',
+      }),
+      validateAddressGeography: jest.fn().mockResolvedValue(true),
+      update: jest.fn().mockResolvedValue(row),
+    };
+    const service = new AddressesService(repo as any);
+
+    await service.update('customer-1', 'address-legacy', { zoneId: 'zone-1' });
+
+    expect(repo.validateAddressGeography).toHaveBeenCalledWith({
+      cityId: 'city-1', districtId: 'district-1', areaId: null, zoneId: 'zone-1',
+    });
+    expect(repo.update).toHaveBeenCalledWith('address-legacy', 'customer-1', {
+      zoneId: 'zone-1', cityId: 'city-1', districtId: 'district-1', areaId: null,
     });
   });
 
