@@ -9,15 +9,16 @@ describe('DriverRepository delivery transaction', () => {
       payment_method: 'cash_on_delivery',
       currency: 'YER',
       subtotal: '100.00',
-      delivery_fee: '20.00',
-      total: '120.00',
+      delivery_fee: '0.00',
+      original_delivery_fee: '25.00',
+      total: '125.00',
       driver_id: 'driver-1',
     };
     const events: string[] = [];
     const client = {
       query: jest.fn()
         .mockImplementationOnce(async () => ({ rows: [{ status: 'pickedUp', driver_id: 'driver-1' }], rowCount: 1 }))
-        .mockImplementationOnce(async () => { events.push('order-update'); return { rows: [deliveredOrder], rowCount: 1 }; })
+        .mockImplementationOnce(async (sql: string) => { expect(sql).toContain('original_delivery_fee'); events.push('order-update'); return { rows: [deliveredOrder], rowCount: 1 }; })
         .mockImplementationOnce(async () => { events.push('status-history'); return { rows: [], rowCount: 1 }; })
         .mockImplementationOnce(async () => { events.push('driver-release'); return { rows: [], rowCount: 1 }; })
         .mockImplementationOnce(async () => { events.push('assignment-complete'); return { rows: [], rowCount: 1 }; }),
@@ -51,4 +52,28 @@ describe('DriverRepository delivery transaction', () => {
       'assignment-complete',
     ]);
   });
+  it('calculates driver earnings from the original fee when customer delivery is free', async () => {
+    const db = {
+      query: jest.fn().mockResolvedValue({
+        rows: [{
+          total_earnings: '25.00',
+          total_deliveries: '1',
+          today_earnings: '25.00',
+          today_deliveries: '1',
+          week_earnings: '25.00',
+          week_deliveries: '1',
+          month_earnings: '25.00',
+          month_deliveries: '1',
+        }],
+      }),
+    };
+    const repo = new DriverRepository(db as any);
+    const result = await repo.getEarnings('driver-1');
+    const [sql, params] = db.query.mock.calls[0];
+    expect(String(sql)).toContain('COALESCE(original_delivery_fee, delivery_fee)');
+    expect(params).toEqual(['driver-1']);
+    expect(result.total_earnings).toBe('25.00');
+    expect(result.total_deliveries).toBe('1');
+  });
+
 });
