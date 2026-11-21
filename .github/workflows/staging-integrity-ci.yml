@@ -32,7 +32,10 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm test -- --runInBand
-      - run: npm run build
+      - name: Build frontend
+        env:
+          ABSHER_API_ORIGIN: https://absher-bi-backend-staging.onrender.com
+        run: npm run build
 
   migrations:
     name: Apply all migrations to disposable PostgreSQL
