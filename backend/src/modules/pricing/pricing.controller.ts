@@ -44,6 +44,9 @@ import {
 class QuoteQueryDto {
   @ApiProperty() @IsUUID() storeId!: string;
 
+  @ApiPropertyOptional() @IsOptional() @IsUUID()
+  zoneId?: string;
+
   @ApiProperty() @Type(() => Number) @IsNumber() @Min(-90) @Max(90)
   addressLat!: number;
 
