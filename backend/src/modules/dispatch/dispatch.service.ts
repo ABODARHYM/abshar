@@ -96,7 +96,7 @@ export class DispatchService implements OnModuleInit, OnModuleDestroy {
     for (const d of drivers) {
       let offerCreated = false;
       try {
-        await this.repo.createOffer({
+        const created = await this.repo.createOffer({
           orderId: params.orderId,
           driverId: d.user_id,
           expiresAt,
@@ -105,6 +105,7 @@ export class DispatchService implements OnModuleInit, OnModuleDestroy {
           distanceKm: Number(d.distance_km),
           mode: 'auto',
         });
+        if (!created) break;
         offerCreated = true;
 
         await this.notifications.notifyDriverNewTask(
@@ -180,7 +181,7 @@ export class DispatchService implements OnModuleInit, OnModuleDestroy {
     for (const d of drivers) {
       let offerCreated = false;
       try {
-        await this.repo.createOffer({
+        const created = await this.repo.createOffer({
           orderId: params.orderId,
           driverId: d.user_id,
           expiresAt,
@@ -189,6 +190,7 @@ export class DispatchService implements OnModuleInit, OnModuleDestroy {
           distanceKm: Number(d.distance_km),
           mode: 'auto',
         });
+        if (!created) break;
         offerCreated = true;
 
         await this.notifications.notifyDriverNewTask(
