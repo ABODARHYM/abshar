@@ -22,6 +22,7 @@ const API = '/api/v1';
 interface City { id: string; nameAr: string; }
 interface District { id: string; nameAr: string; }
 interface Area { id: string; nameAr: string; }
+interface DeliveryZone { id: string; city: string; nameAr: string; }
 
 function NewAddressContent() {
   const router = useRouter();
@@ -35,6 +36,7 @@ function NewAddressContent() {
   const [cityId, setCityId] = useState('');
   const [districtId, setDistrictId] = useState('');
   const [areaId, setAreaId] = useState('');
+  const [zoneId, setZoneId] = useState('');
   const [isDefault, setIsDefault] = useState(true);
 
   const [lat, setLat] = useState(15.4633);
@@ -43,6 +45,7 @@ function NewAddressContent() {
   const [cities, setCities] = useState<City[]>([]);
   const [districts, setDistricts] = useState<District[]>([]);
   const [areas, setAreas] = useState<Area[]>([]);
+  const [deliveryZones, setDeliveryZones] = useState<DeliveryZone[]>([]);
 
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -54,6 +57,16 @@ function NewAddressContent() {
     console.log('[Address]', msg);
     setDebugLog((prev) => [...prev, msg]);
   };
+
+  useEffect(() => {
+    fetch(`${API}/pricing/zones`)
+      .then((r) => (r.ok ? r.json() : []))
+      .then((d) => {
+        const list = Array.isArray(d) ? d : [];
+        setDeliveryZones(list);
+      })
+      .catch(() => setDeliveryZones([]));
+  }, []);
 
   useEffect(() => {
     fetch(`${API}/geography/cities`)
@@ -109,6 +122,10 @@ function NewAddressContent() {
       log('❌ addressLine empty');
       return;
     }
+    if (!zoneId) {
+      setError('يرجى اختيار منطقة التوصيل لضمان احتساب الرسوم الصحيحة');
+      return;
+    }
 
     // Token check
     const token = localStorage.getItem('accessToken');
@@ -151,6 +168,7 @@ function NewAddressContent() {
       latitude: Number(Number(lat).toFixed(6)),
       longitude: Number(Number(lng).toFixed(6)),
       isDefault,
+      zoneId,
     };
 
     // أضف الحقول الاختيارية فقط إذا كانت موجودة فعلياً
@@ -292,6 +310,20 @@ function NewAddressContent() {
             className="input"
             rows={2}
           />
+        </div>
+
+        <div className="card">
+          <label className="block text-sm font-bold mb-2">منطقة التوصيل المطلوبة</label>
+          <select value={zoneId} onChange={(e) => setZoneId(e.target.value)} className="input" required>
+            <option value="">— اختر المدينة والمنطقة —</option>
+            {deliveryZones.map((z) => <option key={z.id} value={z.id}>{z.city} — {z.nameAr}</option>)}
+          </select>
+          <p className="text-xs text-[var(--text-muted)] mt-2">
+            تُستخدم المنطقة المختارة لتحديد شرائح رسوم التوصيل. إذا لم تظهر منطقتك، تواصل مع الإدارة.
+          </p>
+          {deliveryZones.length === 0 && (
+            <p className="text-xs text-[var(--danger)] mt-2">لا توجد مناطق توصيل مفعّلة حالياً.</p>
+          )}
         </div>
 
         <div className="card">
