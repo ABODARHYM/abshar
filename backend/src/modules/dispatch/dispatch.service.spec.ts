@@ -1,3 +1,7 @@
+jest.mock('../notifications/notifications.service', () => ({
+  NotificationsService: class MockNotificationsService {},
+}));
+
 import { DispatchService } from './dispatch.service';
 
 describe('DispatchService offer notification lifecycle', () => {
