@@ -41,6 +41,7 @@ export interface DriverOrderRow {
   currency: string;
   subtotal: string | number;
   delivery_fee: string | number;
+  original_delivery_fee: string | number | null;
   total: string | number;
   customer_notes: string | null;
   driver_id: string | null;
@@ -173,7 +174,7 @@ export class DriverRepository {
         o.delivery_address_text,
         o.delivery_latitude, o.delivery_longitude,
         o.payment_method, o.currency,
-        o.subtotal, o.delivery_fee, o.total,
+        o.subtotal, o.delivery_fee, o.original_delivery_fee, o.total,
         o.customer_notes, o.driver_id,
         o.placed_at, o.accepted_at, o.ready_at, o.picked_up_at, o.delivered_at,
         o.created_at
@@ -348,7 +349,7 @@ export class DriverRepository {
         o.delivery_address_text,
         o.delivery_latitude, o.delivery_longitude,
         o.payment_method, o.currency,
-        o.subtotal, o.delivery_fee, o.total,
+        o.subtotal, o.delivery_fee, o.original_delivery_fee, o.total,
         o.customer_notes, o.driver_id,
         o.placed_at, o.accepted_at, o.ready_at,
         o.picked_up_at, o.delivered_at,
@@ -455,7 +456,7 @@ export class DriverRepository {
         o.delivery_address_text,
         o.delivery_latitude, o.delivery_longitude,
         o.payment_method, o.currency,
-        o.subtotal, o.delivery_fee, o.total,
+        o.subtotal, o.delivery_fee, o.original_delivery_fee, o.total,
         o.customer_notes, o.driver_id,
         o.placed_at, o.accepted_at, o.ready_at, o.picked_up_at, o.delivered_at,
         o.created_at
@@ -496,7 +497,7 @@ export class DriverRepository {
         o.delivery_address_text,
         o.delivery_latitude, o.delivery_longitude,
         o.payment_method, o.currency,
-        o.subtotal, o.delivery_fee, o.total,
+        o.subtotal, o.delivery_fee, o.original_delivery_fee, o.total,
         o.customer_notes, o.driver_id,
         o.placed_at, o.accepted_at, o.ready_at, o.picked_up_at, o.delivered_at,
         o.created_at
@@ -568,7 +569,7 @@ export class DriverRepository {
           delivery_address_text,
           delivery_latitude, delivery_longitude,
           payment_method, currency,
-          subtotal, delivery_fee, total,
+          subtotal, delivery_fee, original_delivery_fee, total,
           customer_notes, driver_id,
           placed_at, accepted_at, ready_at, picked_up_at, delivered_at,
           created_at
@@ -697,7 +698,7 @@ export class DriverRepository {
           delivery_address_text,
           delivery_latitude, delivery_longitude,
           payment_method, currency,
-          subtotal, delivery_fee, total,
+          subtotal, delivery_fee, original_delivery_fee, total,
           customer_notes, driver_id,
           placed_at, accepted_at, ready_at, picked_up_at, delivered_at,
           created_at
@@ -747,7 +748,7 @@ export class DriverRepository {
     month_earnings: string;
     month_deliveries: string;
   }> {
-    // أرباح السائق = delivery_fee عن كل طلب مُسلَّم
+    // Driver earnings use the original fee; free-delivery discounts do not reduce driver pay.
     const r = await this.db.query<{
       total_earnings: string;
       total_deliveries: string;
@@ -760,13 +761,13 @@ export class DriverRepository {
     }>(
       `
       SELECT
-        COALESCE(SUM(delivery_fee), 0)::text AS total_earnings,
+        COALESCE(SUM(COALESCE(original_delivery_fee, delivery_fee)), 0)::text AS total_earnings,
         COUNT(*)::text AS total_deliveries,
-        COALESCE(SUM(CASE WHEN delivered_at >= CURRENT_DATE THEN delivery_fee ELSE 0 END), 0)::text AS today_earnings,
+        COALESCE(SUM(CASE WHEN delivered_at >= CURRENT_DATE THEN COALESCE(original_delivery_fee, delivery_fee) ELSE 0 END), 0)::text AS today_earnings,
         COUNT(CASE WHEN delivered_at >= CURRENT_DATE THEN 1 END)::text AS today_deliveries,
-        COALESCE(SUM(CASE WHEN delivered_at >= CURRENT_DATE - INTERVAL '7 days' THEN delivery_fee ELSE 0 END), 0)::text AS week_earnings,
+        COALESCE(SUM(CASE WHEN delivered_at >= CURRENT_DATE - INTERVAL '7 days' THEN COALESCE(original_delivery_fee, delivery_fee) ELSE 0 END), 0)::text AS week_earnings,
         COUNT(CASE WHEN delivered_at >= CURRENT_DATE - INTERVAL '7 days' THEN 1 END)::text AS week_deliveries,
-        COALESCE(SUM(CASE WHEN delivered_at >= CURRENT_DATE - INTERVAL '30 days' THEN delivery_fee ELSE 0 END), 0)::text AS month_earnings,
+        COALESCE(SUM(CASE WHEN delivered_at >= CURRENT_DATE - INTERVAL '30 days' THEN COALESCE(original_delivery_fee, delivery_fee) ELSE 0 END), 0)::text AS month_earnings,
         COUNT(CASE WHEN delivered_at >= CURRENT_DATE - INTERVAL '30 days' THEN 1 END)::text AS month_deliveries
       FROM orders
       WHERE driver_id = $1 AND status = 'delivered'
