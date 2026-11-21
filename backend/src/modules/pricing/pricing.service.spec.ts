@@ -20,7 +20,7 @@ describe('PricingService distance-tier pricing', () => {
   function makeService(tiers: any[] = [{
     id: 'tier-2-5', zone_id: 'zone-1', min_distance_km: 2,
     max_distance_km: 5, delivery_fee: 700, is_active: true,
-  }], zoneOverride: typeof zone = zone) {
+  }], zoneOverride: any = zone) {
     const repo = {
       getZoneById: jest.fn().mockResolvedValue(zoneOverride),
       calculateDistanceKm: jest.fn().mockResolvedValue(4.2),
