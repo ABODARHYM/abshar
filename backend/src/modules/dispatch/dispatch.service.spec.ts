@@ -132,4 +132,16 @@ describe('DispatchService offer notification lifecycle', () => {
     expect(repo.removeOffer).not.toHaveBeenCalled();
     expect(result.driversOffered).toBe(1);
   });
+  it('does not notify drivers when the order is no longer eligible for offers', async () => {
+    const { service, repo, notifications } = makeService(0);
+    repo.createOffer.mockResolvedValue(null);
+
+    const result = await service.dispatchOrder(params);
+
+    expect(repo.createOffer).toHaveBeenCalledTimes(1);
+    expect(notifications.notifyDriverNewTask).not.toHaveBeenCalled();
+    expect(repo.removeOffer).not.toHaveBeenCalled();
+    expect(result.driversOffered).toBe(0);
+  });
+
 });
