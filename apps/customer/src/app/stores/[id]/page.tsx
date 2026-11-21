@@ -531,8 +531,10 @@ function ProductCard({
   index: number;
 }) {
   const [favorited, setFavorited] = useState(false);
-  const price = Number(product.discountPrice ?? product.price ?? 0);
-  const hasDiscount = product.discountPrice != null && Number(product.discountPrice) < Number(product.price ?? 0);
+  // The products API exposes basePrice; keep the same fallback order used by the cart.
+  const originalPrice = Number(product.price ?? product.basePrice ?? 0);
+  const price = Number(product.discountPrice ?? originalPrice);
+  const hasDiscount = product.discountPrice != null && Number(product.discountPrice) < originalPrice;
 
   return (
     <div
