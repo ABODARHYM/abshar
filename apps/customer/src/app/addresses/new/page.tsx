@@ -22,7 +22,7 @@ const API = '/api/v1';
 interface City { id: string; nameAr: string; }
 interface District { id: string; nameAr: string; }
 interface Area { id: string; nameAr: string; }
-interface DeliveryZone { id: string; city: string; nameAr: string; }
+interface DeliveryZone { id: string; city: string; nameAr: string; cityId?: string | null; districtId?: string | null; }
 
 function NewAddressContent() {
   const router = useRouter();
@@ -51,6 +51,9 @@ function NewAddressContent() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [debugLog, setDebugLog] = useState<string[]>([]);
+  const availableDeliveryZones = deliveryZones.filter((z) =>
+    (!z.cityId || z.cityId === cityId) && (!z.districtId || z.districtId === districtId),
+  );
 
   // تسجيل تشخيصي
   const log = (msg: string) => {
@@ -83,7 +86,7 @@ function NewAddressContent() {
   }, []);
 
   useEffect(() => {
-    setDistricts([]); setDistrictId(''); setAreas([]); setAreaId('');
+    setDistricts([]); setDistrictId(''); setAreas([]); setAreaId(''); setZoneId('');
     if (!cityId) return;
     fetch(`${API}/geography/cities/${cityId}/districts`)
       .then((r) => (r.ok ? r.json() : []))
@@ -96,7 +99,7 @@ function NewAddressContent() {
   }, [cityId]);
 
   useEffect(() => {
-    setAreas([]); setAreaId('');
+    setAreas([]); setAreaId(''); setZoneId('');
     if (!districtId) return;
     fetch(`${API}/geography/districts/${districtId}/areas`)
       .then((r) => (r.ok ? r.json() : []))
@@ -317,13 +320,13 @@ function NewAddressContent() {
           <label className="block text-sm font-bold mb-2">منطقة التوصيل المطلوبة</label>
           <select value={zoneId} onChange={(e) => setZoneId(e.target.value)} className="input" required>
             <option value="">— اختر المدينة والمنطقة —</option>
-            {deliveryZones.map((z) => <option key={z.id} value={z.id}>{z.city} — {z.nameAr}</option>)}
+            {availableDeliveryZones.map((z) => <option key={z.id} value={z.id}>{z.city} — {z.nameAr}</option>)}
           </select>
           <p className="text-xs text-[var(--text-muted)] mt-2">
             تُستخدم المنطقة المختارة لتحديد شرائح رسوم التوصيل. إذا لم تظهر منطقتك، تواصل مع الإدارة.
           </p>
-          {deliveryZones.length === 0 && (
-            <p className="text-xs text-[var(--danger)] mt-2">لا توجد مناطق توصيل مفعّلة حالياً.</p>
+          {availableDeliveryZones.length === 0 && cityId && (
+            <p className="text-xs text-[var(--danger)] mt-2">لا توجد منطقة توصيل مطابقة للمدينة والحي المختارين.</p>
           )}
         </div>
 
