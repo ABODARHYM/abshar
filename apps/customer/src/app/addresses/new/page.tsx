@@ -59,7 +59,8 @@ function NewAddressContent() {
   };
 
   useEffect(() => {
-    fetch(`${API}/pricing/zones`)
+    const token = localStorage.getItem('accessToken');
+    fetch(`${API}/pricing/zones`, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
       .then((r) => (r.ok ? r.json() : []))
       .then((d) => {
         const list = Array.isArray(d) ? d : [];
