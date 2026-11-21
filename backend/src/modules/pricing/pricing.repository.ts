@@ -15,6 +15,8 @@ export interface ZoneRow {
   city: string;
   name_ar: string;
   name_en: string;
+  city_id: string | null;
+  district_id: string | null;
   base_delivery_fee: string | number;
   fee_per_km: string | number;
   min_order_amount: string | number;
@@ -40,7 +42,7 @@ export class PricingRepository {
     if (params.city) {
       const r = await this.db.query<ZoneRow>(
         `
-        SELECT id, city, name_ar, name_en,
+        SELECT id, city, name_ar, name_en, city_id, district_id,
                base_delivery_fee, fee_per_km, min_order_amount,
                free_delivery_threshold, surge_multiplier, fuel_surcharge,
                is_active
@@ -256,7 +258,7 @@ export class PricingRepository {
       UPDATE delivery_zones
       SET ${sets.join(', ')}, updated_at = now()
       WHERE id = $${i}
-      RETURNING id, city, name_ar, name_en,
+      RETURNING id, city, name_ar, name_en, city_id, district_id,
                 base_delivery_fee, fee_per_km, min_order_amount,
                 free_delivery_threshold, surge_multiplier, fuel_surcharge,
                 is_active
