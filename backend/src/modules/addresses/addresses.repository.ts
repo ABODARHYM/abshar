@@ -88,12 +88,40 @@ export class AddressesRepository {
     return result.rows[0] ?? null;
   }
 
-  async zoneExists(zoneId: string): Promise<boolean> {
-    const result = await this.db.query<{ id: string }>(
-      `SELECT id FROM delivery_zones WHERE id = $1 AND is_active = true LIMIT 1`,
-      [zoneId],
+  async validateAddressGeography(input: {
+    cityId?: string | null;
+    districtId?: string | null;
+    areaId?: string | null;
+    zoneId: string;
+  }): Promise<boolean> {
+    const result = await this.db.query<{ valid: boolean }>(
+      `SELECT
+        (
+          EXISTS (
+            SELECT 1 FROM delivery_zones z
+            WHERE z.id = $4 AND z.is_active = true
+              AND (z.city_id IS NULL OR z.city_id = $1::uuid)
+              AND (z.district_id IS NULL OR z.district_id = $2::uuid)
+          )
+          AND ($1::uuid IS NULL OR EXISTS (
+            SELECT 1 FROM cities c WHERE c.id = $1 AND c.is_active = true
+          ))
+          AND ($2::uuid IS NULL OR EXISTS (
+            SELECT 1 FROM districts d
+            WHERE d.id = $2 AND d.is_active = true
+              AND ($1::uuid IS NULL OR d.city_id = $1::uuid)
+          ))
+          AND ($3::uuid IS NULL OR (
+            $2::uuid IS NOT NULL AND EXISTS (
+              SELECT 1 FROM areas ar
+              WHERE ar.id = $3 AND ar.is_active = true
+                AND ar.district_id = $2::uuid
+            )
+          ))
+        ) AS valid`,
+      [input.cityId ?? null, input.districtId ?? null, input.areaId ?? null, input.zoneId],
     );
-    return result.rows.length > 0;
+    return result.rows[0]?.valid === true;
   }
 
   /**
@@ -168,6 +196,9 @@ export class AddressesRepository {
         ['latitude', input.latitude],
         ['longitude', input.longitude],
         ['zone_id', input.zoneId],
+        ['city_id', input.cityId],
+        ['district_id', input.districtId],
+        ['area_id', input.areaId],
         ['is_default', input.isDefault],
       ];
       for (const [col, val] of map) {
