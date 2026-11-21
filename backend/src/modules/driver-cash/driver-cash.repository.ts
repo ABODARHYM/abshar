@@ -126,12 +126,14 @@ export class DriverCashRepository {
       account_id: string | null;
       direction: string;
       amount: string;
+      amount_matches: boolean;
       currency: string;
     }>(
       client,
-      `SELECT account_type, account_id, direction, amount::text, currency
+      `SELECT account_type, account_id, direction, amount::text,
+              amount = $2::numeric AS amount_matches, currency
        FROM transactions WHERE order_id = $1 AND type = 'cod_collection' LIMIT 1`,
-      [params.orderId],
+      [params.orderId, params.amount],
     );
     if (existing.rows.length > 0) {
       const collection = existing.rows[0];
@@ -139,7 +141,7 @@ export class DriverCashRepository {
         collection.account_type !== 'driver' ||
         collection.account_id !== params.driverId ||
         collection.direction !== 'credit' ||
-        Number(collection.amount) !== params.amount ||
+        !collection.amount_matches ||
         collection.currency?.trim() !== params.currency.trim()
       ) {
         throw new ConflictException('An existing COD collection conflicts with the delivered order');
@@ -185,12 +187,14 @@ export class DriverCashRepository {
       account_id: string | null;
       direction: string;
       amount: string;
+      amount_matches: boolean;
       currency: string;
     }>(
       client,
-      `SELECT account_type, account_id, direction, amount::text, currency
+      `SELECT account_type, account_id, direction, amount::text,
+              amount = $2::numeric AS amount_matches, currency
        FROM transactions WHERE order_id = $1 AND type = 'driver_earning' LIMIT 1`,
-      [params.orderId],
+      [params.orderId, params.amount],
     );
     if (existing.rows.length > 0) {
       const earning = existing.rows[0];
@@ -198,7 +202,7 @@ export class DriverCashRepository {
         earning.account_type !== 'driver' ||
         earning.account_id !== params.driverId ||
         earning.direction !== 'credit' ||
-        Number(earning.amount) !== params.amount ||
+        !earning.amount_matches ||
         earning.currency?.trim() !== params.currency.trim()
       ) {
         throw new ConflictException('An existing driver earning conflicts with the delivered order');
@@ -238,21 +242,28 @@ export class DriverCashRepository {
         throw new BadRequestException('Driver account was not found');
       }
 
-      const balance = await client.query<{ outstanding: string }>(
+      const balance = await client.query<{ outstanding: string; within_balance: boolean }>(
         `
-        SELECT COALESCE(SUM(CASE
-          WHEN type = 'cod_collection' AND direction = 'credit' THEN amount
-          WHEN type = 'cash_remittance' AND direction = 'debit' THEN -amount
-          WHEN type = 'settlement_payout' AND direction = 'debit' AND settlement_id IS NULL THEN -amount
-          ELSE 0
-        END), 0)::text AS outstanding
+        SELECT
+          COALESCE(SUM(CASE
+            WHEN type = 'cod_collection' AND direction = 'credit' THEN amount
+            WHEN type = 'cash_remittance' AND direction = 'debit' THEN -amount
+            WHEN type = 'settlement_payout' AND direction = 'debit' AND settlement_id IS NULL THEN -amount
+            ELSE 0
+          END), 0)::text AS outstanding,
+          $2::numeric <= COALESCE(SUM(CASE
+            WHEN type = 'cod_collection' AND direction = 'credit' THEN amount
+            WHEN type = 'cash_remittance' AND direction = 'debit' THEN -amount
+            WHEN type = 'settlement_payout' AND direction = 'debit' AND settlement_id IS NULL THEN -amount
+            ELSE 0
+          END), 0) AS within_balance
         FROM transactions
-        WHERE account_type = 'driver' AND account_id = $1 AND currency = $2
+        WHERE account_type = 'driver' AND account_id = $1 AND currency = $3
         `,
-        [driverId, currency],
+        [driverId, amount, currency],
       );
-      const outstanding = Number(balance.rows[0]?.outstanding ?? 0);
-      if (!Number.isFinite(amount) || amount <= 0 || amount > outstanding) {
+      const outstanding = balance.rows[0]?.outstanding ?? '0';
+      if (!Number.isFinite(amount) || amount <= 0 || !balance.rows[0]?.within_balance) {
         throw new BadRequestException(
           `Cash submission exceeds the current outstanding balance (${outstanding})`,
         );
