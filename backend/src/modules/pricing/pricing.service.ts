@@ -278,6 +278,8 @@ export class PricingService {
     return {
       id: z.id,
       city: z.city,
+      cityId: z.city_id,
+      districtId: z.district_id,
       nameAr: z.name_ar,
       nameEn: z.name_en,
       baseDeliveryFee: Number(z.base_delivery_fee),
