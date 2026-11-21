@@ -6,6 +6,7 @@ import {
 import { ErrorCode } from '../../common/error-codes';
 import {
   AddressesRepository,
+  AddressInput,
   AddressRow,
 } from './addresses.repository';
 import { CreateAddressDto } from './dto/create-address.dto';
@@ -57,10 +58,16 @@ export class AddressesService {
     userId: string,
     dto: CreateAddressDto,
   ): Promise<AddressResponse> {
+    let input: AddressInput = dto;
+
     if (dto.zoneId) {
+      const zone = await this.repo.findActiveZoneGeography(dto.zoneId);
+      const cityId = dto.cityId !== undefined ? dto.cityId : zone?.city_id ?? null;
+      const districtId = dto.districtId !== undefined ? dto.districtId : zone?.district_id ?? null;
+
       const valid = await this.repo.validateAddressGeography({
-        cityId: dto.cityId,
-        districtId: dto.districtId,
+        cityId,
+        districtId,
         areaId: dto.areaId,
         zoneId: dto.zoneId,
       });
@@ -71,6 +78,9 @@ export class AddressesService {
           details: [{ field: 'zoneId', constraints: ['geography mismatch or inactive zone'] }],
         });
       }
+
+      // Backfill missing city/district from the selected active zone.
+      input = { ...dto, cityId, districtId };
     } else if (dto.cityId || dto.districtId || dto.areaId) {
       throw new BadRequestException({
         code: ErrorCode.ValidationFailed,
@@ -79,7 +89,7 @@ export class AddressesService {
       });
     }
 
-    const row = await this.repo.create(userId, dto);
+    const row = await this.repo.create(userId, input);
     return this.toResponse(row);
   }
 
@@ -97,11 +107,19 @@ export class AddressesService {
     }
 
     const nextZoneId = dto.zoneId ?? existing.zone_id;
-    const nextCityId = dto.cityId !== undefined ? dto.cityId : existing.city_id;
-    const nextDistrictId = dto.districtId !== undefined ? dto.districtId : existing.district_id;
+    let nextCityId = dto.cityId !== undefined ? dto.cityId : existing.city_id;
+    let nextDistrictId = dto.districtId !== undefined ? dto.districtId : existing.district_id;
     const nextAreaId = dto.areaId !== undefined ? dto.areaId : existing.area_id;
 
     if (nextZoneId) {
+      const zone = await this.repo.findActiveZoneGeography(nextZoneId);
+      if (dto.cityId === undefined && !nextCityId) {
+        nextCityId = zone?.city_id ?? null;
+      }
+      if (dto.districtId === undefined && !nextDistrictId) {
+        nextDistrictId = zone?.district_id ?? null;
+      }
+
       const valid = await this.repo.validateAddressGeography({
         cityId: nextCityId,
         districtId: nextDistrictId,
@@ -123,7 +141,17 @@ export class AddressesService {
       });
     }
 
-    const updated = await this.repo.update(id, userId, dto);
+    const updateInput: UpdateAddressDto = nextZoneId
+      ? {
+          ...dto,
+          zoneId: nextZoneId,
+          cityId: nextCityId,
+          districtId: nextDistrictId,
+          areaId: nextAreaId,
+        }
+      : dto;
+
+    const updated = await this.repo.update(id, userId, updateInput);
     if (!updated) {
       throw new NotFoundException({
         code: ErrorCode.NotFound,
