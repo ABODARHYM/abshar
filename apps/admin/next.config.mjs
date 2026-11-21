@@ -16,7 +16,7 @@ const nextConfig = {
     if (!configuredOrigin) {
       throw new Error('ABSHER_API_ORIGIN must be configured for this environment; refusing to default to Staging.');
     }
-    const apiOrigin = configuredOrigin.replace(/\\/+$/, '');
+    const apiOrigin = configuredOrigin.replace(/\/+$/, '');
     return [
       {
         source: '/api/v1/:path*',
