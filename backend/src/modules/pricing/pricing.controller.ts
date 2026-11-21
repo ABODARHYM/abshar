@@ -181,38 +181,14 @@ export class PricingController {
       });
     }
 
-    // نحتاج بيانات المتجر
-    const store = await this.service['repo']['db'].query<{
-      id: string;
-      latitude: string | number;
-      longitude: string | number;
-      delivery_fee: string | number;
-      min_order_amount: string | number;
-    }>(
-      `SELECT id, latitude, longitude, delivery_fee, min_order_amount FROM stores WHERE id = $1 AND deleted_at IS NULL LIMIT 1`,
-      [query.storeId],
-    );
-    if (!store.rows[0]) {
-      throw new Error('Store not found');
-    }
-    const s = store.rows[0];
-
-    const currency = await this.service['repo']['db'].query<{ value: any }>(
-      `SELECT value FROM settings WHERE key = 'currency' LIMIT 1`,
-    );
-    const currencyStr = String(currency.rows[0]?.value ?? 'USD').replace(/"/g, '');
+    const store = await this.service.getStoreQuoteDetails(query.storeId);
 
     return this.service.quote({
-      storeId: s.id,
+      ...store,
       zoneId,
-      storeLat: Number(s.latitude),
-      storeLng: Number(s.longitude),
-      storeDeliveryFee: Number(s.delivery_fee),
-      storeMinOrderAmount: Number(s.min_order_amount),
       addressLat,
       addressLng,
       subtotal: query.subtotal ?? 0,
-      currency: currencyStr,
     });
   }
 
