@@ -159,7 +159,15 @@ export default function PushSetup() {
       const reg = await navigator.serviceWorker.ready;
       const sub = await reg.pushManager.getSubscription();
       if (sub) {
-        await authFetch('/api/v1/notifications/push/unsubscribe', { method: 'DELETE', body: JSON.stringify({ endpoint: sub.endpoint }) });
+        const response = await authFetch('/api/v1/notifications/push/unsubscribe', {
+          method: 'DELETE',
+          body: JSON.stringify({ endpoint: sub.endpoint }),
+        });
+        if (!response.ok) {
+          setError('تعذر إلغاء الاشتراك من الخادم. أعد المحاولة.');
+          setLoading(false);
+          return;
+        }
         await sub.unsubscribe();
       }
       setSubscribed(false);
