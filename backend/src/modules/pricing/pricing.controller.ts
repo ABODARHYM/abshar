@@ -1,10 +1,12 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseUUIDPipe,
   Patch,
+  Post,
   Query,
   UseGuards,
 } from '@nestjs/common';
@@ -55,6 +57,33 @@ class QuoteQueryDto {
   @ApiPropertyOptional()
   @IsOptional() @IsUUID()
   addressId?: string;
+}
+
+class CreateDistanceTierDto {
+  @ApiProperty() @Type(() => Number) @IsNumber() @Min(0)
+  minDistanceKm!: number;
+
+  @ApiPropertyOptional({ nullable: true }) @IsOptional()
+  @Type(() => Number) @IsNumber() @Min(0)
+  maxDistanceKm?: number | null;
+
+  @ApiProperty() @Type(() => Number) @IsNumber() @Min(0)
+  deliveryFee!: number;
+}
+
+class UpdateDistanceTierDto {
+  @ApiPropertyOptional() @IsOptional() @Type(() => Number) @IsNumber() @Min(0)
+  minDistanceKm?: number;
+
+  @ApiPropertyOptional({ nullable: true }) @IsOptional()
+  @Type(() => Number) @IsNumber() @Min(0)
+  maxDistanceKm?: number | null;
+
+  @ApiPropertyOptional() @IsOptional() @Type(() => Number) @IsNumber() @Min(0)
+  deliveryFee?: number;
+
+  @ApiPropertyOptional() @IsOptional() @IsBoolean()
+  isActive?: boolean;
 }
 
 class UpdateZoneDto {
@@ -146,6 +175,7 @@ export class PricingController {
 
     return this.service.quote({
       storeId: s.id,
+      zoneId: query.zoneId,
       storeLat: Number(s.latitude),
       storeLng: Number(s.longitude),
       storeDeliveryFee: Number(s.delivery_fee),
@@ -182,6 +212,42 @@ export class PricingController {
     @Body() dto: UpdateZoneDto,
   ): Promise<ZoneResponseDto> {
     return this.service.updateZone(id, dto);
+  }
+
+
+  @Get('zones/:id/distance-tiers')
+  @RequirePermission('zones.manage')
+  listDistanceTiers(@Param('id', ParseUUIDPipe) id: string) {
+    return this.service.listDistanceTiers(id);
+  }
+
+  @Post('zones/:id/distance-tiers')
+  @RequirePermission('zones.manage')
+  createDistanceTier(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: CreateDistanceTierDto,
+  ) {
+    return this.service.createDistanceTier({
+      zoneId: id,
+      minDistanceKm: dto.minDistanceKm,
+      maxDistanceKm: dto.maxDistanceKm ?? null,
+      deliveryFee: dto.deliveryFee,
+    });
+  }
+
+  @Patch('distance-tiers/:id')
+  @RequirePermission('zones.manage')
+  updateDistanceTier(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateDistanceTierDto,
+  ) {
+    return this.service.updateDistanceTier(id, dto);
+  }
+
+  @Delete('distance-tiers/:id')
+  @RequirePermission('zones.manage')
+  deactivateDistanceTier(@Param('id', ParseUUIDPipe) id: string) {
+    return this.service.deactivateDistanceTier(id);
   }
 
   // ═══ Settings (Admin) ═══
