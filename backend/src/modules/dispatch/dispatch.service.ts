@@ -84,6 +84,7 @@ export class DispatchService {
     let offered = 0;
 
     for (const d of drivers) {
+      let offerCreated = false;
       try {
         await this.repo.createOffer({
           orderId: params.orderId,
@@ -94,6 +95,7 @@ export class DispatchService {
           distanceKm: Number(d.distance_km),
           mode: 'auto',
         });
+        offerCreated = true;
 
         await this.notifications.notifyDriverNewTask(
           d.user_id,
@@ -106,9 +108,19 @@ export class DispatchService {
         );
 
         offered++;
-      } catch (err) {
+      } catch {
+        // Do not strand an active offer when its notification could not be queued.
+        if (offerCreated) {
+          try {
+            await this.repo.removeOffer(params.orderId, d.user_id);
+          } catch {
+            this.logger.error(
+              `Failed to roll back an unnotified offer for order ${params.orderNumber}`,
+            );
+          }
+        }
         this.logger.warn(
-          `Failed to offer to driver ${d.user_id}: ${(err as Error).message}`,
+          `Failed to create or notify an offer for order ${params.orderNumber}`,
         );
       }
     }
@@ -156,6 +168,7 @@ export class DispatchService {
     let offered = 0;
 
     for (const d of drivers) {
+      let offerCreated = false;
       try {
         await this.repo.createOffer({
           orderId: params.orderId,
@@ -166,6 +179,7 @@ export class DispatchService {
           distanceKm: Number(d.distance_km),
           mode: 'auto',
         });
+        offerCreated = true;
 
         await this.notifications.notifyDriverNewTask(
           d.user_id,
@@ -178,8 +192,19 @@ export class DispatchService {
         );
 
         offered++;
-      } catch (err) {
-        this.logger.warn(`Broadcast failed for ${d.user_id}: ${(err as Error).message}`);
+      } catch {
+        if (offerCreated) {
+          try {
+            await this.repo.removeOffer(params.orderId, d.user_id);
+          } catch {
+            this.logger.error(
+              `Failed to roll back an unnotified broadcast offer for order ${params.orderNumber}`,
+            );
+          }
+        }
+        this.logger.warn(
+          `Broadcast offer creation or notification failed for order ${params.orderNumber}`,
+        );
       }
     }
 
