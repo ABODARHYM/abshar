@@ -176,28 +176,24 @@ export class OrdersService {
     // 7) العملة
     const currency = await this.repo.getCurrency();
 
-    // 8) ═══ حساب delivery fee من Pricing Engine ═══
-    let deliveryFee = Number(store.delivery_fee); // fallback
-    try {
-      const pricing = await this.pricing.calculate({
-        storeId: store.id,
-        storeLat: Number(store.latitude ?? 0),
-        storeLng: Number(store.longitude ?? 0),
-        storeDeliveryFee: Number(store.delivery_fee),
-        storeMinOrderAmount: Number(store.min_order_amount),
-        addressLat: Number(address.latitude),
-        addressLng: Number(address.longitude),
-        subtotal,
-        currency,
-      });
-      deliveryFee = pricing.deliveryFee;
-
-      console.log(
-        `[orders] pricing: source=${pricing.source} distance=${pricing.distanceKm}km fee=${pricing.deliveryFee}`,
-      );
-    } catch (err) {
-      console.warn('[orders] pricing failed, using store default:', (err as Error).message);
-    }
+    // 8) احسب رسوم التوصيل من شريحة المنطقة المرتبطة بعنوان العميل.
+    // لا يوجد fallback إلى رسوم المتجر أو السعر العام عند غياب التعرفة.
+    const pricing = await this.pricing.calculate({
+      storeId: store.id,
+      zoneId: address.zone_id,
+      storeLat: Number(store.latitude),
+      storeLng: Number(store.longitude),
+      storeDeliveryFee: Number(store.delivery_fee),
+      storeMinOrderAmount: Number(store.min_order_amount),
+      addressLat: Number(address.latitude),
+      addressLng: Number(address.longitude),
+      subtotal,
+      currency,
+    });
+    const deliveryFee = pricing.deliveryFee;
+    console.log(
+      `[orders] pricing: zone=${pricing.zoneId} tier=${pricing.distanceTierId} distance=${pricing.distanceKm}km fee=${pricing.deliveryFee}`,
+    );
 
     // 8.5) ═══ تطبيق الكوبون (إن وُجد) ═══
     let discountTotal = 0;
