@@ -28,7 +28,7 @@ describe('DriverCashRepository finance integrity', () => {
     const client = {
       query: jest.fn()
         .mockResolvedValueOnce({ rows: [{ user_id: 'driver-1' }], rowCount: 1 })
-        .mockResolvedValueOnce({ rows: [{ outstanding: '1000.00' }], rowCount: 1 })
+        .mockResolvedValueOnce({ rows: [{ outstanding: '1000.00', within_balance: true }], rowCount: 1 })
         .mockResolvedValueOnce({ rows: [{ id: 'tx-1' }], rowCount: 1 }),
     };
     const db = {
@@ -43,6 +43,7 @@ describe('DriverCashRepository finance integrity', () => {
     expect(db.transaction).toHaveBeenCalledTimes(1);
     expect(client.query).toHaveBeenCalledTimes(3);
     expect(String(client.query.mock.calls[0][0])).toContain('FOR UPDATE');
+    expect(String(client.query.mock.calls[1][0])).toContain('$2::numeric <= COALESCE(SUM');
     const sql = String(client.query.mock.calls[2][0]);
     expect(sql).toContain("'cash_remittance'");
     expect(sql).toContain('created_by');
@@ -53,7 +54,7 @@ describe('DriverCashRepository finance integrity', () => {
     const client = {
       query: jest.fn()
         .mockResolvedValueOnce({ rows: [{ user_id: 'driver-1' }], rowCount: 1 })
-        .mockResolvedValueOnce({ rows: [{ outstanding: '100.00' }], rowCount: 1 }),
+        .mockResolvedValueOnce({ rows: [{ outstanding: '100.00', within_balance: false }], rowCount: 1 }),
     };
     const db = {
       transaction: jest.fn(async (work: (tx: any) => Promise<any>) => work(client)),
