@@ -363,6 +363,7 @@ export class OrdersRepository {
     landmark: string | null;
     latitude: string | number;
     longitude: string | number;
+    zone_id: string | null;
     user_id: string;
     deleted_at: Date | null;
   } | null> {
@@ -375,12 +376,13 @@ export class OrdersRepository {
       landmark: string | null;
       latitude: string | number;
       longitude: string | number;
+      zone_id: string | null;
       user_id: string;
       deleted_at: Date | null;
     }>(
       `
       SELECT id, address_line, building, floor, apartment, landmark,
-             latitude, longitude, user_id, deleted_at
+             latitude, longitude, zone_id, user_id, deleted_at
       FROM addresses WHERE id = $1 AND user_id = $2 LIMIT 1
       `,
       [addressId, userId],
