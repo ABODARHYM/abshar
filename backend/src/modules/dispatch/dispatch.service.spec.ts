@@ -2,6 +2,10 @@ jest.mock('../notifications/notifications.service', () => ({
   NotificationsService: class MockNotificationsService {},
 }));
 
+jest.mock('@nestjs/jwt', () => ({
+  JwtService: class MockJwtService {},
+}));
+
 import { DispatchService } from './dispatch.service';
 
 describe('DispatchService offer notification lifecycle', () => {
