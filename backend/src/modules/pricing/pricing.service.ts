@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ErrorCode } from '../../common/error-codes';
-import { PricingRepository, ZoneRow } from './pricing.repository';
+import { DistanceTierRow, PricingRepository, ZoneRow } from './pricing.repository';
 import { DeliveryQuoteDto, ZoneResponseDto } from './dto/pricing-response.dto';
 
 export interface PricingContext {
@@ -143,6 +143,65 @@ export class PricingService {
       distanceTierId: r.distanceTierId,
       currency: ctx.currency,
     };
+  }
+
+
+  async listDistanceTiers(zoneId: string): Promise<DistanceTierRow[]> {
+    const zone = await this.repo.getZoneById(zoneId);
+    if (!zone) {
+      throw new NotFoundException({ code: ErrorCode.NotFound, message: 'Delivery zone not found' });
+    }
+    return this.repo.listActiveDistanceTiers(zoneId);
+  }
+
+  async createDistanceTier(input: {
+    zoneId: string; minDistanceKm: number; maxDistanceKm: number | null; deliveryFee: number;
+  }): Promise<DistanceTierRow> {
+    const zone = await this.repo.getZoneById(input.zoneId);
+    if (!zone) {
+      throw new NotFoundException({ code: ErrorCode.NotFound, message: 'Delivery zone not found' });
+    }
+    try {
+      return await this.repo.createDistanceTier(input);
+    } catch (error) {
+      const e = error as { code?: string; constraint?: string };
+      if (e.code === '23514' || e.code === '23505') {
+        throw new BadRequestException({
+          code: ErrorCode.ValidationFailed,
+          message: 'شريحة المسافة تتداخل مع شريحة نشطة أخرى في المنطقة نفسها.',
+        });
+      }
+      throw error;
+    }
+  }
+
+  async updateDistanceTier(id: string, fields: {
+    minDistanceKm?: number; maxDistanceKm?: number | null; deliveryFee?: number; isActive?: boolean;
+  }): Promise<DistanceTierRow> {
+    try {
+      const row = await this.repo.updateDistanceTier(id, fields);
+      if (!row) {
+        throw new NotFoundException({ code: ErrorCode.NotFound, message: 'Distance tier not found' });
+      }
+      return row;
+    } catch (error) {
+      const e = error as { code?: string };
+      if (e.code === '23514' || e.code === '23505') {
+        throw new BadRequestException({
+          code: ErrorCode.ValidationFailed,
+          message: 'تعديل الشريحة يسبب تداخلاً مع شريحة نشطة أخرى.',
+        });
+      }
+      throw error;
+    }
+  }
+
+  async deactivateDistanceTier(id: string): Promise<{ status: string }> {
+    const row = await this.repo.updateDistanceTier(id, { isActive: false });
+    if (!row) {
+      throw new NotFoundException({ code: ErrorCode.NotFound, message: 'Distance tier not found' });
+    }
+    return { status: 'ok' };
   }
 
   async listZones(): Promise<ZoneResponseDto[]> {
