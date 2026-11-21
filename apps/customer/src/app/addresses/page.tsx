@@ -6,8 +6,11 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import TopBar from '@/components/TopBar';
 
+interface DeliveryZone { id: string; city: string; nameAr: string; }
+
 interface Address {
   id: string;
+  zoneId: string | null;
   label: string;
   cityName: string | null;
   districtName: string | null;
@@ -23,6 +26,7 @@ interface Address {
 export default function AddressesPage() {
   const router = useRouter();
   const [addresses, setAddresses] = useState<Address[]>([]);
+  const [deliveryZones, setDeliveryZones] = useState<DeliveryZone[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -48,7 +52,33 @@ export default function AddressesPage() {
 
   useEffect(() => {
     loadAddresses();
+    const token = localStorage.getItem('accessToken');
+    fetch('/api/v1/pricing/zones', { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data) => setDeliveryZones(Array.isArray(data) ? data : []))
+      .catch(() => setDeliveryZones([]));
   }, []);
+
+
+  const updateAddressZone = async (addressId: string, zoneId: string) => {
+    const token = localStorage.getItem('accessToken');
+    if (!zoneId || !token) return;
+    try {
+      const response = await fetch(`/api/v1/addresses/${addressId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ zoneId }),
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        throw new Error(body?.message || 'تعذر تحديث منطقة العنوان');
+      }
+      setAddresses((current) => current.map((a) => a.id === addressId ? { ...a, zoneId } : a));
+      setError('');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'تعذر تحديث منطقة العنوان');
+    }
+  };
 
   const handleDelete = async (id: string) => {
     if (!confirm('هل تريد حذف هذا العنوان؟')) return;
@@ -141,6 +171,25 @@ export default function AddressesPage() {
                 }`}
                 style={{ animationDelay: `${i * 0.05}s` }}
               >
+                  <div className="mt-3 pt-3 border-t border-[var(--bg-border)]">
+                    <label className="block text-xs font-bold mb-2">منطقة احتساب رسوم التوصيل</label>
+                    <div className="flex gap-2">
+                      <select
+                        className="input flex-1"
+                        value={addr.zoneId || ''}
+                        onChange={(e) => setAddresses((current) => current.map((a) => a.id === addr.id ? { ...a, zoneId: e.target.value } : a))}
+                      >
+                        <option value="">اختر المنطقة</option>
+                        {deliveryZones.map((z) => <option key={z.id} value={z.id}>{z.city} — {z.nameAr}</option>)}
+                      </select>
+                      <button
+                        className="btn btn-secondary"
+                        disabled={!addr.zoneId}
+                        onClick={() => updateAddressZone(addr.id, addr.zoneId || '')}
+                      >حفظ</button>
+                    </div>
+                  </div>
+
                 <div className="flex items-start gap-3 mb-3">
                   <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
                     addr.isDefault ? 'bg-[var(--brand-red)] text-white' : 'bg-[var(--bg-elevated)]'
