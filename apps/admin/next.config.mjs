@@ -12,7 +12,11 @@ const nextConfig = {
     return config;
   },
   async rewrites() {
-    const apiOrigin = (process.env.ABSHER_API_ORIGIN || 'https://absher-bi-backend-staging.onrender.com');
+    const configuredOrigin = process.env.ABSHER_API_ORIGIN;
+    if (!configuredOrigin) {
+      throw new Error('ABSHER_API_ORIGIN must be configured for this environment; refusing to default to Staging.');
+    }
+    const apiOrigin = configuredOrigin.replace(/\\/+$/, '');
     return [
       {
         source: '/api/v1/:path*',
