@@ -14,6 +14,7 @@ export class DeliveryQuoteDto {
   @ApiProperty({ nullable: true }) source!: string | null;
   @ApiProperty({ nullable: true }) zoneId!: string | null;
   @ApiProperty({ nullable: true }) zoneName!: string | null;
+  @ApiProperty({ nullable: true }) distanceTierId!: string | null;
   @ApiProperty() currency!: string;
 }
 
