@@ -22,6 +22,7 @@ import {
   STATUS_LABELS_AR,
 } from '../orders/order-state-machine';
 import { NotificationsService } from '../notifications/notifications.service';
+import { DispatchService } from '../dispatch/dispatch.service';
 import { AdminUserQueryDto } from './dto/admin-user-query.dto';
 import { CreateAdminDriverDto } from './dto/create-admin-driver.dto';
 import { AdminOrderQueryDto } from './dto/admin-order-query.dto';
@@ -43,6 +44,7 @@ export class AdminService {
     private readonly notifications: NotificationsService,
     private readonly storesService: StoresService,
     private readonly productsService: ProductsService,
+    private readonly dispatch: DispatchService,
   ) {}
 
   // ───── Dashboard ─────
@@ -502,6 +504,13 @@ export class AdminService {
         code: ErrorCode.NotFound,
         message: 'Order not found',
       });
+    }
+
+    // Admin cancellation can happen after Smart Dispatch has created active offers.
+    try {
+      await this.dispatch.cancelDispatch(orderId);
+    } catch {
+      console.warn('[admin] dispatch cleanup failed after cancellation');
     }
 
     // إشعار العميل
