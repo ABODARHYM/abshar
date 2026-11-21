@@ -373,7 +373,7 @@ export class AdminRepository {
       if (!current.rows[0]) return false;
 
       await client.query(
-        `UPDATE drivers SET status = $1 WHERE user_id = $2`,
+        `UPDATE drivers SET status = $1, availability = 'offline' WHERE user_id = $2`,
         [status, userId],
       );
 
