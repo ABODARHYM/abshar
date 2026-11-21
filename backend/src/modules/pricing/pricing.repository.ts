@@ -164,7 +164,7 @@ export class PricingRepository {
   async listActiveZones(): Promise<ZoneRow[]> {
     const r = await this.db.query<ZoneRow>(
       `
-      SELECT id, city, name_ar, name_en,
+      SELECT id, city, name_ar, name_en, city_id, district_id,
              base_delivery_fee, fee_per_km, min_order_amount,
              free_delivery_threshold, surge_multiplier, fuel_surcharge,
              is_active
