@@ -33,6 +33,7 @@ describe('DispatchService offer notification lifecycle', () => {
       findNearbyAvailableDrivers: jest.fn().mockResolvedValue(availableDrivers),
       createOffer: jest.fn().mockResolvedValue({ id: 'offer-1' }),
       removeOffer: jest.fn().mockResolvedValue(undefined),
+      expireOffersAndFindReadyOrders: jest.fn().mockResolvedValue({ expiredCount: 0, orders: [] }),
     };
     const notifications = {
       notifyDriverNewTask: jest.fn().mockRejectedValue(new Error('notification unavailable')),
@@ -104,6 +105,23 @@ describe('DispatchService offer notification lifecycle', () => {
     expect(repo.findNearbyAvailableDrivers).toHaveBeenCalledWith(expect.objectContaining({ limit: 20 }));
     expect(repo.createOffer).toHaveBeenCalledTimes(4);
     expect(notifications.notifyDriverNewTask).toHaveBeenCalledTimes(4);
+  });
+  it('advances to the next round after all offers in a timed-out round expire', async () => {
+    const nextDriver = { ...driver, user_id: 'driver-next', distance_km: '3.5' };
+    const { service, repo, notifications } = makeService(1, [nextDriver]);
+    repo.expireOffersAndFindReadyOrders.mockResolvedValue({
+      expiredCount: 3,
+      orders: [{ orderId: 'order-1', orderNumber: 'ORD-1', storeId: 'store-1', deliveryArea: 'حي الجامعة' }],
+    });
+    notifications.notifyDriverNewTask.mockResolvedValue(undefined);
+
+    const expiredCount = await service.cleanupExpiredOffers();
+
+    expect(expiredCount).toBe(3);
+    expect(repo.createOffer).toHaveBeenCalledWith(expect.objectContaining({
+      orderId: 'order-1', driverId: 'driver-next', roundNumber: 2,
+    }));
+    expect(notifications.notifyDriverNewTask).toHaveBeenCalledTimes(1);
   });
   it('keeps an offer when its notification is successfully queued', async () => {
     const { service, repo, notifications } = makeService(0);
