@@ -530,6 +530,13 @@ export class StoreOwnerService {
       });
     }
 
+    // Remove outstanding driver offers and their notifications after a successful cancellation.
+    try {
+      await this.dispatch.cancelDispatch(orderId);
+    } catch {
+      console.warn('[store-owner] dispatch cleanup failed after cancellation');
+    }
+
     const items = await this.repo.listOrderItems(orderId);
     const full = await this.repo.findOrderForStore(orderId, store.id);
 
