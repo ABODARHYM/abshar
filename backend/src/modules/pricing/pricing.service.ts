@@ -42,6 +42,24 @@ export class PricingService {
 
   constructor(private readonly repo: PricingRepository) {}
 
+  async getStoreQuoteDetails(storeId: string) {
+    const store = await this.repo.getStoreQuoteDetails(storeId);
+    if (!store) {
+      throw new NotFoundException({
+        code: ErrorCode.NotFound,
+        message: 'المتجر غير موجود أو غير متاح.',
+      });
+    }
+    return {
+      storeId: store.id,
+      storeLat: Number(store.latitude),
+      storeLng: Number(store.longitude),
+      storeDeliveryFee: Number(store.delivery_fee),
+      storeMinOrderAmount: Number(store.min_order_amount),
+      currency: store.currency,
+    };
+  }
+
   /**
    * حساب تكلفة التوصيل — pipeline كامل.
    *
