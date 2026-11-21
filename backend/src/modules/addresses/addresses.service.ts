@@ -141,7 +141,7 @@ export class AddressesService {
       });
     }
 
-    const updateInput: UpdateAddressDto = nextZoneId
+    const updateInput: AddressInput = nextZoneId
       ? {
           ...dto,
           zoneId: nextZoneId,
