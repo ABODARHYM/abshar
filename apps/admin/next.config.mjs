@@ -12,7 +12,8 @@ const nextConfig = {
     return config;
   },
   async rewrites() {
-    const configuredOrigin = process.env.ABSHER_API_ORIGIN;
+    const configuredOrigin = process.env.ABSHER_API_ORIGIN ||
+      (process.env.NODE_ENV === 'development' ? 'http://127.0.0.1:3000' : undefined);
     if (!configuredOrigin) {
       throw new Error('ABSHER_API_ORIGIN must be configured for this environment; refusing to default to Staging.');
     }
