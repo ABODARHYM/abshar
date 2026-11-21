@@ -88,6 +88,23 @@ export class AddressesRepository {
     return result.rows[0] ?? null;
   }
 
+  async findActiveZoneGeography(zoneId: string): Promise<{
+    city_id: string | null;
+    district_id: string | null;
+  } | null> {
+    const result = await this.db.query<{
+      city_id: string | null;
+      district_id: string | null;
+    }>(
+      `SELECT city_id, district_id
+       FROM delivery_zones
+       WHERE id = $1 AND is_active = true
+       LIMIT 1`,
+      [zoneId],
+    );
+    return result.rows[0] ?? null;
+  }
+
   async validateAddressGeography(input: {
     cityId?: string | null;
     districtId?: string | null;
