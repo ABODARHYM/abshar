@@ -248,7 +248,7 @@ export class OrdersService {
       storeId: store.id,
       currency,
       deliveryFee: finalDeliveryFee,
-      originalDeliveryFee: deliveryFee,
+      originalDeliveryFee: pricing.originalDeliveryFee,
       subtotal,
       discountTotal,
       total,
