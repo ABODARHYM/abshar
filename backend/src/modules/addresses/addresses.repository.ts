@@ -212,7 +212,7 @@ export class AddressesRepository {
         const cur = await client.query<AddressRow>(
           `
           SELECT id, user_id, label, address_line, building, floor, apartment,
-                 landmark, latitude, longitude, zone_id, is_default,
+                 landmark, latitude, longitude, zone_id, city_id, district_id, area_id, is_default,
                  created_at, updated_at
           FROM addresses a WHERE a.id = $1 AND a.user_id = $2 AND a.deleted_at IS NULL
           `,
