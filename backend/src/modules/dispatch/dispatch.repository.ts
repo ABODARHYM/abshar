@@ -113,27 +113,39 @@ export class DispatchRepository {
     tier: number;
     distanceKm: number | null;
     mode?: 'manual' | 'auto';
-  }): Promise<{ id: string }> {
-    const r = await this.db.query<{ id: string }>(
-      `
-      INSERT INTO driver_assignments (
-        order_id, driver_id, status, mode,
-        offered_at, expires_at, round_number, tier, distance_km
-      )
-      VALUES ($1, $2, 'offered', $3, now(), $4, $5, $6, $7)
-      RETURNING id
-      `,
-      [
-        params.orderId,
-        params.driverId,
-        params.mode ?? 'auto',
-        params.expiresAt,
-        params.roundNumber,
-        params.tier,
-        params.distanceKm,
-      ],
-    );
-    return r.rows[0];
+  }): Promise<{ id: string } | null> {
+    return this.db.transaction(async (client: PoolClient) => {
+      // Serialize offer creation with driver acceptance on the same order row.
+      const order = await client.query<{ status: string; driver_id: string | null }>(
+        `SELECT status, driver_id FROM orders WHERE id = $1 FOR UPDATE`,
+        [params.orderId],
+      );
+      const current = order.rows[0];
+      if (!current || current.status !== 'ready' || current.driver_id !== null) {
+        return null;
+      }
+
+      const r = await client.query<{ id: string }>(
+        `
+        INSERT INTO driver_assignments (
+          order_id, driver_id, status, mode,
+          offered_at, expires_at, round_number, tier, distance_km
+        )
+        VALUES ($1, $2, 'offered', $3, now(), $4, $5, $6, $7)
+        RETURNING id
+        `,
+        [
+          params.orderId,
+          params.driverId,
+          params.mode ?? 'auto',
+          params.expiresAt,
+          params.roundNumber,
+          params.tier,
+          params.distanceKm,
+        ],
+      );
+      return r.rows[0] ?? null;
+    });
   }
 
   /**
