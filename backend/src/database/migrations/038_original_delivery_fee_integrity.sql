@@ -5,10 +5,12 @@ ALTER TABLE orders
   ALTER COLUMN original_delivery_fee DROP NOT NULL,
   ALTER COLUMN original_delivery_fee DROP DEFAULT;
 
--- Historical zero-fee orders are ambiguous; keep the original fee explicitly unknown.
+-- Only rows backfilled as zero/zero are ambiguous. Preserve a positive original fee
+-- when a free-delivery coupon reduced the customer-facing delivery_fee to zero.
 UPDATE orders
 SET original_delivery_fee = NULL
-WHERE delivery_fee = 0;
+WHERE delivery_fee = 0
+  AND original_delivery_fee = 0;
 
 CREATE OR REPLACE FUNCTION require_original_delivery_fee_on_new_order()
 RETURNS trigger
