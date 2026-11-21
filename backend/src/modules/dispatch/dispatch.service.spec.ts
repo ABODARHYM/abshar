@@ -11,7 +11,7 @@ describe('DispatchService offer notification lifecycle', () => {
     availability: 'online',
   };
 
-  function makeService(currentRound: number) {
+  function makeService(currentRound: number, availableDrivers = [driver]) {
     const repo = {
       getStoreInfo: jest.fn().mockResolvedValue({
         id: 'store-1',
@@ -22,7 +22,7 @@ describe('DispatchService offer notification lifecycle', () => {
       }),
       getCurrentRound: jest.fn().mockResolvedValue(currentRound),
       getOfferedDriverIds: jest.fn().mockResolvedValue([]),
-      findNearbyAvailableDrivers: jest.fn().mockResolvedValue([driver]),
+      findNearbyAvailableDrivers: jest.fn().mockResolvedValue(availableDrivers),
       createOffer: jest.fn().mockResolvedValue({ id: 'offer-1' }),
       removeOffer: jest.fn().mockResolvedValue(undefined),
     };
@@ -64,6 +64,39 @@ describe('DispatchService offer notification lifecycle', () => {
     expect(result.usesBroadcast).toBe(true);
   });
 
+  it('creates offers for all three eligible drivers in one tier', async () => {
+    const drivers = Array.from({ length: 3 }, (_, index) => ({
+      ...driver,
+      user_id: `driver-${index + 1}`,
+      distance_km: String(index + 1),
+    }));
+    const { service, repo, notifications } = makeService(0, drivers);
+    notifications.notifyDriverNewTask.mockResolvedValue(undefined);
+
+    const result = await service.dispatchOrder(params);
+
+    expect(result.driversOffered).toBe(3);
+    expect(repo.createOffer).toHaveBeenCalledTimes(3);
+    expect(notifications.notifyDriverNewTask).toHaveBeenCalledTimes(3);
+  });
+
+  it('broadcasts offers to every eligible driver in the final round', async () => {
+    const drivers = Array.from({ length: 4 }, (_, index) => ({
+      ...driver,
+      user_id: `driver-${index + 1}`,
+      distance_km: String(index + 1),
+    }));
+    const { service, repo, notifications } = makeService(3, drivers);
+    notifications.notifyDriverNewTask.mockResolvedValue(undefined);
+
+    const result = await service.dispatchOrder(params);
+
+    expect(result.usesBroadcast).toBe(true);
+    expect(result.driversOffered).toBe(4);
+    expect(repo.findNearbyAvailableDrivers).toHaveBeenCalledWith(expect.objectContaining({ limit: 20 }));
+    expect(repo.createOffer).toHaveBeenCalledTimes(4);
+    expect(notifications.notifyDriverNewTask).toHaveBeenCalledTimes(4);
+  });
   it('keeps an offer when its notification is successfully queued', async () => {
     const { service, repo, notifications } = makeService(0);
     notifications.notifyDriverNewTask.mockResolvedValue(undefined);
