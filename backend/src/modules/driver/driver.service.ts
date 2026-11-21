@@ -467,7 +467,7 @@ export class DriverService {
               await this.notifications.notifyEarningsAdded(
                 full.driver_id!,
                 full.order_number,
-                Number((full as any).driver_earnings ?? (full as any).delivery_fee ?? 0),
+                Number(full.original_delivery_fee ?? full.delivery_fee ?? 0),
               );
             } catch {}
 
@@ -523,7 +523,7 @@ export class DriverService {
     items?: DriverOrderItemRow[],
   ): DriverOrderResponseDto {
     // أرباح السائق = رسوم التوصيل
-    const driverEarning = Number(row.delivery_fee);
+    const driverEarning = Number(row.original_delivery_fee ?? row.delivery_fee);
     const res: DriverOrderResponseDto = {
       id: row.id,
       orderNumber: row.order_number,
