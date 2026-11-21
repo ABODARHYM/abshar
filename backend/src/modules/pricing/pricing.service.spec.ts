@@ -1,4 +1,4 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { PricingService } from './pricing.service';
 
 describe('PricingService distance-tier pricing', () => {
@@ -26,10 +26,30 @@ describe('PricingService distance-tier pricing', () => {
       calculateDistanceKm: jest.fn().mockResolvedValue(4.2),
       listActiveDistanceTiers: jest.fn().mockResolvedValue(tiers),
       getPricingSettings: jest.fn().mockResolvedValue({}),
+      findAddressForUser: jest.fn().mockResolvedValue({ zone_id: 'zone-1', latitude: 15.41, longitude: 45.31 }),
     };
     return { service: new PricingService(repo as any), repo };
   }
 
+  it('resolves quote coordinates and zone from the authenticated customer address', async () => {
+    const { service, repo } = makeService();
+    await expect(service.getAddressForQuote('address-1', 'customer-1')).resolves.toEqual({
+      zoneId: 'zone-1', addressLat: 15.41, addressLng: 45.31,
+    });
+    expect(repo.findAddressForUser).toHaveBeenCalledWith('address-1', 'customer-1');
+  });
+
+  it('rejects quote lookup when the address is not owned by the customer', async () => {
+    const { service, repo } = makeService();
+    repo.findAddressForUser.mockResolvedValue(null);
+    await expect(service.getAddressForQuote('address-1', 'other-customer')).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('rejects quote lookup for an address without a delivery zone', async () => {
+    const { service, repo } = makeService();
+    repo.findAddressForUser.mockResolvedValue({ zone_id: null, latitude: 15.41, longitude: 45.31 });
+    await expect(service.getAddressForQuote('address-1', 'customer-1')).rejects.toBeInstanceOf(BadRequestException);
+  });
   it('uses the configured fee for the matching distance band', async () => {
     const { service } = makeService();
     const result = await service.calculate(context);
