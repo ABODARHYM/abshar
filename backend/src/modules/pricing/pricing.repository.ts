@@ -30,6 +30,24 @@ export interface ZoneRow {
 export class PricingRepository {
   constructor(private readonly db: DatabaseService) {}
 
+  async getStoreQuoteDetails(storeId: string): Promise<{
+    id: string; latitude: string | number; longitude: string | number;
+    delivery_fee: string | number; min_order_amount: string | number; currency: string;
+  } | null> {
+    const store = await this.db.query<{
+      id: string; latitude: string | number; longitude: string | number;
+      delivery_fee: string | number; min_order_amount: string | number;
+    }>(
+      `SELECT id, latitude, longitude, delivery_fee, min_order_amount
+       FROM stores WHERE id = $1 AND deleted_at IS NULL LIMIT 1`,
+      [storeId],
+    );
+    if (!store.rows[0]) return null;
+    const currency = await this.db.query<{ value: unknown }>(
+      `SELECT value FROM settings WHERE key = 'currency' LIMIT 1`,
+    );
+    return { ...store.rows[0], currency: String(currency.rows[0]?.value ?? 'USD').replace(/"/g, '') };
+  }
   /**
    * ابحث عن zone مناسق حسب إحداثيات (اختياري: city).
    * حالياً: نختار zone يطابق city (لو متوفر)، وإلا نختار أول zone نشط.
