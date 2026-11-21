@@ -15,8 +15,8 @@ export interface ZoneRow {
   city: string;
   name_ar: string;
   name_en: string;
-  city_id: string | null;
-  district_id: string | null;
+  city_id?: string | null;
+  district_id?: string | null;
   base_delivery_fee: string | number;
   fee_per_km: string | number;
   min_order_amount: string | number;
