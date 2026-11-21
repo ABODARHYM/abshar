@@ -48,6 +48,7 @@ describe('AdminRepository driver account status', () => {
 
     expect(String(client.query.mock.calls[0][0])).toContain('FOR UPDATE');
     expect(String(client.query.mock.calls[1][0])).toContain('UPDATE drivers');
+    expect(String(client.query.mock.calls[1][0])).toContain("availability = 'offline'");
     expect(String(client.query.mock.calls[2][0])).toContain('UPDATE users');
     expect(String(client.query.mock.calls[3][0])).toContain('INSERT INTO audit_logs');
     expect(client.query.mock.calls[1][1]).toEqual(['suspended', 'driver-user-1']);
