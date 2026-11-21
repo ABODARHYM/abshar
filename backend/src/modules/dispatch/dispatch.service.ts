@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { DispatchRepository, DriverNearbyRow } from './dispatch.repository';
 import { NotificationsService } from '../notifications/notifications.service';
 import { DispatchResultDto, NearbyDriverDto } from './dto/smart-dispatch.dto';
@@ -11,13 +11,23 @@ const MAX_ROUNDS = 3;             // 3 جولات قبل الـ broadcast
 const BROADCAST_LIMIT = 20;       // أقصى عدد في الـ broadcast
 
 @Injectable()
-export class DispatchService {
+export class DispatchService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(DispatchService.name);
+  private expiryTimer?: ReturnType<typeof setInterval>;
+  private processingExpiredOffers = false;
 
   constructor(
     private readonly repo: DispatchRepository,
     private readonly notifications: NotificationsService,
   ) {}
+
+  onModuleInit(): void {
+    this.expiryTimer = setInterval(() => { void this.cleanupExpiredOffers(); }, 10_000);
+  }
+
+  onModuleDestroy(): void {
+    if (this.expiryTimer) clearInterval(this.expiryTimer);
+  }
 
   /**
    * 🎯 Smart Dispatch — يستدعيه StoreOwner عند markReady
@@ -251,11 +261,27 @@ export class DispatchService {
    * تنظيف العروض المنتهية — يُستدعى دوريًا (cron)
    */
   async cleanupExpiredOffers(): Promise<number> {
-    const n = await this.repo.expireOldOffers();
-    if (n > 0) {
-      this.logger.log(`[SmartDispatch] Expired ${n} offers`);
+    if (this.processingExpiredOffers) return 0;
+    this.processingExpiredOffers = true;
+    try {
+      const { expiredCount, orders } = await this.repo.expireOffersAndFindReadyOrders();
+      for (const order of orders) {
+        try {
+          await this.dispatchOrder(order);
+        } catch (err) {
+          this.logger.warn(`Redispatch failed for order ${order.orderNumber}: ${(err as Error).message}`);
+        }
+      }
+      if (expiredCount > 0) {
+        this.logger.log(`[SmartDispatch] Expired ${expiredCount} offers; retried ${orders.length} ready orders`);
+      }
+      return expiredCount;
+    } catch (err) {
+      this.logger.error(`Expired-offer processing failed: ${(err as Error).message}`);
+      return 0;
+    } finally {
+      this.processingExpiredOffers = false;
     }
-    return n;
   }
 
   /**
