@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { PoolClient } from 'pg';
 import { DatabaseService } from '../../database/database.service';
 
 export interface DriverNearbyRow {
@@ -174,6 +175,62 @@ export class DispatchRepository {
     return r.rows.map((row) => row.driver_id);
   }
 
+  /**
+   * Expire timed-out offers and return still-ready orders that need the next dispatch round.
+   * The update and candidate selection are atomic so only one worker claims newly expired rows.
+   */
+  async expireOffersAndFindReadyOrders(): Promise<{
+    expiredCount: number;
+    orders: Array<{ orderId: string; orderNumber: string; storeId: string; deliveryArea: string }>;
+  }> {
+    return this.db.transaction(async (client: PoolClient) => {
+      const expired = await client.query<{ order_id: string }>(
+        `UPDATE driver_assignments
+         SET status = 'expired', responded_at = now()
+         WHERE status = 'offered' AND expires_at IS NOT NULL AND expires_at <= now()
+         RETURNING order_id`,
+      );
+      const orderIds = [...new Set(expired.rows.map((row) => row.order_id))];
+      if (orderIds.length === 0) return { expiredCount: 0, orders: [] };
+
+      const candidates = await client.query<{
+        order_id: string; order_number: string; store_id: string; delivery_area: string | null;
+      }>(
+        `SELECT o.id AS order_id, o.order_number, o.store_id,
+                o.delivery_address_text AS delivery_area
+         FROM orders o
+         WHERE o.id = ANY($1::uuid[])
+           AND o.status = 'ready'
+           AND o.driver_id IS NULL
+           AND NOT EXISTS (
+             SELECT 1 FROM driver_assignments active
+             WHERE active.order_id = o.id AND active.status = 'offered'
+               AND (active.expires_at IS NULL OR active.expires_at > now())
+           )
+           AND NOT EXISTS (
+             SELECT 1 FROM driver_assignments accepted
+             WHERE accepted.order_id = o.id AND accepted.status = 'accepted'
+           )
+           AND COALESCE((
+             SELECT MAX(history.round_number) FROM driver_assignments history
+             WHERE history.order_id = o.id
+           ), 0) BETWEEN 1 AND 3
+         ORDER BY o.ready_at ASC NULLS LAST, o.created_at ASC
+         FOR UPDATE OF o SKIP LOCKED`,
+        [orderIds],
+      );
+
+      return {
+        expiredCount: expired.rowCount ?? 0,
+        orders: candidates.rows.map((row) => ({
+          orderId: row.order_id,
+          orderNumber: row.order_number,
+          storeId: row.store_id,
+          deliveryArea: row.delivery_area ?? '',
+        })),
+      };
+    });
+  }
   /**
    * احذف العروض المنتهية
    */
