@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -47,11 +48,11 @@ class QuoteQueryDto {
   @ApiPropertyOptional() @IsOptional() @IsUUID()
   zoneId?: string;
 
-  @ApiProperty() @Type(() => Number) @IsNumber() @Min(-90) @Max(90)
-  addressLat!: number;
+  @ApiPropertyOptional() @IsOptional() @Type(() => Number) @IsNumber() @Min(-90) @Max(90)
+  addressLat?: number;
 
-  @ApiProperty() @Type(() => Number) @IsNumber() @Min(-180) @Max(180)
-  addressLng!: number;
+  @ApiPropertyOptional() @IsOptional() @Type(() => Number) @IsNumber() @Min(-180) @Max(180)
+  addressLng?: number;
 
   @ApiPropertyOptional({ default: 0 })
   @IsOptional() @Type(() => Number) @IsNumber() @Min(0)
@@ -154,7 +155,32 @@ export class PricingController {
     description: 'حساب سعر التوصيل لموقع معيّن بدون إنشاء طلب',
   })
   @ApiResponse({ status: 200, type: DeliveryQuoteDto })
-  async quote(@Query() query: QuoteQueryDto): Promise<DeliveryQuoteDto> {
+  async quote(
+    @Query() query: QuoteQueryDto,
+    @CurrentUser() user: AuthUser,
+  ): Promise<DeliveryQuoteDto> {
+    let zoneId = query.zoneId;
+    let addressLat = query.addressLat;
+    let addressLng = query.addressLng;
+
+    if (query.addressId) {
+      const address = await this.service.getAddressForQuote(query.addressId, user.id);
+      if (zoneId && zoneId !== address.zoneId) {
+        throw new BadRequestException({
+          message: 'منطقة التوصيل لا تتطابق مع العنوان المحدد.',
+        });
+      }
+      zoneId = address.zoneId;
+      addressLat = address.addressLat;
+      addressLng = address.addressLng;
+    }
+
+    if (!zoneId || addressLat === undefined || addressLng === undefined) {
+      throw new BadRequestException({
+        message: 'يجب تحديد عنوان محفوظ أو منطقة التوصيل وإحداثيات العنوان.',
+      });
+    }
+
     // نحتاج بيانات المتجر
     const store = await this.service['repo']['db'].query<{
       id: string;
@@ -178,13 +204,13 @@ export class PricingController {
 
     return this.service.quote({
       storeId: s.id,
-      zoneId: query.zoneId,
+      zoneId,
       storeLat: Number(s.latitude),
       storeLng: Number(s.longitude),
       storeDeliveryFee: Number(s.delivery_fee),
       storeMinOrderAmount: Number(s.min_order_amount),
-      addressLat: query.addressLat,
-      addressLng: query.addressLng,
+      addressLat,
+      addressLng,
       subtotal: query.subtotal ?? 0,
       currency: currencyStr,
     });
