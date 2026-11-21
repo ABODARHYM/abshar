@@ -6,11 +6,13 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import TopBar from '@/components/TopBar';
 
-interface DeliveryZone { id: string; city: string; nameAr: string; }
+interface DeliveryZone { id: string; city: string; nameAr: string; cityId?: string | null; districtId?: string | null; }
 
 interface Address {
   id: string;
   zoneId: string | null;
+  cityId: string | null;
+  districtId: string | null;
   label: string;
   cityName: string | null;
   districtName: string | null;
@@ -180,7 +182,7 @@ export default function AddressesPage() {
                         onChange={(e) => setAddresses((current) => current.map((a) => a.id === addr.id ? { ...a, zoneId: e.target.value } : a))}
                       >
                         <option value="">اختر المنطقة</option>
-                        {deliveryZones.map((z) => <option key={z.id} value={z.id}>{z.city} — {z.nameAr}</option>)}
+                        {deliveryZones.filter((z) => (!z.cityId || z.cityId === addr.cityId) && (!z.districtId || z.districtId === addr.districtId)).map((z) => <option key={z.id} value={z.id}>{z.city} — {z.nameAr}</option>)}
                       </select>
                       <button
                         className="btn btn-secondary"
