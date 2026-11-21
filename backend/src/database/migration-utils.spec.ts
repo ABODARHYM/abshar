@@ -67,7 +67,7 @@ describe('real migration files', () => {
   it('preserves applied migration 031 and appends forward-only finance, notification, delivery-fee, and distance-tier pricing migrations', () => {
     const numbers = names.map((name) => Number(name.slice(0, 3)));
     expect(numbers.slice(0, 26)).toEqual(Array.from({ length: 26 }, (_, i) => i + 1));
-    expect(numbers.slice(26)).toEqual([31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42]);
+    expect(numbers.slice(26)).toEqual([31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43]);
   });
 
   it('plans finance migrations after an already-applied 031 without out-of-order work', () => {
