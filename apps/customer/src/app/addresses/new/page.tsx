@@ -317,20 +317,6 @@ function NewAddressContent() {
         </div>
 
         <div className="card">
-          <label className="block text-sm font-bold mb-2">منطقة التوصيل المطلوبة</label>
-          <select value={zoneId} onChange={(e) => setZoneId(e.target.value)} className="input" required>
-            <option value="">— اختر المدينة والمنطقة —</option>
-            {availableDeliveryZones.map((z) => <option key={z.id} value={z.id}>{z.city} — {z.nameAr}</option>)}
-          </select>
-          <p className="text-xs text-[var(--text-muted)] mt-2">
-            تُستخدم المنطقة المختارة لتحديد شرائح رسوم التوصيل. إذا لم تظهر منطقتك، تواصل مع الإدارة.
-          </p>
-          {availableDeliveryZones.length === 0 && cityId && (
-            <p className="text-xs text-[var(--danger)] mt-2">لا توجد منطقة توصيل مطابقة للمدينة والحي المختارين.</p>
-          )}
-        </div>
-
-        <div className="card">
           <label className="block text-sm font-bold mb-2">المدينة</label>
           <select value={cityId} onChange={(e) => setCityId(e.target.value)} className="input">
             <option value="">— اختر —</option>
@@ -357,6 +343,20 @@ function NewAddressContent() {
             </select>
           </div>
         )}
+
+        <div className="card">
+          <label className="block text-sm font-bold mb-2">منطقة التوصيل المطلوبة</label>
+          <select value={zoneId} onChange={(e) => setZoneId(e.target.value)} className="input" required>
+            <option value="">— اختر المدينة والمنطقة —</option>
+            {availableDeliveryZones.map((z) => <option key={z.id} value={z.id}>{z.city} — {z.nameAr}</option>)}
+          </select>
+          <p className="text-xs text-[var(--text-muted)] mt-2">
+            تُستخدم المنطقة المختارة لتحديد شرائح رسوم التوصيل. إذا لم تظهر منطقتك، تواصل مع الإدارة.
+          </p>
+          {availableDeliveryZones.length === 0 && cityId && (
+            <p className="text-xs text-[var(--danger)] mt-2">لا توجد منطقة توصيل مطابقة للمدينة والحي المختارين.</p>
+          )}
+        </div>
 
         <div className="card">
           <label className="block text-sm font-bold mb-2">أقرب معلم</label>
