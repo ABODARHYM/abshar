@@ -67,6 +67,40 @@ jobs:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/absher_bi
           DATABASE_SSL: "false"
         run: npx ts-node src/database/migrate.ts up
+      - name: Verify Smart Dispatch offer indexes
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/absher_bi
+        run: |
+          node <<'NODE'
+          const { Client } = require('pg');
+          (async () => {
+            const client = new Client({ connectionString: process.env.DATABASE_URL });
+            await client.connect();
+            try {
+              const result = await client.query(`
+                SELECT indexname, indexdef FROM pg_indexes
+                WHERE schemaname = 'public' AND indexname IN (
+                  'driver_assignments_one_active_per_order',
+                  'driver_assignments_one_accepted_per_order',
+                  'driver_assignments_one_offer_per_driver_per_order'
+                )
+              `);
+              const indexes = new Map(result.rows.map((row) => [row.indexname, row.indexdef]));
+              if (indexes.has('driver_assignments_one_active_per_order')) {
+                throw new Error('Legacy single-active-offer index still exists');
+              }
+              if (!indexes.get('driver_assignments_one_accepted_per_order')?.includes("status = 'accepted'")) {
+                throw new Error('Single accepted-driver guard is missing or invalid');
+              }
+              if (!indexes.get('driver_assignments_one_offer_per_driver_per_order')?.includes("status = 'offered'")) {
+                throw new Error('Per-driver offer idempotency guard is missing or invalid');
+              }
+              console.log('Smart Dispatch multi-offer indexes verified');
+            } finally {
+              await client.end();
+            }
+          })().catch((error) => { console.error(error); process.exit(1); });
+          NODE
 
   frontends:
     name: ${{ matrix.app }} production build
