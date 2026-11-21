@@ -1,0 +1,130 @@
+'use client';
+
+import { FormEvent, useCallback, useEffect, useState } from 'react';
+import AdminHeader from '@/components/AdminHeader';
+import { authFetch } from '@/lib/auth';
+
+type Zone = { id: string; city: string; nameAr: string; nameEn?: string };
+type Tier = {
+  id: string; zone_id: string; min_distance_km: string | number;
+  max_distance_km: string | number | null; delivery_fee: string | number; is_active: boolean;
+};
+
+export default function PricingPage() {
+  const [zones, setZones] = useState<Zone[]>([]);
+  const [zoneId, setZoneId] = useState('');
+  const [tiers, setTiers] = useState<Tier[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [form, setForm] = useState({ minDistanceKm: '0', maxDistanceKm: '', deliveryFee: '' });
+
+  const loadZones = useCallback(async () => {
+    const response = await authFetch('/api/v1/pricing/zones');
+    if (!response.ok) throw new Error('تعذر تحميل مناطق التوصيل');
+    const data = await response.json();
+    const rows = Array.isArray(data) ? data : [];
+    setZones(rows);
+    if (!zoneId && rows[0]?.id) setZoneId(rows[0].id);
+  }, [zoneId]);
+
+  const loadTiers = useCallback(async () => {
+    if (!zoneId) { setTiers([]); return; }
+    const response = await authFetch(`/api/v1/pricing/zones/${zoneId}/distance-tiers`);
+    if (!response.ok) throw new Error('تعذر تحميل شرائح المسافة');
+    const data = await response.json();
+    setTiers(Array.isArray(data) ? data : []);
+  }, [zoneId]);
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        await loadZones();
+        if (active) setError('');
+      } catch (e) {
+        if (active) setError(e instanceof Error ? e.message : 'حدث خطأ');
+      } finally {
+        if (active) setLoading(false);
+      }
+    })();
+    return () => { active = false; };
+  }, [loadZones]);
+
+  useEffect(() => {
+    let active = true;
+    loadTiers().catch((e) => { if (active) setError(e instanceof Error ? e.message : 'تعذر تحميل الشرائح'); });
+    return () => { active = false; };
+  }, [loadTiers]);
+
+  const createTier = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!zoneId) return;
+    setSaving(true); setError('');
+    try {
+      const response = await authFetch(`/api/v1/pricing/zones/${zoneId}/distance-tiers`, {
+        method: 'POST',
+        body: JSON.stringify({
+          minDistanceKm: Number(form.minDistanceKm),
+          maxDistanceKm: form.maxDistanceKm.trim() ? Number(form.maxDistanceKm) : null,
+          deliveryFee: Number(form.deliveryFee),
+        }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.message || 'تعذر حفظ شريحة المسافة');
+      setForm({ minDistanceKm: form.maxDistanceKm || '0', maxDistanceKm: '', deliveryFee: '' });
+      await loadTiers();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'تعذر حفظ الشريحة');
+    } finally { setSaving(false); }
+  };
+
+  const deactivate = async (id: string) => {
+    if (!confirm('هل تريد إيقاف هذه الشريحة؟')) return;
+    const response = await authFetch(`/api/v1/pricing/distance-tiers/${id}`, { method: 'DELETE' });
+    if (!response.ok) { setError('تعذر إيقاف الشريحة'); return; }
+    await loadTiers();
+  };
+
+  return (
+    <div style={{ padding: '24px', maxWidth: 1100, margin: '0 auto' }}>
+      <AdminHeader title="🚚 تعرفة التوصيل" subtitle="شرائح المسافة لكل مدينة ومنطقة" />
+      {error && <div role="alert" className="card mb-4 border border-red-500/40 text-red-600">{error}</div>}
+      <section className="card p-4 mb-5">
+        <label className="block text-sm font-bold mb-2">مدينة / منطقة التوصيل</label>
+        <select className="input w-full" value={zoneId} onChange={(e) => setZoneId(e.target.value)}>
+          <option value="">اختر المنطقة</option>
+          {zones.map((z) => <option key={z.id} value={z.id}>{z.city} — {z.nameAr}</option>)}
+        </select>
+        {!loading && zones.length === 0 && <p className="text-sm text-amber-500 mt-2">لا توجد مناطق توصيل معرفة. أضف المدن والمناطق أولاً.</p>}
+      </section>
+      <section className="card p-4 mb-5">
+        <h2 className="font-black mb-3">إضافة شريحة مسافة</h2>
+        <form onSubmit={createTier} className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+          <label className="text-sm">من (كم)<input className="input w-full mt-1" type="number" min="0" step="0.01" required value={form.minDistanceKm} onChange={(e) => setForm({ ...form, minDistanceKm: e.target.value })} /></label>
+          <label className="text-sm">إلى (كم) — فارغ = مفتوح<input className="input w-full mt-1" type="number" min="0.01" step="0.01" value={form.maxDistanceKm} onChange={(e) => setForm({ ...form, maxDistanceKm: e.target.value })} /></label>
+          <label className="text-sm">رسوم التوصيل<input className="input w-full mt-1" type="number" min="0" step="0.01" required value={form.deliveryFee} onChange={(e) => setForm({ ...form, deliveryFee: e.target.value })} /></label>
+          <button className="btn btn-primary" type="submit" disabled={saving || !zoneId || !form.deliveryFee}>{saving ? 'جارٍ الحفظ...' : 'إضافة الشريحة'}</button>
+        </form>
+        <p className="text-xs text-[var(--text-muted)] mt-3">المسافات تُحسب تقديرياً بخط مستقيم بين إحداثيات المتجر والعميل. لا تُضاف أسعار افتراضية، ويجب تغطية كامل نطاق الخدمة بشرائح غير متداخلة.</p>
+      </section>
+      <section className="card p-4">
+        <h2 className="font-black mb-3">الشرائح المسجلة</h2>
+        {tiers.length === 0 ? <p className="text-sm text-[var(--text-muted)]">{loading ? 'جارٍ التحميل...' : 'لا توجد شرائح لهذه المنطقة بعد.'}</p> : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead><tr className="text-right border-b"><th className="p-2">من (كم)</th><th className="p-2">إلى (كم)</th><th className="p-2">الرسوم</th><th className="p-2">الحالة</th><th className="p-2">إجراء</th></tr></thead>
+              <tbody>{tiers.map((t) => <tr key={t.id} className="border-b">
+                <td className="p-2">{Number(t.min_distance_km).toFixed(2)}</td>
+                <td className="p-2">{t.max_distance_km === null ? 'مفتوح' : Number(t.max_distance_km).toFixed(2)}</td>
+                <td className="p-2 font-bold">{Number(t.delivery_fee).toLocaleString('ar-YE')}</td>
+                <td className="p-2">{t.is_active ? 'نشطة' : 'متوقفة'}</td>
+                <td className="p-2">{t.is_active && <button className="text-red-500 font-bold" onClick={() => deactivate(t.id)}>إيقاف</button>}</td>
+              </tr>)}</tbody>
+            </table>
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
