@@ -182,7 +182,7 @@ export default function AddressesPage() {
                         onChange={(e) => setAddresses((current) => current.map((a) => a.id === addr.id ? { ...a, zoneId: e.target.value } : a))}
                       >
                         <option value="">اختر المنطقة</option>
-                        {deliveryZones.filter((z) => (!z.cityId || z.cityId === addr.cityId) && (!z.districtId || z.districtId === addr.districtId)).map((z) => <option key={z.id} value={z.id}>{z.city} — {z.nameAr}</option>)}
+                        {deliveryZones.filter((z) => (!addr.cityId || !z.cityId || z.cityId === addr.cityId) && (!addr.districtId || !z.districtId || z.districtId === addr.districtId)).map((z) => <option key={z.id} value={z.id}>{z.city} — {z.nameAr}</option>)}
                       </select>
                       <button
                         className="btn btn-secondary"
