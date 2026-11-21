@@ -1,10 +1,11 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ErrorCode } from '../../common/error-codes';
 import { PricingRepository, ZoneRow } from './pricing.repository';
 import { DeliveryQuoteDto, ZoneResponseDto } from './dto/pricing-response.dto';
 
 export interface PricingContext {
   storeId: string;
+  zoneId?: string | null;
   storeLat: number;
   storeLng: number;
   storeDeliveryFee: number;
@@ -29,6 +30,7 @@ interface PricingResult {
   source: 'zone' | 'store' | 'global';
   zoneId: string | null;
   zoneName: string | null;
+  distanceTierId: string | null;
 }
 
 @Injectable()
@@ -48,113 +50,73 @@ export class PricingService {
    * 6) Fuel surcharge (global)
    */
   async calculate(ctx: PricingContext): Promise<PricingResult> {
-    // 1) اقرأ settings
-    const settings = await this.repo.getPricingSettings();
-
-    const globalDefaultFee = settings['default_delivery_fee'] ?? 500;
-    const minFee = settings['min_delivery_fee'] ?? 0;
-    const maxFee = settings['max_delivery_fee'] ?? 5000;
-    const globalSurge = settings['surge_multiplier'] ?? 1.0;
-    const globalFuel = settings['fuel_surcharge'] ?? 0;
-    const globalFreeThreshold = settings['free_delivery_threshold'] ?? 0;
-
-    // 2) احسب المسافة
-    let distanceKm = 0;
-    try {
-      distanceKm = await this.repo.calculateDistanceKm(
-        ctx.storeLat,
-        ctx.storeLng,
-        ctx.addressLat,
-        ctx.addressLng,
-      );
-    } catch (err) {
-      this.logger.warn(`Distance calculation failed: ${(err as Error).message}`);
-    }
-
-    // 3) جرّب zone
-    let zone: ZoneRow | null = null;
-    try {
-      zone = await this.repo.findZoneForLocation({
-        city: ctx.city,
-        latitude: ctx.addressLat,
-        longitude: ctx.addressLng,
+    if (!ctx.zoneId) {
+      throw new BadRequestException({
+        code: ErrorCode.ValidationFailed,
+        message: 'عنوان التوصيل غير مرتبط بمنطقة توصيل. يرجى تحديد المنطقة قبل الطلب.',
       });
-    } catch (err) {
-      this.logger.warn(`Zone lookup failed: ${(err as Error).message}`);
+    }
+    if (!Number.isFinite(ctx.storeLat) || !Number.isFinite(ctx.storeLng) ||
+        !Number.isFinite(ctx.addressLat) || !Number.isFinite(ctx.addressLng) ||
+        (ctx.storeLat === 0 && ctx.storeLng === 0)) {
+      throw new BadRequestException({
+        code: ErrorCode.ValidationFailed,
+        message: 'تعذر تحديد المسافة لعدم اكتمال إحداثيات المتجر أو العنوان.',
+      });
     }
 
-    let baseFee = 0;
-    let distanceFee = 0;
-    let fuelSurcharge = 0;
-    let surgeMultiplier = globalSurge;
-    let freeThreshold: number | null = null;
-    let source: 'zone' | 'store' | 'global';
-    let zoneId: string | null = null;
-    let zoneName: string | null = null;
-
-    if (zone) {
-      // ═══ 1) Zone-based ═══
-      source = 'zone';
-      zoneId = zone.id;
-      zoneName = zone.name_ar;
-
-      baseFee = Number(zone.base_delivery_fee);
-      const perKm = Number(zone.fee_per_km);
-      distanceFee = distanceKm * perKm;
-      fuelSurcharge = Number(zone.fuel_surcharge) + globalFuel;
-      surgeMultiplier = Number(zone.surge_multiplier) * globalSurge;
-      freeThreshold = zone.free_delivery_threshold !== null
-        ? Number(zone.free_delivery_threshold)
-        : (globalFreeThreshold > 0 ? globalFreeThreshold : null);
-    } else if (ctx.storeDeliveryFee > 0) {
-      // ═══ 2) Store fallback ═══
-      source = 'store';
-      baseFee = ctx.storeDeliveryFee;
-      fuelSurcharge = globalFuel;
-      freeThreshold = globalFreeThreshold > 0 ? globalFreeThreshold : null;
-    } else {
-      // ═══ 3) Global fallback ═══
-      source = 'global';
-      baseFee = globalDefaultFee;
-      fuelSurcharge = globalFuel;
-      freeThreshold = globalFreeThreshold > 0 ? globalFreeThreshold : null;
+    const zone = await this.repo.getZoneById(ctx.zoneId);
+    if (!zone || !zone.is_active) {
+      throw new BadRequestException({
+        code: ErrorCode.ValidationFailed,
+        message: 'منطقة التوصيل غير موجودة أو غير مفعّلة.',
+      });
     }
 
-    // 4) احسب قبل الطلب
-    let feeBeforeThreshold = (baseFee + distanceFee + fuelSurcharge) * surgeMultiplier;
+    const distanceKm = Math.round((await this.repo.calculateDistanceKm(
+      ctx.storeLat, ctx.storeLng, ctx.addressLat, ctx.addressLng,
+    )) * 100) / 100;
 
-    // 5) Free delivery threshold
+    const tiers = await this.repo.listActiveDistanceTiers(zone.id);
+    const tier = tiers.find((item) => {
+      const min = Number(item.min_distance_km);
+      const max = item.max_distance_km === null ? null : Number(item.max_distance_km);
+      return distanceKm >= min && (max === null || distanceKm < max);
+    });
+
+    if (!tier) {
+      throw new BadRequestException({
+        code: ErrorCode.ValidationFailed,
+        message: 'لا توجد شريحة رسوم توصيل تغطي المسافة إلى هذا العنوان. يرجى التواصل مع الإدارة.',
+        details: [{ field: 'deliveryDistance', constraints: ['no active distance tier for this zone'] }],
+      });
+    }
+
+    const settings = await this.repo.getPricingSettings();
+    const globalSurge = settings['surge_multiplier'] ?? 1;
+    const globalFuel = settings['fuel_surcharge'] ?? 0;
+    const freeThreshold = zone.free_delivery_threshold !== null
+      ? Number(zone.free_delivery_threshold)
+      : (settings['free_delivery_threshold'] > 0 ? settings['free_delivery_threshold'] : null);
     const isFreeDelivery = freeThreshold !== null && ctx.subtotal >= freeThreshold;
-    if (isFreeDelivery) {
-      feeBeforeThreshold = 0;
-    }
-
-    // 6) Min/Max caps
-    let finalFee = feeBeforeThreshold;
-    if (!isFreeDelivery) {
-      if (finalFee < minFee) finalFee = minFee;
-      if (finalFee > maxFee) finalFee = maxFee;
-    }
-
-    // 7) round
-    finalFee = Math.round(finalFee * 100) / 100;
-    distanceKm = Math.round(distanceKm * 100) / 100;
-
+    const tierFee = Number(tier.delivery_fee);
+    const finalFee = isFreeDelivery ? 0 : Math.round(tierFee * 100) / 100;
     const total = Math.round((ctx.subtotal + finalFee) * 100) / 100;
 
     return {
       deliveryFee: finalFee,
       distanceKm,
-      baseFee: Math.round(baseFee * 100) / 100,
-      distanceFee: Math.round(distanceFee * 100) / 100,
-      fuelSurcharge: Math.round(fuelSurcharge * 100) / 100,
-      surgeMultiplier,
+      baseFee: tierFee,
+      distanceFee: 0,
+      fuelSurcharge: 0,
+      surgeMultiplier: 1,
       total,
       freeDeliveryThreshold: freeThreshold,
       isFreeDelivery,
-      source,
-      zoneId,
-      zoneName,
+      source: 'zone',
+      zoneId: zone.id,
+      zoneName: zone.name_ar,
+      distanceTierId: tier.id,
     };
   }
 
@@ -178,6 +140,7 @@ export class PricingService {
       source: r.source,
       zoneId: r.zoneId,
       zoneName: r.zoneName,
+      distanceTierId: r.distanceTierId,
       currency: ctx.currency,
     };
   }
