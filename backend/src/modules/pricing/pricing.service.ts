@@ -18,7 +18,10 @@ export interface PricingContext {
 }
 
 interface PricingResult {
+  /** Customer-paid fee after threshold discounts. */
   deliveryFee: number;
+  /** Full configured tier fee before free-delivery discounts; used for driver earnings. */
+  originalDeliveryFee: number;
   distanceKm: number;
   baseFee: number;
   distanceFee: number;
@@ -99,12 +102,14 @@ export class PricingService {
       ? Number(zone.free_delivery_threshold)
       : (settings['free_delivery_threshold'] > 0 ? settings['free_delivery_threshold'] : null);
     const isFreeDelivery = freeThreshold !== null && ctx.subtotal >= freeThreshold;
-    const tierFee = Number(tier.delivery_fee);
-    const finalFee = isFreeDelivery ? 0 : Math.round(tierFee * 100) / 100;
+    const tierFee = Math.round(Number(tier.delivery_fee) * 100) / 100;
+    const originalDeliveryFee = tierFee;
+    const finalFee = isFreeDelivery ? 0 : originalDeliveryFee;
     const total = Math.round((ctx.subtotal + finalFee) * 100) / 100;
 
     return {
       deliveryFee: finalFee,
+      originalDeliveryFee,
       distanceKm,
       baseFee: tierFee,
       distanceFee: 0,
