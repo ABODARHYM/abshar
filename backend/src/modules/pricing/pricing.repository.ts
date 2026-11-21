@@ -71,6 +71,24 @@ export class PricingRepository {
   }
 
 
+  async findAddressForUser(addressId: string, userId: string): Promise<{
+    zone_id: string | null;
+    latitude: string | number;
+    longitude: string | number;
+  } | null> {
+    const r = await this.db.query<{
+      zone_id: string | null;
+      latitude: string | number;
+      longitude: string | number;
+    }>(
+      `SELECT zone_id, latitude, longitude
+       FROM addresses
+       WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL
+       LIMIT 1`,
+      [addressId, userId],
+    );
+    return r.rows[0] ?? null;
+  }
   async listActiveDistanceTiers(zoneId: string): Promise<DistanceTierRow[]> {
     const r = await this.db.query<DistanceTierRow>(
       `SELECT id, zone_id, min_distance_km, max_distance_km, delivery_fee, is_active
