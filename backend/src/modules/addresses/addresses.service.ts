@@ -58,14 +58,25 @@ export class AddressesService {
     dto: CreateAddressDto,
   ): Promise<AddressResponse> {
     if (dto.zoneId) {
-      const exists = await this.repo.zoneExists(dto.zoneId);
-      if (!exists) {
+      const valid = await this.repo.validateAddressGeography({
+        cityId: dto.cityId,
+        districtId: dto.districtId,
+        areaId: dto.areaId,
+        zoneId: dto.zoneId,
+      });
+      if (!valid) {
         throw new BadRequestException({
           code: ErrorCode.ValidationFailed,
-          message: 'Delivery zone not found or inactive',
-          details: [{ field: 'zoneId', constraints: ['not found'] }],
+          message: 'منطقة التوصيل لا تتطابق مع المدينة أو الحي أو المنطقة المحددة.',
+          details: [{ field: 'zoneId', constraints: ['geography mismatch or inactive zone'] }],
         });
       }
+    } else if (dto.cityId || dto.districtId || dto.areaId) {
+      throw new BadRequestException({
+        code: ErrorCode.ValidationFailed,
+        message: 'يجب تحديد منطقة التوصيل المتوافقة مع العنوان.',
+        details: [{ field: 'zoneId', constraints: ['required with geographic fields'] }],
+      });
     }
 
     const row = await this.repo.create(userId, dto);
@@ -85,15 +96,31 @@ export class AddressesService {
       });
     }
 
-    if (dto.zoneId) {
-      const exists = await this.repo.zoneExists(dto.zoneId);
-      if (!exists) {
+    const nextZoneId = dto.zoneId ?? existing.zone_id;
+    const nextCityId = dto.cityId !== undefined ? dto.cityId : existing.city_id;
+    const nextDistrictId = dto.districtId !== undefined ? dto.districtId : existing.district_id;
+    const nextAreaId = dto.areaId !== undefined ? dto.areaId : existing.area_id;
+
+    if (nextZoneId) {
+      const valid = await this.repo.validateAddressGeography({
+        cityId: nextCityId,
+        districtId: nextDistrictId,
+        areaId: nextAreaId,
+        zoneId: nextZoneId,
+      });
+      if (!valid) {
         throw new BadRequestException({
           code: ErrorCode.ValidationFailed,
-          message: 'Delivery zone not found or inactive',
-          details: [{ field: 'zoneId', constraints: ['not found'] }],
+          message: 'منطقة التوصيل لا تتطابق مع المدينة أو الحي أو المنطقة المحددة.',
+          details: [{ field: 'zoneId', constraints: ['geography mismatch or inactive zone'] }],
         });
       }
+    } else if (nextCityId || nextDistrictId || nextAreaId) {
+      throw new BadRequestException({
+        code: ErrorCode.ValidationFailed,
+        message: 'يجب تحديد منطقة التوصيل المتوافقة مع العنوان.',
+        details: [{ field: 'zoneId', constraints: ['required with geographic fields'] }],
+      });
     }
 
     const updated = await this.repo.update(id, userId, dto);
