@@ -20,9 +20,9 @@ describe('PricingService distance-tier pricing', () => {
   function makeService(tiers: any[] = [{
     id: 'tier-2-5', zone_id: 'zone-1', min_distance_km: 2,
     max_distance_km: 5, delivery_fee: 700, is_active: true,
-  }]) {
+  }], zoneOverride: typeof zone = zone) {
     const repo = {
-      getZoneById: jest.fn().mockResolvedValue(zone),
+      getZoneById: jest.fn().mockResolvedValue(zoneOverride),
       calculateDistanceKm: jest.fn().mockResolvedValue(4.2),
       listActiveDistanceTiers: jest.fn().mockResolvedValue(tiers),
       getPricingSettings: jest.fn().mockResolvedValue({}),
@@ -54,10 +54,19 @@ describe('PricingService distance-tier pricing', () => {
     const { service } = makeService();
     const result = await service.calculate(context);
     expect(result.deliveryFee).toBe(700);
+    expect(result.originalDeliveryFee).toBe(700);
     expect(result.distanceKm).toBe(4.2);
     expect(result.distanceTierId).toBe('tier-2-5');
     expect(result.zoneId).toBe('zone-1');
     expect(result.source).toBe('zone');
+  });
+
+  it('preserves the original tier fee when the free-delivery threshold waives the customer fee', async () => {
+    const { service } = makeService(undefined, { ...zone, free_delivery_threshold: 500 });
+    const result = await service.calculate(context);
+    expect(result.deliveryFee).toBe(0);
+    expect(result.originalDeliveryFee).toBe(700);
+    expect(result.isFreeDelivery).toBe(true);
   });
 
   it('does not use store or global fallback when address has no zone', async () => {
