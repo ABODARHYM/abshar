@@ -43,4 +43,56 @@ describe('DispatchRepository nearby driver eligibility', () => {
       ['00000000-0000-4000-8000-000000000001'],
     ]);
   });
+  it('does not create an offer after the order has been assigned', async () => {
+    const client = {
+      query: jest.fn().mockResolvedValue({
+        rows: [{ status: 'driverAssigned', driver_id: 'driver-accepted' }],
+      }),
+    };
+    const db = {
+      transaction: jest.fn(async (work: (client: any) => Promise<unknown>) => work(client)),
+    };
+    const repository = new DispatchRepository(db as any);
+
+    await expect(repository.createOffer({
+      orderId: 'order-1',
+      driverId: 'driver-next',
+      expiresAt: new Date(),
+      roundNumber: 2,
+      tier: 1,
+      distanceKm: 2,
+      mode: 'auto',
+    })).resolves.toBeNull();
+
+    expect(client.query).toHaveBeenCalledTimes(1);
+    expect(client.query.mock.calls[0][0]).toContain('FOR UPDATE');
+    expect(client.query.mock.calls[0][1]).toEqual(['order-1']);
+  });
+
+  it('locks a ready unassigned order before inserting its offer', async () => {
+    const client = {
+      query: jest.fn()
+        .mockResolvedValueOnce({ rows: [{ status: 'ready', driver_id: null }] })
+        .mockResolvedValueOnce({ rows: [{ id: 'offer-1' }] }),
+    };
+    const db = {
+      transaction: jest.fn(async (work: (client: any) => Promise<unknown>) => work(client)),
+    };
+    const repository = new DispatchRepository(db as any);
+
+    await expect(repository.createOffer({
+      orderId: 'order-1',
+      driverId: 'driver-1',
+      expiresAt: new Date(),
+      roundNumber: 1,
+      tier: 1,
+      distanceKm: 2,
+      mode: 'auto',
+    })).resolves.toEqual({ id: 'offer-1' });
+
+    expect(client.query).toHaveBeenCalledTimes(2);
+    expect(client.query.mock.calls[0][0]).toContain('FOR UPDATE');
+    expect(client.query.mock.calls[1][0]).toContain('INSERT INTO driver_assignments');
+  });
+
 });
