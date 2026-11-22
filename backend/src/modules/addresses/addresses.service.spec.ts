@@ -102,12 +102,35 @@ describe('AddressesService geography validation', () => {
     });
   });
 
-  it('rejects geography fields without a delivery zone', async () => {
-    const repo = {};
+  it('allows saving a GPS address with a verified city but without a delivery zone', async () => {
+    const now = new Date();
+    const repo = {
+      validateAddressGeographyWithoutZone: jest.fn().mockResolvedValue(true),
+      create: jest.fn().mockResolvedValue({
+        id: 'address-1', user_id: 'customer-1', label: 'المنزل',
+        address_line: 'شارع الجامعة', building: null, floor: null, apartment: null,
+        landmark: null, latitude: 15.4, longitude: 45.3, zone_id: null,
+        city_id: 'city-1', district_id: null, area_id: null,
+        is_default: false, created_at: now, updated_at: now,
+      }),
+    };
+    const service = new AddressesService(repo as any);
+    const result = await service.create('customer-1', {
+      label: 'المنزل', addressLine: 'شارع الجامعة',
+      latitude: 15.4, longitude: 45.3, cityId: 'city-1',
+    });
+    expect(result.zoneId).toBeNull();
+    expect(repo.validateAddressGeographyWithoutZone).toHaveBeenCalledWith({
+      cityId: 'city-1', districtId: undefined, areaId: undefined,
+    });
+  });
+
+  it('rejects unverified locality references when saving without a delivery zone', async () => {
+    const repo = { validateAddressGeographyWithoutZone: jest.fn().mockResolvedValue(false) };
     const service = new AddressesService(repo as any);
     await expect(service.create('customer-1', {
       label: 'المنزل', addressLine: 'شارع الجامعة',
-      latitude: 15.4, longitude: 45.3, cityId: 'city-1',
+      latitude: 15.4, longitude: 45.3, districtId: 'legacy-district',
     })).rejects.toBeInstanceOf(BadRequestException);
   });
 });
