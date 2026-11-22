@@ -105,6 +105,7 @@ describe('AddressesService geography validation', () => {
   it('allows saving a GPS address with a verified city but without a delivery zone', async () => {
     const now = new Date();
     const repo = {
+      findVerifiedZoneForPoint: jest.fn().mockResolvedValue(null),
       validateAddressGeographyWithoutZone: jest.fn().mockResolvedValue(true),
       create: jest.fn().mockResolvedValue({
         id: 'address-1', user_id: 'customer-1', label: 'المنزل',
