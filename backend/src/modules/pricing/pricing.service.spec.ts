@@ -113,6 +113,15 @@ describe('PricingService distance-tier pricing', () => {
     expect(repo.updateZoneCoverage).not.toHaveBeenCalled();
   });
 
+  it('rejects self-intersecting delivery coverage polygons', async () => {
+    const { service, repo } = makeService();
+    await expect(service.updateZoneCoverage({
+      zoneId: 'zone-1', status: 'verified', actorId: 'admin-1', note: 'حدود غير صالحة',
+      geojson: { type: 'Polygon', coordinates: [[[45, 15], [46, 16], [45, 16], [46, 15], [45, 15]]] },
+    })).rejects.toBeInstanceOf(BadRequestException);
+    expect(repo.updateZoneCoverage).not.toHaveBeenCalled();
+  });
+
   it('stores an explicitly approved valid delivery polygon with the administrator identity', async () => {
     const { service, repo } = makeService();
     const geojson = { type: 'Polygon', coordinates: [[[45, 15], [46, 15], [46, 16], [45, 16], [45, 15]]] };
