@@ -2,6 +2,30 @@ import { Injectable } from '@nestjs/common';
 import { PoolClient } from 'pg';
 import { DatabaseService } from '../../database/database.service';
 
+
+function pointInGeoJsonCoverage(value: unknown, longitude: number, latitude: number): boolean {
+  const geometry = value as { type?: unknown; coordinates?: unknown };
+  if (!geometry || (geometry.type !== 'Polygon' && geometry.type !== 'MultiPolygon')) return false;
+  const polygons: any[] = geometry.type === 'Polygon'
+    ? [geometry.coordinates]
+    : (Array.isArray(geometry.coordinates) ? geometry.coordinates : []);
+  const inRing = (ring: number[][]): boolean => {
+    let inside = false;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const [xi, yi] = ring[i]; const [xj, yj] = ring[j];
+      const cross = (longitude - xi) * (yj - yi) - (latitude - yi) * (xj - xi);
+      if (Math.abs(cross) < 1e-10 && longitude >= Math.min(xi, xj) - 1e-10
+        && longitude <= Math.max(xi, xj) + 1e-10 && latitude >= Math.min(yi, yj) - 1e-10
+        && latitude <= Math.max(yi, yj) + 1e-10) return true;
+      if (((yi > latitude) !== (yj > latitude))
+        && longitude < ((xj - xi) * (latitude - yi)) / (yj - yi) + xi) inside = !inside;
+    }
+    return inside;
+  };
+  return polygons.some((polygon) => Array.isArray(polygon) && Array.isArray(polygon[0])
+    && inRing(polygon[0]) && !polygon.slice(1).some((hole: number[][]) => inRing(hole)));
+}
+
 export interface AddressRow {
   id: string;
   user_id: string;
@@ -92,19 +116,42 @@ export class AddressesRepository {
     city_id: string | null;
     district_id: string | null;
   } | null> {
-    const result = await this.db.query<{
-      city_id: string | null;
-      district_id: string | null;
-    }>(
-      `SELECT city_id, district_id
+    const result = await this.db.query<{ city_id: string | null; district_id: string | null }>(
+      `SELECT z.city_id,
+              CASE WHEN COALESCE(to_jsonb(d)->>'source_status', 'legacy_unverified') IN ('verified', 'community_verified')
+                   THEN z.district_id ELSE NULL END AS district_id
        FROM delivery_zones z
-       JOIN districts d ON d.id = z.district_id
-       WHERE z.id = $1 AND z.is_active = true
-         AND COALESCE(to_jsonb(d)->>'source_status', 'legacy_unverified') IN ('verified', 'community_verified')
-       LIMIT 1`,
-      [zoneId],
+       LEFT JOIN districts d ON d.id = z.district_id
+       WHERE z.id = $1 AND z.is_active = true AND z.coverage_status = 'verified'
+         AND z.coverage_geojson IS NOT NULL AND z.coverage_verified_at IS NOT NULL
+       LIMIT 1`, [zoneId],
     );
     return result.rows[0] ?? null;
+  }
+
+  async findVerifiedZoneForPoint(latitude: number, longitude: number, cityId?: string | null): Promise<{
+    id: string; city_id: string | null; district_id: string | null;
+  } | null> {
+    const result = await this.db.query<{
+      id: string; city_id: string | null; district_id: string | null; coverage_geojson: unknown;
+    }>(
+      `SELECT z.id, z.city_id,
+              CASE WHEN COALESCE(to_jsonb(d)->>'source_status', 'legacy_unverified') IN ('verified', 'community_verified')
+                   THEN z.district_id ELSE NULL END AS district_id,
+              z.coverage_geojson
+       FROM delivery_zones z
+       LEFT JOIN districts d ON d.id = z.district_id
+       WHERE z.is_active = true AND z.coverage_status = 'verified'
+         AND z.coverage_geojson IS NOT NULL AND z.coverage_verified_at IS NOT NULL
+         AND ($3::uuid IS NULL OR z.city_id IS NULL OR z.city_id = $3::uuid)
+       ORDER BY z.city ASC, z.name_ar ASC`,
+      [latitude, longitude, cityId ?? null],
+    );
+    const matches = result.rows.filter((row) => pointInGeoJsonCoverage(row.coverage_geojson, longitude, latitude));
+    if (matches.length > 1) {
+      throw new Error('Customer location overlaps multiple verified delivery zones; resolve coverage overlap before saving.');
+    }
+    return matches[0] ?? null;
   }
 
   async validateAddressGeography(input: {
@@ -118,11 +165,10 @@ export class AddressesRepository {
         (
           EXISTS (
             SELECT 1 FROM delivery_zones z
-            JOIN districts zd ON zd.id = z.district_id
-            WHERE z.id = $4 AND z.is_active = true
-              AND COALESCE(to_jsonb(zd)->>'source_status', 'legacy_unverified') IN ('verified', 'community_verified')
-              AND (z.city_id IS NULL OR z.city_id = $1::uuid)
-              AND (z.district_id IS NULL OR z.district_id = $2::uuid)
+            WHERE z.id = $4 AND z.is_active = true AND z.coverage_status = 'verified'
+              AND z.coverage_geojson IS NOT NULL AND z.coverage_verified_at IS NOT NULL
+              AND (z.city_id IS NULL OR $1::uuid IS NULL OR z.city_id = $1::uuid)
+              AND (z.district_id IS NULL OR $2::uuid IS NULL OR z.district_id = $2::uuid)
           )
           AND ($1::uuid IS NULL OR EXISTS (
             SELECT 1 FROM cities c WHERE c.id = $1 AND c.is_active = true
