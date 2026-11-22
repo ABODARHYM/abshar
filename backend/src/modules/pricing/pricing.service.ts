@@ -415,9 +415,15 @@ export class PricingService {
           message: 'لا يمكن تفعيل المنطقة قبل إدخال شريحة رسوم واحدة على الأقل.' });
       }
       const endpoint = process.env.ROUTING_API_URL?.trim();
-      if (!endpoint || !/^https:\/\//i.test(endpoint)) {
+      let secureRoutingConfigured = false;
+      try {
+        const parsed = new URL(endpoint ?? '');
+        secureRoutingConfigured = parsed.protocol === 'https:' && Boolean(parsed.hostname)
+          && !parsed.username && !parsed.password;
+      } catch { secureRoutingConfigured = false; }
+      if (!secureRoutingConfigured) {
         throw new BadRequestException({ code: ErrorCode.ValidationFailed,
-          message: 'لا يمكن تفعيل التوصيل قبل إعداد مزود موثوق لحساب مسافة الطريق عبر HTTPS.' });
+          message: 'لا يمكن تفعيل التوصيل قبل إعداد عنوان HTTPS صالح وآمن لمزود مسافة الطريق.' });
       }
     }
     const z = await this.repo.updateZone(id, dto);
