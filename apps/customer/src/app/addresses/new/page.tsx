@@ -22,7 +22,6 @@ const API = '/api/v1';
 interface City { id: string; nameAr: string; }
 interface District { id: string; nameAr: string; }
 interface Area { id: string; nameAr: string; }
-interface DeliveryZone { id: string; city: string; nameAr: string; cityId?: string | null; districtId?: string | null; }
 
 function NewAddressContent() {
   const router = useRouter();
@@ -36,7 +35,6 @@ function NewAddressContent() {
   const [cityId, setCityId] = useState('');
   const [districtId, setDistrictId] = useState('');
   const [areaId, setAreaId] = useState('');
-  const [zoneId, setZoneId] = useState('');
   const [isDefault, setIsDefault] = useState(true);
 
   const [lat, setLat] = useState(15.4633);
@@ -45,26 +43,10 @@ function NewAddressContent() {
   const [cities, setCities] = useState<City[]>([]);
   const [districts, setDistricts] = useState<District[]>([]);
   const [areas, setAreas] = useState<Area[]>([]);
-  const [deliveryZones, setDeliveryZones] = useState<DeliveryZone[]>([]);
 
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
-  const availableDeliveryZones = deliveryZones.filter((z) =>
-    (!cityId || !z.cityId || z.cityId === cityId) && (!districtId || !z.districtId || z.districtId === districtId),
-  );
-
-  useEffect(() => {
-    const token = localStorage.getItem('accessToken');
-    fetch(`${API}/pricing/zones`, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
-      .then((r) => (r.ok ? r.json() : []))
-      .then((d) => {
-        const list = Array.isArray(d) ? d : [];
-        setDeliveryZones(list);
-      })
-      .catch(() => setDeliveryZones([]));
-  }, []);
-
   useEffect(() => {
     fetch(`${API}/geography/cities`)
       .then((r) => (r.ok ? r.json() : []))
@@ -78,7 +60,7 @@ function NewAddressContent() {
   }, []);
 
   useEffect(() => {
-    setDistricts([]); setDistrictId(''); setAreas([]); setAreaId(''); setZoneId('');
+    setDistricts([]); setDistrictId(''); setAreas([]); setAreaId('');
     if (!cityId) return;
     fetch(`${API}/geography/cities/${cityId}/districts`)
       .then((r) => (r.ok ? r.json() : []))
@@ -90,7 +72,7 @@ function NewAddressContent() {
   }, [cityId]);
 
   useEffect(() => {
-    setAreas([]); setAreaId(''); setZoneId('');
+    setAreas([]); setAreaId('');
     if (!districtId) return;
     fetch(`${API}/geography/districts/${districtId}/areas`)
       .then((r) => (r.ok ? r.json() : []))
@@ -113,11 +95,6 @@ function NewAddressContent() {
       setError('وصف العنوان مطلوب');
       return;
     }
-    if (!zoneId) {
-      setError('يرجى اختيار منطقة التوصيل لضمان احتساب الرسوم الصحيحة');
-      return;
-    }
-
     // Token check
     const token = localStorage.getItem('accessToken');
 
@@ -152,10 +129,10 @@ function NewAddressContent() {
       latitude: Number(Number(lat).toFixed(6)),
       longitude: Number(Number(lng).toFixed(6)),
       isDefault,
-      zoneId,
     };
 
     // أضف الحقول الاختيارية فقط إذا كانت موجودة فعلياً
+    if (zoneId) rawPayload.zoneId = zoneId;
     if (building.trim()) rawPayload.building = building.trim();
     if (floor.trim()) rawPayload.floor = floor.trim();
     if (apartment.trim()) rawPayload.apartment = apartment.trim();
@@ -300,18 +277,9 @@ function NewAddressContent() {
           </div>
         )}
 
-        <div className="card">
-          <label className="block text-sm font-bold mb-2">منطقة التوصيل المطلوبة</label>
-          <select value={zoneId} onChange={(e) => setZoneId(e.target.value)} className="input" required>
-            <option value="">— اختر المدينة والمنطقة —</option>
-            {availableDeliveryZones.map((z) => <option key={z.id} value={z.id}>{z.city} — {z.nameAr}</option>)}
-          </select>
-          <p className="text-xs text-[var(--text-muted)] mt-2">
-            تُستخدم المنطقة المختارة لتحديد شرائح رسوم التوصيل. إذا لم تظهر منطقتك، تواصل مع الإدارة.
-          </p>
-          {availableDeliveryZones.length === 0 && cityId && (
-            <p className="text-xs text-[var(--danger)] mt-2">لا توجد منطقة توصيل مطابقة للمدينة والحي المختارين.</p>
-          )}
+        <div className="card border border-[var(--bg-border)]">
+          <p className="text-sm font-bold">تأكيد نطاق التوصيل والرسوم</p>
+          <p className="text-xs text-[var(--text-muted)] mt-2">سيتم التحقق من تغطية العنوان واحتساب رسوم الطريق عند طلب التوصيل. لا تُعرض مناطق غير موثقة ولا تُفترض رسوم مسبقة.</p>
         </div>
 
         <div className="card">
