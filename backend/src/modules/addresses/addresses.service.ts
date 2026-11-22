@@ -82,11 +82,18 @@ export class AddressesService {
       // Backfill missing city/district from the selected active zone.
       input = { ...dto, cityId, districtId };
     } else if (dto.cityId || dto.districtId || dto.areaId) {
-      throw new BadRequestException({
-        code: ErrorCode.ValidationFailed,
-        message: 'يجب تحديد منطقة التوصيل المتوافقة مع العنوان.',
-        details: [{ field: 'zoneId', constraints: ['required with geographic fields'] }],
+      const valid = await this.repo.validateAddressGeographyWithoutZone({
+        cityId: dto.cityId,
+        districtId: dto.districtId,
+        areaId: dto.areaId,
       });
+      if (!valid) {
+        throw new BadRequestException({
+          code: ErrorCode.ValidationFailed,
+          message: 'البيانات الجغرافية غير موثقة أو غير متطابقة. يمكنك حفظ وصف العنوان والإحداثيات دون اختيار حي.',
+          details: [{ field: 'geography', constraints: ['unverified or mismatched locality'] }],
+        });
+      }
     }
 
     const row = await this.repo.create(userId, input);
