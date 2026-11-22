@@ -19,6 +19,11 @@ describe('OrdersRepository original delivery fee', () => {
       subtotal: 1000,
       deliveryFee: 0,
       originalDeliveryFee: 120,
+      deliveryPricingSnapshot: {
+        distanceKm: 4.2, zoneId: 'zone-1', distanceTierId: 'tier-1',
+        distanceSource: 'routing_api', pricingVersion: 1, currency: 'YER',
+        originalDeliveryFee: 120, customerDeliveryFee: 0,
+      },
       discountTotal: 0,
       total: 1000,
       addressSnapshot: {
