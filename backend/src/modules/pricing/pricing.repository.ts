@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { DatabaseService } from '../../database/database.service';
 
 export interface DistanceTierRow {
@@ -192,6 +192,56 @@ export class PricingRepository {
       `,
     );
     return r.rows;
+  }
+
+  /**
+   * Road distance from the configured routing provider.
+   * ROUTING_API_URL must implement POST {origin:{latitude,longitude},destination:{latitude,longitude}}
+   * and return {distanceKm:number}. No straight-line fallback is permitted for charging.
+   */
+  async calculateRouteDistanceKm(
+    originLat: number, originLng: number, destinationLat: number, destinationLng: number,
+  ): Promise<number> {
+    const endpoint = process.env.ROUTING_API_URL?.trim();
+    if (!endpoint) {
+      throw new ServiceUnavailableException({
+        code: 'ROUTING_NOT_CONFIGURED',
+        message: 'خدمة حساب مسافة الطريق غير مهيأة؛ لا يمكن تأكيد رسوم التوصيل حالياً.',
+      });
+    }
+    let url: URL;
+    try { url = new URL(endpoint); } catch {
+      throw new ServiceUnavailableException({ code: 'ROUTING_CONFIG_INVALID', message: 'إعداد خدمة التوجيه غير صالح.' });
+    }
+    if (url.protocol !== 'https:' && process.env.NODE_ENV === 'production') {
+      throw new ServiceUnavailableException({ code: 'ROUTING_CONFIG_INSECURE', message: 'يجب استخدام HTTPS لخدمة التوجيه.' });
+    }
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          ...(process.env.ROUTING_API_KEY ? { authorization: `Bearer ${process.env.ROUTING_API_KEY}` } : {}),
+        },
+        body: JSON.stringify({
+          origin: { latitude: originLat, longitude: originLng },
+          destination: { latitude: destinationLat, longitude: destinationLng },
+        }),
+        signal: AbortSignal.timeout(10000),
+      });
+      if (!response.ok) throw new Error(`Routing provider returned HTTP ${response.status}`);
+      const data = await response.json() as { distanceKm?: unknown };
+      const distance = Number(data?.distanceKm);
+      if (!Number.isFinite(distance) || distance < 0 || distance > 500) {
+        throw new Error('Routing provider returned an invalid distanceKm');
+      }
+      return distance;
+    } catch (error) {
+      throw new ServiceUnavailableException({
+        code: 'ROUTING_UNAVAILABLE',
+        message: 'تعذر حساب مسافة الطريق من مزود التوجيه؛ لم يتم استخدام مسافة خط مستقيم أو رسوم بديلة.',
+      });
+    }
   }
 
   /**
