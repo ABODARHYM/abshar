@@ -132,7 +132,6 @@ function NewAddressContent() {
     };
 
     // أضف الحقول الاختيارية فقط إذا كانت موجودة فعلياً
-    if (zoneId) rawPayload.zoneId = zoneId;
     if (building.trim()) rawPayload.building = building.trim();
     if (floor.trim()) rawPayload.floor = floor.trim();
     if (apartment.trim()) rawPayload.apartment = apartment.trim();
