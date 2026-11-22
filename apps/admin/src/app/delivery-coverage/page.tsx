@@ -1,7 +1,7 @@
 'use client';
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
-import type { Map as LeafletMap, LayerGroup } from 'leaflet';
+import type { Map as LeafletMap, LayerGroup, LeafletMouseEvent } from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import AdminHeader from '@/components/AdminHeader';
 import { authFetch } from '@/lib/auth';
@@ -73,7 +73,7 @@ export default function DeliveryCoveragePage() {
       }).addTo(map);
       const layer = L.layerGroup().addTo(map);
       layerRef.current = layer;
-      map.on('click', (event: L.LeafletMouseEvent) => {
+      map.on('click', (event: LeafletMouseEvent) => {
         setPoints((current) => [...current, [event.latlng.lng, event.latlng.lat]]);
       });
       mapRef.current = map;
