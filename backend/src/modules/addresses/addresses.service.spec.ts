@@ -4,6 +4,7 @@ import { AddressesService } from './addresses.service';
 describe('AddressesService geography validation', () => {
   it('rejects creating an address when the selected zone does not match its geography', async () => {
     const repo = {
+      findVerifiedZoneForPoint: jest.fn().mockResolvedValue({ id: 'zone-2', city_id: 'city-1', district_id: 'district-1' }),
       findActiveZoneGeography: jest.fn().mockResolvedValue({ city_id: 'city-1', district_id: 'district-1' }),
       validateAddressGeography: jest.fn().mockResolvedValue(false),
     };
@@ -30,6 +31,7 @@ describe('AddressesService geography validation', () => {
       is_default: false, created_at: now, updated_at: now,
     };
     const repo = {
+      findVerifiedZoneForPoint: jest.fn().mockResolvedValue({ id: 'zone-1', city_id: 'city-1', district_id: 'district-1' }),
       findActiveZoneGeography: jest.fn().mockResolvedValue({
         city_id: 'city-1', district_id: 'district-1',
       }),
@@ -53,6 +55,7 @@ describe('AddressesService geography validation', () => {
 
   it('validates the combined existing and changed geography when updating an address', async () => {
     const repo = {
+      findVerifiedZoneForPoint: jest.fn().mockResolvedValue({ id: 'zone-2', city_id: 'city-1', district_id: 'district-1' }),
       findByIdForUser: jest.fn().mockResolvedValue({
         id: 'address-1', zone_id: 'zone-1', city_id: 'city-1',
         district_id: 'district-1', area_id: 'area-1',
@@ -80,6 +83,7 @@ describe('AddressesService geography validation', () => {
       is_default: false, created_at: updatedAt, updated_at: updatedAt,
     };
     const repo = {
+      findVerifiedZoneForPoint: jest.fn().mockResolvedValue({ id: 'zone-1', city_id: 'city-1', district_id: 'district-1' }),
       findByIdForUser: jest.fn().mockResolvedValue({
         id: 'address-legacy', zone_id: null, city_id: null,
         district_id: null, area_id: null,
