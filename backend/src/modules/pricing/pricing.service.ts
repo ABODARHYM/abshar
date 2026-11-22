@@ -37,6 +37,11 @@ interface PricingResult {
   distanceSource: 'routing_api';
 }
 
+const APPROVED_DISTANCE_BANDS: Array<{ min: number; max: number | null }> = [
+  { min: 0, max: 2 }, { min: 2, max: 4 }, { min: 4, max: 6 },
+  { min: 6, max: 10 }, { min: 10, max: 15 }, { min: 15, max: null },
+];
+
 @Injectable()
 export class PricingService {
   private readonly logger = new Logger(PricingService.name);
@@ -121,7 +126,8 @@ export class PricingService {
     const tier = tiers.find((item) => {
       const min = Number(item.min_distance_km);
       const max = item.max_distance_km === null ? null : Number(item.max_distance_km);
-      return distanceKm >= min && (max === null || distanceKm < max);
+      return (min === 0 ? distanceKm >= 0 : distanceKm > min)
+        && (max === null || distanceKm <= max);
     });
 
     if (!tier) {
@@ -334,6 +340,10 @@ export class PricingService {
   async createDistanceTier(input: {
     zoneId: string; minDistanceKm: number; maxDistanceKm: number | null; deliveryFee: number;
   }): Promise<DistanceTierRow> {
+    if (!APPROVED_DISTANCE_BANDS.some((band) => band.min === input.minDistanceKm && band.max === input.maxDistanceKm)) {
+      throw new BadRequestException({ code: ErrorCode.ValidationFailed,
+        message: 'شرائح المسافة المعتمدة هي: 0–2، أكثر من 2–4، أكثر من 4–6، أكثر من 6–10، أكثر من 10–15، وأكثر من 15 كم.' });
+    }
     const zone = await this.repo.getZoneById(input.zoneId);
     if (!zone) {
       throw new NotFoundException({ code: ErrorCode.NotFound, message: 'Delivery zone not found' });
@@ -355,6 +365,15 @@ export class PricingService {
   async updateDistanceTier(id: string, fields: {
     minDistanceKm?: number; maxDistanceKm?: number | null; deliveryFee?: number; isActive?: boolean;
   }): Promise<DistanceTierRow> {
+    const current = await this.repo.getDistanceTierById(id);
+    if (!current) throw new NotFoundException({ code: ErrorCode.NotFound, message: 'Distance tier not found' });
+    const nextMin = fields.minDistanceKm ?? Number(current.min_distance_km);
+    const nextMax = fields.maxDistanceKm !== undefined
+      ? fields.maxDistanceKm : (current.max_distance_km === null ? null : Number(current.max_distance_km));
+    if (!APPROVED_DISTANCE_BANDS.some((band) => band.min === nextMin && band.max === nextMax)) {
+      throw new BadRequestException({ code: ErrorCode.ValidationFailed,
+        message: 'لا يمكن تغيير حدود الشريحة عن شرائح المسافة المعتمدة.' });
+    }
     try {
       const row = await this.repo.updateDistanceTier(id, fields);
       if (!row) {
