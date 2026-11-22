@@ -155,6 +155,7 @@ export class PricingRepository {
          coverage_verified_at = CASE WHEN $3 = 'verified' THEN now() ELSE NULL END,
          coverage_verified_by = CASE WHEN $3 = 'verified' THEN $4::uuid ELSE NULL END,
          coverage_verification_note = $5,
+         is_active = CASE WHEN $3 <> 'verified' THEN false ELSE is_active END,
          updated_at = now()
        WHERE id = $1 RETURNING id`,
       [input.zoneId, input.geojson ? JSON.stringify(input.geojson) : null, input.status, input.actorId, input.note],
