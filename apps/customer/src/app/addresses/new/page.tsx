@@ -332,7 +332,7 @@ function NewAddressContent() {
           <button
             type="button"
             onClick={submit}
-            disabled={submitting}
+            disabled={submitting || Boolean(notice)}
             className="btn btn-primary btn-lg flex-1"
           >
             {submitting ? '⏳ جاري...' : '💾 حفظ'}
