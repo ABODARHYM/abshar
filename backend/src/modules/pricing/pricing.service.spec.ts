@@ -75,6 +75,21 @@ describe('PricingService distance-tier pricing', () => {
     await expect(service.calculate({ ...context, zoneId: null })).rejects.toBeInstanceOf(BadRequestException);
   });
 
+  it('rejects an unverified legacy zone before requesting a route or charging a fee', async () => {
+    const { service, repo } = makeService();
+    repo.isZoneVerifiedForDelivery.mockResolvedValue(false);
+    await expect(service.calculate(context)).rejects.toBeInstanceOf(BadRequestException);
+    expect(repo.calculateRouteDistanceKm).not.toHaveBeenCalled();
+    expect(repo.listActiveDistanceTiers).not.toHaveBeenCalled();
+  });
+
+  it('does not fall back to straight-line distance when the routing provider is unavailable', async () => {
+    const { service, repo } = makeService();
+    repo.calculateRouteDistanceKm.mockRejectedValue(new Error('routing unavailable'));
+    await expect(service.calculate(context)).rejects.toThrow('routing unavailable');
+    expect(repo.listActiveDistanceTiers).not.toHaveBeenCalled();
+  });
+
   it('rejects distances not covered by a configured tier', async () => {
     const { service } = makeService([{
       id: 'tier-0-2', zone_id: 'zone-1', min_distance_km: 0,
