@@ -48,6 +48,7 @@ function NewAddressContent() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
   useEffect(() => {
     fetch(`${API}/geography/cities`)
       .then((r) => (r.ok ? r.json() : []))
@@ -172,6 +173,11 @@ function NewAddressContent() {
         return;
       }
 
+      if (!data.zoneId) {
+        setNotice('تم حفظ العنوان، لكن موقعه خارج نطاقات التوصيل المعتمدة حالياً أو لم يُحدد له نطاق وحيد. يمكنك الاحتفاظ به، لكن لن يمكن إنشاء طلب توصيل منه حتى تعتمد الإدارة نطاقاً يغطي موقعك.');
+        setSubmitting(false);
+        return;
+      }
       router.push('/addresses');
     } catch (e) {
       const msg = (e as Error).message;
@@ -196,6 +202,12 @@ function NewAddressContent() {
       <TopBar title="عنوان جديد" showBack />
 
       <main className="container-app py-4 space-y-4">
+        {notice && (
+          <div role="status" className="card border-r-4 border-r-amber-500">
+            <p className="text-sm font-bold text-amber-600">{notice}</p>
+            <button type="button" className="btn btn-primary mt-3" onClick={() => router.push('/addresses')}>العودة إلى العناوين</button>
+          </div>
+        )}
         {error && (
           <div className="card border-r-4 border-r-[var(--danger)]">
             <p className="text-sm font-bold text-[var(--danger)]">⚠️ {error}</p>
