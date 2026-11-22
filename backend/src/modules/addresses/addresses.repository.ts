@@ -97,8 +97,10 @@ export class AddressesRepository {
       district_id: string | null;
     }>(
       `SELECT city_id, district_id
-       FROM delivery_zones
-       WHERE id = $1 AND is_active = true
+       FROM delivery_zones z
+       JOIN districts d ON d.id = z.district_id
+       WHERE z.id = $1 AND z.is_active = true
+         AND COALESCE(to_jsonb(d)->>'source_status', 'legacy_unverified') IN ('verified', 'community_verified')
        LIMIT 1`,
       [zoneId],
     );
@@ -137,6 +139,31 @@ export class AddressesRepository {
           ))
         ) AS valid`,
       [input.cityId ?? null, input.districtId ?? null, input.areaId ?? null, input.zoneId],
+    );
+    return result.rows[0]?.valid === true;
+  }
+
+  async validateAddressGeographyWithoutZone(input: {
+    cityId?: string | null;
+    districtId?: string | null;
+    areaId?: string | null;
+  }): Promise<boolean> {
+    const result = await this.db.query<{ valid: boolean }>(
+      `SELECT
+        ($1::uuid IS NULL OR EXISTS (SELECT 1 FROM cities c WHERE c.id = $1 AND c.is_active = true))
+        AND ($2::uuid IS NULL OR EXISTS (
+          SELECT 1 FROM districts d WHERE d.id = $2 AND d.is_active = true
+            AND ($1::uuid IS NULL OR d.city_id = $1::uuid)
+            AND COALESCE(to_jsonb(d)->>'source_status', 'legacy_unverified') IN ('verified', 'community_verified')
+        ))
+        AND ($3::uuid IS NULL OR EXISTS (
+          SELECT 1 FROM areas ar JOIN districts d ON d.id = ar.district_id
+          WHERE ar.id = $3 AND ar.is_active = true AND $2::uuid IS NOT NULL
+            AND ar.district_id = $2::uuid
+            AND COALESCE(to_jsonb(ar)->>'source_status', 'legacy_unverified') IN ('verified', 'community_verified')
+            AND COALESCE(to_jsonb(d)->>'source_status', 'legacy_unverified') IN ('verified', 'community_verified')
+        )) AS valid`,
+      [input.cityId ?? null, input.districtId ?? null, input.areaId ?? null],
     );
     return result.rows[0]?.valid === true;
   }
