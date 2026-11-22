@@ -69,7 +69,8 @@ export class GeographyRepository {
   async listDistricts(cityId: string): Promise<DistrictRow[]> {
     const r = await this.db.query<DistrictRow>(
       `SELECT id, city_id, name_ar, name_en, slug, latitude, longitude, is_active, sort_order
-       FROM districts WHERE city_id = $1 AND is_active = true
+       FROM districts d WHERE city_id = $1 AND is_active = true
+         AND COALESCE(to_jsonb(d)->>'source_status', 'legacy_unverified') IN ('verified', 'community_verified')
        ORDER BY sort_order ASC, name_ar ASC`, [cityId],
     );
     return r.rows;
@@ -86,7 +87,8 @@ export class GeographyRepository {
   async listAreas(districtId: string): Promise<AreaRow[]> {
     const r = await this.db.query<AreaRow>(
       `SELECT id, district_id, name_ar, name_en, slug, latitude, longitude, is_active, sort_order
-       FROM areas WHERE district_id = $1 AND is_active = true
+       FROM areas ar WHERE district_id = $1 AND is_active = true
+         AND COALESCE(to_jsonb(ar)->>'source_status', 'legacy_unverified') IN ('verified', 'community_verified')
        ORDER BY sort_order ASC, name_ar ASC`, [districtId],
     );
     return r.rows;
@@ -111,11 +113,15 @@ export class GeographyRepository {
       ),
       this.db.query<DistrictRow>(
         `SELECT id, city_id, name_ar, name_en, slug, latitude, longitude, is_active, sort_order
-         FROM districts WHERE is_active = true AND (name_ar ILIKE $1 OR name_en ILIKE $1) LIMIT $2`, [q, limit],
+         FROM districts d WHERE is_active = true
+           AND COALESCE(to_jsonb(d)->>'source_status', 'legacy_unverified') IN ('verified', 'community_verified')
+           AND (name_ar ILIKE $1 OR name_en ILIKE $1) LIMIT $2`, [q, limit],
       ),
       this.db.query<AreaRow>(
         `SELECT id, district_id, name_ar, name_en, slug, latitude, longitude, is_active, sort_order
-         FROM areas WHERE is_active = true AND (name_ar ILIKE $1 OR name_en ILIKE $1) LIMIT $2`, [q, limit],
+         FROM areas ar WHERE is_active = true
+           AND COALESCE(to_jsonb(ar)->>'source_status', 'legacy_unverified') IN ('verified', 'community_verified')
+           AND (name_ar ILIKE $1 OR name_en ILIKE $1) LIMIT $2`, [q, limit],
       ),
     ]);
     return { cities: cities.rows, districts: districts.rows, areas: areas.rows };
