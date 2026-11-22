@@ -63,7 +63,7 @@ describe('PricingService distance-tier pricing', () => {
     expect(result.deliveryFee).toBe(700);
     expect(result.originalDeliveryFee).toBe(700);
     expect(result.distanceKm).toBe(3.2);
-    expect(result.distanceTierId).toBe('tier-2-5');
+    expect(result.distanceTierId).toBe('tier-2-4');
     expect(result.zoneId).toBe('zone-1');
     expect(result.source).toBe('zone');
   });
