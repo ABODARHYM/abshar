@@ -24,6 +24,7 @@ import {
   IsIn,
   IsObject,
   IsString,
+  MaxLength,
   MinLength,
   IsNumber,
   IsOptional,
@@ -119,6 +120,17 @@ class UpdateZoneDto {
   isActive?: boolean;
 }
 
+class CreateZoneDto {
+  @ApiProperty() @IsUUID()
+  cityId!: string;
+
+  @ApiProperty({ maxLength: 120 }) @IsString() @MinLength(2) @MaxLength(120)
+  nameAr!: string;
+
+  @ApiProperty({ maxLength: 120 }) @IsString() @MinLength(2) @MaxLength(120)
+  nameEn!: string;
+}
+
 class UpdateZoneCoverageDto {
   @ApiProperty({ enum: ['unverified', 'verified', 'rejected'] })
   @IsIn(['unverified', 'verified', 'rejected'])
@@ -211,6 +223,18 @@ export class PricingController {
   }
 
   // ═══ Zones (Public read, Admin write) ═══
+
+  @Get('zones/admin')
+  @RequirePermission('zones.manage')
+  @ApiOperation({ summary: 'List all delivery zones including unverified legacy records (admin)' })
+  listZonesForAdmin() { return this.service.listZonesForAdmin(); }
+
+  @Post('zones')
+  @RequirePermission('zones.manage')
+  @ApiOperation({ summary: 'Create an inactive operational delivery zone (admin)' })
+  createZone(@Body() dto: CreateZoneDto) {
+    return this.service.createZone({ cityId: dto.cityId, nameAr: dto.nameAr, nameEn: dto.nameEn });
+  }
 
   @Get('zones')
   @ApiOperation({ summary: 'List active delivery zones' })
