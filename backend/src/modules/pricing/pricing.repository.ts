@@ -26,6 +26,8 @@ export interface ZoneRow {
   is_active: boolean;
   coverage_geojson?: unknown | null;
   coverage_status?: 'unverified' | 'verified' | 'rejected';
+  coverage_verified_at?: Date | null;
+  district_source_status?: string | null;
 }
 
 @Injectable()
@@ -205,6 +207,38 @@ export class PricingRepository {
     return r.rows[0] ?? null;
   }
 
+  async listZonesForAdmin(): Promise<ZoneRow[]> {
+    const r = await this.db.query<ZoneRow>(
+      `SELECT z.id, z.city, z.name_ar, z.name_en, z.city_id, z.district_id,
+              z.base_delivery_fee, z.fee_per_km, z.min_order_amount,
+              z.free_delivery_threshold, z.surge_multiplier, z.fuel_surcharge,
+              z.is_active, z.coverage_status, z.coverage_verified_at,
+              d.source_status AS district_source_status
+       FROM delivery_zones z
+       LEFT JOIN districts d ON d.id = z.district_id
+       ORDER BY z.city ASC, z.name_ar ASC`,
+    );
+    return r.rows;
+  }
+
+  async createZone(input: { cityId: string; nameAr: string; nameEn: string }): Promise<ZoneRow | null> {
+    const r = await this.db.query<ZoneRow>(
+      `INSERT INTO delivery_zones (
+         city, name_ar, name_en, city_id, district_id,
+         base_delivery_fee, fee_per_km, min_order_amount, free_delivery_threshold,
+         surge_multiplier, fuel_surcharge, is_active
+       )
+       SELECT c.name_ar, $2, $3, c.id, NULL,
+              0, 0, 0, NULL, 1, 0, false
+       FROM cities c WHERE c.id = $1 AND c.is_active = true
+       RETURNING id, city, name_ar, name_en, city_id, district_id,
+                 base_delivery_fee, fee_per_km, min_order_amount,
+                 free_delivery_threshold, surge_multiplier, fuel_surcharge, is_active`,
+      [input.cityId, input.nameAr.trim(), input.nameEn.trim()],
+    );
+    return r.rows[0] ?? null;
+  }
+
   async getZoneById(id: string): Promise<ZoneRow | null> {
     const r = await this.db.query<ZoneRow>(
       `
@@ -212,8 +246,9 @@ export class PricingRepository {
              base_delivery_fee, fee_per_km, min_order_amount,
              free_delivery_threshold, surge_multiplier, fuel_surcharge,
              is_active
-      FROM delivery_zones
-      WHERE id = $1
+      FROM delivery_zones z
+      LEFT JOIN districts d ON d.id = z.district_id
+      WHERE z.id = $1
       LIMIT 1
       `,
       [id],
