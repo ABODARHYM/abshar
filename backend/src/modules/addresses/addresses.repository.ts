@@ -118,7 +118,9 @@ export class AddressesRepository {
         (
           EXISTS (
             SELECT 1 FROM delivery_zones z
+            JOIN districts zd ON zd.id = z.district_id
             WHERE z.id = $4 AND z.is_active = true
+              AND COALESCE(to_jsonb(zd)->>'source_status', 'legacy_unverified') IN ('verified', 'community_verified')
               AND (z.city_id IS NULL OR z.city_id = $1::uuid)
               AND (z.district_id IS NULL OR z.district_id = $2::uuid)
           )
