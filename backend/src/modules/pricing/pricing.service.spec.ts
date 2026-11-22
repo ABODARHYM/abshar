@@ -23,7 +23,7 @@ describe('PricingService distance-tier pricing', () => {
   }], zoneOverride: any = zone) {
     const repo = {
       getZoneById: jest.fn().mockResolvedValue(zoneOverride),
-      calculateDistanceKm: jest.fn().mockResolvedValue(4.2),
+      calculateRouteDistanceKm: jest.fn().mockResolvedValue(4.2),
       listActiveDistanceTiers: jest.fn().mockResolvedValue(tiers),
       getPricingSettings: jest.fn().mockResolvedValue({}),
       findAddressForUser: jest.fn().mockResolvedValue({ zone_id: 'zone-1', latitude: 15.41, longitude: 45.31 }),
