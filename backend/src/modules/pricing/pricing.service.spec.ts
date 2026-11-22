@@ -24,6 +24,7 @@ describe('PricingService distance-tier pricing', () => {
     const repo = {
       getZoneById: jest.fn().mockResolvedValue(zoneOverride),
       isZoneVerifiedForDelivery: jest.fn().mockResolvedValue(true),
+      getZoneCoverage: jest.fn().mockResolvedValue({"type":"Polygon","coordinates":[[[45.3,15.4],[45.32,15.4],[45.32,15.42],[45.3,15.42],[45.3,15.4]]]}),
       calculateRouteDistanceKm: jest.fn().mockResolvedValue(4.2),
       listActiveDistanceTiers: jest.fn().mockResolvedValue(tiers),
       getPricingSettings: jest.fn().mockResolvedValue({}),
@@ -73,6 +74,15 @@ describe('PricingService distance-tier pricing', () => {
   it('does not use store or global fallback when address has no zone', async () => {
     const { service } = makeService();
     await expect(service.calculate({ ...context, zoneId: null })).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('rejects a customer location outside the approved zone polygon before routing', async () => {
+    const { service, repo } = makeService();
+    repo.getZoneCoverage.mockResolvedValue({
+      type: 'Polygon', coordinates: [[[45.0, 15.0], [45.1, 15.0], [45.1, 15.1], [45.0, 15.1], [45.0, 15.0]]],
+    });
+    await expect(service.calculate(context)).rejects.toBeInstanceOf(BadRequestException);
+    expect(repo.calculateRouteDistanceKm).not.toHaveBeenCalled();
   });
 
   it('rejects an unverified legacy zone before requesting a route or charging a fee', async () => {
