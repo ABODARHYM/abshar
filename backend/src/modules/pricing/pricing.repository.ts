@@ -242,10 +242,11 @@ export class PricingRepository {
   async getZoneById(id: string): Promise<ZoneRow | null> {
     const r = await this.db.query<ZoneRow>(
       `
-      SELECT id, city, name_ar, name_en, city_id, district_id,
-             base_delivery_fee, fee_per_km, min_order_amount,
-             free_delivery_threshold, surge_multiplier, fuel_surcharge,
-             is_active
+      SELECT z.id, z.city, z.name_ar, z.name_en, z.city_id, z.district_id,
+             z.base_delivery_fee, z.fee_per_km, z.min_order_amount,
+             z.free_delivery_threshold, z.surge_multiplier, z.fuel_surcharge,
+             z.is_active, z.coverage_status, z.coverage_verified_at,
+             d.source_status AS district_source_status
       FROM delivery_zones z
       LEFT JOIN districts d ON d.id = z.district_id
       WHERE z.id = $1
