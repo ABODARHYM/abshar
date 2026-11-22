@@ -121,9 +121,10 @@ export default function DeliveryCoveragePage() {
       });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(body.message || 'تعذر إنشاء المنطقة');
-      setZoneId(body.id);
       setNameAr(''); setNameEn('');
       await loadData();
+      setZoneId(body.id);
+      setPoints([]);
       setMessage('تم إنشاء المنطقة كمسودة غير نشطة. ارسم حدودها ثم اعتمدها.');
     } catch (e) { setError(e instanceof Error ? e.message : 'تعذر إنشاء المنطقة'); }
     finally { setSaving(false); }
