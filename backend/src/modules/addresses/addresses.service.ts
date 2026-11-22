@@ -126,7 +126,8 @@ export class AddressesService {
 
     const nextLatitude = dto.latitude !== undefined ? dto.latitude : Number(existing.latitude);
     const nextLongitude = dto.longitude !== undefined ? dto.longitude : Number(existing.longitude);
-    const coordinatesChanged = nextLatitude !== Number(existing.latitude) || nextLongitude !== Number(existing.longitude);
+    const coordinatesChanged = (dto.latitude !== undefined && nextLatitude !== Number(existing.latitude))
+      || (dto.longitude !== undefined && nextLongitude !== Number(existing.longitude));
     let nextZoneId = dto.zoneId !== undefined ? dto.zoneId : existing.zone_id;
     let matchedLocationZone: { id: string; city_id: string | null; district_id: string | null } | null = null;
     if (coordinatesChanged) {
