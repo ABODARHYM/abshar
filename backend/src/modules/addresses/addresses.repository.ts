@@ -181,12 +181,16 @@ export class AddressesRepository {
             SELECT 1 FROM districts d
             WHERE d.id = $2 AND d.is_active = true
               AND ($1::uuid IS NULL OR d.city_id = $1::uuid)
+              AND COALESCE(to_jsonb(d)->>'source_status', 'legacy_unverified') IN ('verified', 'community_verified')
           ))
           AND ($3::uuid IS NULL OR (
             $2::uuid IS NOT NULL AND EXISTS (
               SELECT 1 FROM areas ar
+              JOIN districts d ON d.id = ar.district_id
               WHERE ar.id = $3 AND ar.is_active = true
                 AND ar.district_id = $2::uuid
+                AND COALESCE(to_jsonb(ar)->>'source_status', 'legacy_unverified') IN ('verified', 'community_verified')
+                AND COALESCE(to_jsonb(d)->>'source_status', 'legacy_unverified') IN ('verified', 'community_verified')
             )
           ))
         ) AS valid`,
