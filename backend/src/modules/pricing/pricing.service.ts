@@ -94,6 +94,13 @@ export class PricingService {
       });
     }
 
+    if (!(await this.repo.isZoneVerifiedForDelivery(zone.id))) {
+      throw new BadRequestException({
+        code: ErrorCode.ValidationFailed,
+        message: 'منطقة التوصيل غير موثقة أو لم تعتمدها الإدارة بعد؛ لا يمكن احتساب رسوم عليها.',
+      });
+    }
+
     const distanceKm = Math.round((await this.repo.calculateRouteDistanceKm(
       ctx.storeLat, ctx.storeLng, ctx.addressLat, ctx.addressLng,
     )) * 100) / 100;
