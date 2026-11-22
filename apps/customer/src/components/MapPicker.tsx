@@ -60,7 +60,8 @@ export default function MapPicker({
         const marker = L.marker([initialLat, initialLng], { icon, draggable: true }).addTo(map);
         markerRef.current = marker;
 
-        onLocationChange(initialLat, initialLng);
+        // Do not treat the default map center as a customer-confirmed address.
+        // The parent receives a location only after a map click, marker drag, or GPS selection.
 
         marker.on('dragend', async () => {
           const pos = marker.getLatLng();
