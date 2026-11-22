@@ -14,6 +14,15 @@ type Tier = {
   max_distance_km: string | number | null; delivery_fee: string | number; is_active: boolean;
 };
 
+const DISTANCE_BANDS = [
+  { value: '0-2', label: '0 إلى 2 كم', min: 0, max: 2 },
+  { value: '2-4', label: 'أكثر من 2 إلى 4 كم', min: 2, max: 4 },
+  { value: '4-6', label: 'أكثر من 4 إلى 6 كم', min: 4, max: 6 },
+  { value: '6-10', label: 'أكثر من 6 إلى 10 كم', min: 6, max: 10 },
+  { value: '10-15', label: 'أكثر من 10 إلى 15 كم', min: 10, max: 15 },
+  { value: '15+', label: 'أكثر من 15 كم (حتى حدود التغطية)', min: 15, max: null },
+];
+
 export default function PricingPage() {
   const [zones, setZones] = useState<Zone[]>([]);
   const [zoneId, setZoneId] = useState('');
@@ -21,7 +30,7 @@ export default function PricingPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const [form, setForm] = useState({ minDistanceKm: '0', maxDistanceKm: '', deliveryFee: '' });
+  const [form, setForm] = useState({ band: '0-2', deliveryFee: '' });
 
   const loadZones = useCallback(async () => {
     const response = await authFetch('/api/v1/pricing/zones/admin');
@@ -68,17 +77,19 @@ export default function PricingPage() {
     if (!zoneId) return;
     setSaving(true); setError('');
     try {
+      const band = DISTANCE_BANDS.find((item) => item.value === form.band)!;
       const response = await authFetch(`/api/v1/pricing/zones/${zoneId}/distance-tiers`, {
         method: 'POST',
         body: JSON.stringify({
-          minDistanceKm: Number(form.minDistanceKm),
-          maxDistanceKm: form.maxDistanceKm.trim() ? Number(form.maxDistanceKm) : null,
+          minDistanceKm: band.min,
+          maxDistanceKm: band.max,
           deliveryFee: Number(form.deliveryFee),
         }),
       });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(body.message || 'تعذر حفظ شريحة المسافة');
-      setForm({ minDistanceKm: form.maxDistanceKm || '0', maxDistanceKm: '', deliveryFee: '' });
+      const nextBand = DISTANCE_BANDS.find((item) => item.min === band.max);
+      setForm({ band: nextBand?.value ?? '0-2', deliveryFee: '' });
       await loadTiers();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'تعذر حفظ الشريحة');
@@ -128,12 +139,18 @@ export default function PricingPage() {
 
       <section className="card p-4 mb-5">
         <h2 className="font-black mb-3">إضافة شريحة مسافة</h2>
-        <form onSubmit={createTier} className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
-          <label className="text-sm">من (كم)<input className="input w-full mt-1" type="number" min="0" step="0.01" required value={form.minDistanceKm} onChange={(e) => setForm({ ...form, minDistanceKm: e.target.value })} /></label>
-          <label className="text-sm">إلى (كم) — فارغ = مفتوح<input className="input w-full mt-1" type="number" min="0.01" step="0.01" value={form.maxDistanceKm} onChange={(e) => setForm({ ...form, maxDistanceKm: e.target.value })} /></label>
-          <label className="text-sm">رسوم التوصيل<input className="input w-full mt-1" type="number" min="0" step="0.01" required value={form.deliveryFee} onChange={(e) => setForm({ ...form, deliveryFee: e.target.value })} /></label>
+        <form onSubmit={createTier} className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+          <label className="text-sm">شريحة المسافة
+            <select className="input w-full mt-1" value={form.band} onChange={(e) => setForm({ ...form, band: e.target.value })}>
+              {DISTANCE_BANDS.map((band) => <option key={band.value} value={band.value}>{band.label}</option>)}
+            </select>
+          </label>
+          <label className="text-sm">رسوم التوصيل
+            <input className="input w-full mt-1" type="number" min="0" step="0.01" required value={form.deliveryFee} onChange={(e) => setForm({ ...form, deliveryFee: e.target.value })} />
+          </label>
           <button className="btn btn-primary" type="submit" disabled={saving || !zoneId || !form.deliveryFee}>{saving ? 'جارٍ الحفظ...' : 'إضافة الشريحة'}</button>
         </form>
+        <p className="text-xs text-[var(--text-muted)] mt-3">الحدود ثابتة ومعتمدة؛ أدخل رسوم كل شريحة فقط. الشريحة الأخيرة لا تتجاوز حدود التغطية الجغرافية المعتمدة.</p>
         <p className="text-xs text-[var(--text-muted)] mt-3">تُحسب الرسوم من مسافة الطريق عبر مزود التوجيه المهيأ. لا تُضاف أسعار افتراضية، ويجب أن تغطي الشرائح المسافات المطلوبة دون تداخل.</p>
       </section>
       <section className="card p-4">
