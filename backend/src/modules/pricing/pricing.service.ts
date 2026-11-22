@@ -261,8 +261,29 @@ export class PricingService {
       if (!Array.isArray(polygon) || polygon.length === 0) return false;
       for (const ring of polygon) {
         if (!Array.isArray(ring) || ring.length < 4 || !ring.every(validPosition)) return false;
-        const first = ring[0] as number[], last = ring[ring.length - 1] as number[];
+        const positions = ring as [number, number][];
+        const first = positions[0], last = positions[positions.length - 1];
         if (first[0] !== last[0] || first[1] !== last[1]) return false;
+        let twiceArea = 0;
+        for (let i = 0; i < positions.length - 1; i++) {
+          twiceArea += positions[i][0] * positions[i + 1][1] - positions[i + 1][0] * positions[i][1];
+        }
+        if (Math.abs(twiceArea) < 1e-10) return false;
+        const orient = (a: number[], b: number[], d: number[]) =>
+          (b[0] - a[0]) * (d[1] - a[1]) - (b[1] - a[1]) * (d[0] - a[0]);
+        const intersects = (a: number[], b: number[], d: number[], e: number[]) => {
+          const o1 = orient(a, b, d), o2 = orient(a, b, e);
+          const o3 = orient(d, e, a), o4 = orient(d, e, b);
+          return ((o1 > 1e-10 && o2 < -1e-10) || (o1 < -1e-10 && o2 > 1e-10))
+            && ((o3 > 1e-10 && o4 < -1e-10) || (o3 < -1e-10 && o4 > 1e-10));
+        };
+        const segments = positions.length - 1;
+        for (let i = 0; i < segments; i++) {
+          for (let j = i + 1; j < segments; j++) {
+            if (j === i + 1 || (i === 0 && j === segments - 1)) continue;
+            if (intersects(positions[i], positions[i + 1], positions[j], positions[j + 1])) return false;
+          }
+        }
       }
     }
     return true;
