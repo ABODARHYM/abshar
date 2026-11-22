@@ -36,6 +36,7 @@ function NewAddressContent() {
   const [districtId, setDistrictId] = useState('');
   const [areaId, setAreaId] = useState('');
   const [isDefault, setIsDefault] = useState(true);
+  const [locationConfirmed, setLocationConfirmed] = useState(false);
 
   const [lat, setLat] = useState(15.4633);
   const [lng, setLng] = useState(45.3256);
@@ -93,6 +94,10 @@ function NewAddressContent() {
     }
     if (!addressLine.trim()) {
       setError('وصف العنوان مطلوب');
+      return;
+    }
+    if (!locationConfirmed) {
+      setError('حدد موقع العنوان من الخريطة أو اضغط «استخدم موقعي الحالي» قبل الحفظ.');
       return;
     }
     // Token check
@@ -216,6 +221,7 @@ function NewAddressContent() {
             initialLat={lat}
             initialLng={lng}
             onLocationChange={(newLat, newLng, addr) => {
+              setLocationConfirmed(true);
               setLat(newLat);
               setLng(newLng);
               if (addr && !addressLine) {
@@ -223,6 +229,7 @@ function NewAddressContent() {
               }
             }}
           />
+          <p className="mt-2 text-xs text-[var(--text-muted)]">اختر موقعك فعلياً بالنقر على الخريطة أو باستخدام GPS؛ مركز الخريطة الظاهر مبدئي وليس عنوانك.</p>
           <div className="mt-3 grid grid-cols-2 gap-2 text-xs" dir="ltr">
             <div className="bg-[var(--bg-elevated)] p-2 rounded-lg">
               <span className="text-[var(--text-muted)]">Lat:</span>{' '}
