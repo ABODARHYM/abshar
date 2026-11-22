@@ -30,6 +30,7 @@ describe('PricingService distance-tier pricing', () => {
       getPricingSettings: jest.fn().mockResolvedValue({}),
       findAddressForUser: jest.fn().mockResolvedValue({ zone_id: 'zone-1', latitude: 15.41, longitude: 45.31 }),
       updateZoneCoverage: jest.fn().mockResolvedValue(true),
+      updateZone: jest.fn().mockResolvedValue({ ...zone, is_active: true }),
     };
     return { service: new PricingService(repo as any), repo };
   }
@@ -75,6 +76,32 @@ describe('PricingService distance-tier pricing', () => {
   it('does not use store or global fallback when address has no zone', async () => {
     const { service } = makeService();
     await expect(service.calculate({ ...context, zoneId: null })).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('blocks activation of a zone without verified coverage', async () => {
+    const { service, repo } = makeService();
+    repo.isZoneVerifiedForDelivery.mockResolvedValue(false);
+    await expect(service.updateZone('zone-1', { isActive: true })).rejects.toBeInstanceOf(BadRequestException);
+    expect(repo.updateZone).not.toHaveBeenCalled();
+  });
+
+  it('blocks activation when no active distance tier exists', async () => {
+    const { service, repo } = makeService([]);
+    await expect(service.updateZone('zone-1', { isActive: true })).rejects.toBeInstanceOf(BadRequestException);
+    expect(repo.updateZone).not.toHaveBeenCalled();
+  });
+
+  it('blocks activation when a secure routing provider is not configured', async () => {
+    const previous = process.env.ROUTING_API_URL;
+    delete process.env.ROUTING_API_URL;
+    try {
+      const { service, repo } = makeService();
+      await expect(service.updateZone('zone-1', { isActive: true })).rejects.toBeInstanceOf(BadRequestException);
+      expect(repo.updateZone).not.toHaveBeenCalled();
+    } finally {
+      if (previous === undefined) delete process.env.ROUTING_API_URL;
+      else process.env.ROUTING_API_URL = previous;
+    }
   });
 
   it('requires a valid closed GeoJSON polygon and an audit note before approving coverage', async () => {
