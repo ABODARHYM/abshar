@@ -105,7 +105,7 @@ describe('PricingService distance-tier pricing', () => {
   });
 
   it('requires a valid closed GeoJSON polygon and an audit note before approving coverage', async () => {
-    const { service, repo } = makeService();
+    const { service, repo } = makeService(undefined, { ...zone, is_active: false });
     await expect(service.updateZoneCoverage({
       zoneId: 'zone-1', status: 'verified', actorId: 'admin-1', note: 'اعتماد حدود المنطقة',
       geojson: { type: 'Polygon', coordinates: [[[45, 15], [46, 15], [46, 16], [45, 16]]] },
@@ -114,7 +114,7 @@ describe('PricingService distance-tier pricing', () => {
   });
 
   it('rejects self-intersecting delivery coverage polygons', async () => {
-    const { service, repo } = makeService();
+    const { service, repo } = makeService(undefined, { ...zone, is_active: false });
     await expect(service.updateZoneCoverage({
       zoneId: 'zone-1', status: 'verified', actorId: 'admin-1', note: 'حدود غير صالحة',
       geojson: { type: 'Polygon', coordinates: [[[45, 15], [46, 16], [45, 16], [46, 15], [45, 15]]] },
@@ -123,7 +123,7 @@ describe('PricingService distance-tier pricing', () => {
   });
 
   it('stores an explicitly approved valid delivery polygon with the administrator identity', async () => {
-    const { service, repo } = makeService();
+    const { service, repo } = makeService(undefined, { ...zone, is_active: false });
     const geojson = { type: 'Polygon', coordinates: [[[45, 15], [46, 15], [46, 16], [45, 16], [45, 15]]] };
     await expect(service.updateZoneCoverage({
       zoneId: 'zone-1', status: 'verified', actorId: 'admin-1', note: 'تم التحقق من الحدود', geojson,
