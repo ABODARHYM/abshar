@@ -173,7 +173,10 @@ describe('AddressesService geography validation', () => {
   });
 
   it('rejects unverified locality references when saving without a delivery zone', async () => {
-    const repo = { validateAddressGeographyWithoutZone: jest.fn().mockResolvedValue(false) };
+    const repo = {
+      findVerifiedZoneForPoint: jest.fn().mockResolvedValue(null),
+      validateAddressGeographyWithoutZone: jest.fn().mockResolvedValue(false),
+    };
     const service = new AddressesService(repo as any);
     await expect(service.create('customer-1', {
       label: 'المنزل', addressLine: 'شارع الجامعة',
