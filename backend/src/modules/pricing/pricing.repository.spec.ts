@@ -30,16 +30,16 @@ describe('PricingRepository road routing provider', () => {
       status: 200, headers: { 'content-type': 'application/json' },
     }));
     await expect(repository().calculateRouteDistanceKm(15.4, 45.3, 15.41, 45.31)).resolves.toBe(4.25);
-    expect(fetchMock).toHaveBeenCalledWith(
-      'https://routing.example.test/route',
-      expect.objectContaining({
-        method: 'POST', redirect: 'error',
-        body: JSON.stringify({
-          origin: { latitude: 15.4, longitude: 45.3 },
-          destination: { latitude: 15.41, longitude: 45.31 },
-        }),
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, options] = fetchMock.mock.calls[0];
+    expect(String(url)).toBe('https://routing.example.test/route');
+    expect(options).toEqual(expect.objectContaining({
+      method: 'POST', redirect: 'error',
+      body: JSON.stringify({
+        origin: { latitude: 15.4, longitude: 45.3 },
+        destination: { latitude: 15.41, longitude: 45.31 },
       }),
-    );
+    }));
   });
 
   it('fails closed when the routing provider is not configured', async () => {
