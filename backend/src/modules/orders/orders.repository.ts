@@ -54,6 +54,11 @@ export class OrdersRepository {
       currency: string;
       deliveryFee: number;
       originalDeliveryFee: number;
+      deliveryPricingSnapshot: {
+        distanceKm: number; zoneId: string; distanceTierId: string;
+        distanceSource: string; pricingVersion: number; currency: string;
+        originalDeliveryFee: number; customerDeliveryFee: number;
+      };
       subtotal: number;
       discountTotal: number;
       total: number;
@@ -89,14 +94,17 @@ export class OrdersRepository {
           currency, subtotal, delivery_fee, original_delivery_fee, discount_total, total,
           customer_notes, delivery_address_id, delivery_address_text,
           delivery_latitude, delivery_longitude,
-          recipient_name, recipient_phone, idempotency_key, coupon_id
+          recipient_name, recipient_phone, idempotency_key, coupon_id,
+          delivery_distance_km, delivery_zone_id, delivery_distance_tier_id,
+          delivery_distance_source, delivery_pricing_version, delivery_pricing_snapshot
         )
         VALUES (
           $1, $2, 'pending', 'cash_on_delivery', 'pending',
           $3, $4, $5, $6, $7, $8,
           $9, $10, $11,
           $12, $13,
-          $14, $15, $16, $17
+          $14, $15, $16, $17,
+          $18, $19, $20, $21, $22, $23::jsonb
         )
         RETURNING *
         `,
@@ -118,6 +126,12 @@ export class OrdersRepository {
           payload.addressSnapshot.recipientPhone,
           payload.idempotencyKey,
           payload.couponId ?? null,
+          payload.deliveryPricingSnapshot.distanceKm,
+          payload.deliveryPricingSnapshot.zoneId,
+          payload.deliveryPricingSnapshot.distanceTierId,
+          payload.deliveryPricingSnapshot.distanceSource,
+          payload.deliveryPricingSnapshot.pricingVersion,
+          JSON.stringify(payload.deliveryPricingSnapshot),
         ],
       );
       const order = orderRes.rows[0];
