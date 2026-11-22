@@ -8,6 +8,8 @@ export interface DistanceTierRow {
   max_distance_km: string | number | null;
   delivery_fee: string | number;
   is_active: boolean;
+  coverage_geojson?: unknown | null;
+  coverage_status?: 'unverified' | 'verified' | 'rejected';
 }
 
 export interface ZoneRow {
@@ -109,17 +111,44 @@ export class PricingRepository {
     );
     return r.rows[0] ?? null;
   }
+  async getZoneCoverage(zoneId: string): Promise<unknown | null> {
+    const r = await this.db.query<{ coverage_geojson: unknown | null }>(
+      `SELECT coverage_geojson FROM delivery_zones
+       WHERE id = $1 AND is_active = true AND coverage_status = 'verified'
+       LIMIT 1`, [zoneId],
+    );
+    return r.rows[0]?.coverage_geojson ?? null;
+  }
+
   async isZoneVerifiedForDelivery(zoneId: string): Promise<boolean> {
     const r = await this.db.query<{ eligible: boolean }>(
       `SELECT EXISTS (
          SELECT 1 FROM delivery_zones z
-         JOIN districts d ON d.id = z.district_id
          WHERE z.id = $1 AND z.is_active = true
-           AND COALESCE(to_jsonb(d)->>'source_status', 'legacy_unverified') IN ('verified', 'community_verified')
-       ) AS eligible`,
-      [zoneId],
+           AND z.coverage_status = 'verified' AND z.coverage_geojson IS NOT NULL
+           AND z.coverage_verified_at IS NOT NULL AND z.coverage_verified_by IS NOT NULL
+           AND length(trim(coalesce(z.coverage_verification_note, ''))) >= 8
+       ) AS eligible`, [zoneId],
     );
     return r.rows[0]?.eligible === true;
+  }
+
+  async updateZoneCoverage(input: {
+    zoneId: string; geojson: Record<string, unknown> | null;
+    status: 'unverified' | 'verified' | 'rejected'; actorId: string; note: string;
+  }): Promise<boolean> {
+    const r = await this.db.query<{ id: string }>(
+      `UPDATE delivery_zones SET
+         coverage_geojson = $2::jsonb,
+         coverage_status = $3,
+         coverage_verified_at = CASE WHEN $3 = 'verified' THEN now() ELSE NULL END,
+         coverage_verified_by = CASE WHEN $3 = 'verified' THEN $4::uuid ELSE NULL END,
+         coverage_verification_note = $5,
+         updated_at = now()
+       WHERE id = $1 RETURNING id`,
+      [input.zoneId, input.geojson ? JSON.stringify(input.geojson) : null, input.status, input.actorId, input.note],
+    );
+    return r.rowCount > 0;
   }
 
   async listActiveDistanceTiers(zoneId: string): Promise<DistanceTierRow[]> {
@@ -200,11 +229,10 @@ export class PricingRepository {
              free_delivery_threshold, surge_multiplier, fuel_surcharge,
              is_active
       FROM delivery_zones z
-      WHERE z.is_active = true
-        AND EXISTS (
-          SELECT 1 FROM districts d WHERE d.id = z.district_id
-            AND COALESCE(to_jsonb(d)->>'source_status', 'legacy_unverified') IN ('verified', 'community_verified')
-        )
+      WHERE z.is_active = true AND z.coverage_status = 'verified'
+        AND z.coverage_geojson IS NOT NULL
+        AND z.coverage_verified_at IS NOT NULL AND z.coverage_verified_by IS NOT NULL
+        AND length(trim(coalesce(z.coverage_verification_note, ''))) >= 8
       ORDER BY city ASC, name_ar ASC
       `,
     );
