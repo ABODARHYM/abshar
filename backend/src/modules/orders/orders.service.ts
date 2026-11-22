@@ -257,7 +257,7 @@ export class OrdersService {
         pricingVersion: 1,
         currency,
         originalDeliveryFee: pricing.originalDeliveryFee,
-        customerDeliveryFee: pricing.deliveryFee,
+        customerDeliveryFee: finalDeliveryFee,
       },
       subtotal,
       discountTotal,
