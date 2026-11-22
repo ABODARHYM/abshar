@@ -70,14 +70,9 @@ export class PricingService {
   }
 
   /**
-   * حساب تكلفة التوصيل — pipeline كامل.
-   *
-   * 1) Zone → base + distance × per_km + surge + fuel
-   * 2) Store fallback → store.delivery_fee
-   * 3) Global fallback → settings.pricing.default_delivery_fee
-   * 4) Free delivery threshold
-   * 5) Min/max caps
-   * 6) Fuel surcharge (global)
+   * Calculate delivery only from an active, administrator-approved zone,
+   * a verified coverage polygon, a configured road route, and one approved tier.
+   * There is deliberately no store/global fee fallback.
    */
   async calculate(ctx: PricingContext): Promise<PricingResult> {
     if (!ctx.zoneId) {
@@ -142,8 +137,6 @@ export class PricingService {
     }
 
     const settings = await this.repo.getPricingSettings();
-    const globalSurge = settings['surge_multiplier'] ?? 1;
-    const globalFuel = settings['fuel_surcharge'] ?? 0;
     const freeThreshold = zone.free_delivery_threshold !== null
       ? Number(zone.free_delivery_threshold)
       : (settings['free_delivery_threshold'] > 0 ? settings['free_delivery_threshold'] : null);
