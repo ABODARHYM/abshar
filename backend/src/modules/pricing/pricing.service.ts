@@ -94,7 +94,7 @@ export class PricingService {
       });
     }
 
-    const distanceKm = Math.round((await this.repo.calculateDistanceKm(
+    const distanceKm = Math.round((await this.repo.calculateRouteDistanceKm(
       ctx.storeLat, ctx.storeLng, ctx.addressLat, ctx.addressLng,
     )) * 100) / 100;
 
