@@ -207,6 +207,16 @@ export class PricingService {
   }
 
 
+  async listZonesForAdmin(): Promise<ZoneRow[]> {
+    return this.repo.listZonesForAdmin();
+  }
+
+  async createZone(input: { cityId: string; nameAr: string; nameEn: string }): Promise<ZoneRow> {
+    const row = await this.repo.createZone(input);
+    if (!row) throw new NotFoundException({ code: ErrorCode.NotFound, message: 'المدينة غير موجودة أو غير مفعلة.' });
+    return row;
+  }
+
   async updateZoneCoverage(input: {
     zoneId: string; geojson: Record<string, unknown> | null;
     status: 'unverified' | 'verified' | 'rejected'; actorId: string; note: string;
@@ -214,6 +224,12 @@ export class PricingService {
     const zone = await this.repo.getZoneById(input.zoneId);
     if (!zone) throw new NotFoundException({ code: ErrorCode.NotFound, message: 'Delivery zone not found' });
     if (input.status === 'verified') {
+      if (zone.district_id && zone.district_source_status !== 'verified' && zone.district_source_status !== 'community_verified') {
+        throw new BadRequestException({
+          code: ErrorCode.ValidationFailed,
+          message: 'هذه المنطقة مرتبطة بسجل حي قديم غير موثق. أنشئ منطقة تشغيلية جديدة مستقلة عن السجل القديم بدلاً من اعتمادها.',
+        });
+      }
       if (!input.geojson || !this.isValidCoverageGeometry(input.geojson)) {
         throw new BadRequestException({
           code: ErrorCode.ValidationFailed,
