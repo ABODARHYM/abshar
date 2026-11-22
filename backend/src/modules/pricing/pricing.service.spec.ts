@@ -29,6 +29,7 @@ describe('PricingService distance-tier pricing', () => {
       listActiveDistanceTiers: jest.fn().mockResolvedValue(tiers),
       getPricingSettings: jest.fn().mockResolvedValue({}),
       findAddressForUser: jest.fn().mockResolvedValue({ zone_id: 'zone-1', latitude: 15.41, longitude: 45.31 }),
+      updateZoneCoverage: jest.fn().mockResolvedValue(true),
     };
     return { service: new PricingService(repo as any), repo };
   }
@@ -74,6 +75,26 @@ describe('PricingService distance-tier pricing', () => {
   it('does not use store or global fallback when address has no zone', async () => {
     const { service } = makeService();
     await expect(service.calculate({ ...context, zoneId: null })).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('requires a valid closed GeoJSON polygon and an audit note before approving coverage', async () => {
+    const { service, repo } = makeService();
+    await expect(service.updateZoneCoverage({
+      zoneId: 'zone-1', status: 'verified', actorId: 'admin-1', note: 'اعتماد حدود المنطقة',
+      geojson: { type: 'Polygon', coordinates: [[[45, 15], [46, 15], [46, 16], [45, 16]]] },
+    })).rejects.toBeInstanceOf(BadRequestException);
+    expect(repo.updateZoneCoverage).not.toHaveBeenCalled();
+  });
+
+  it('stores an explicitly approved valid delivery polygon with the administrator identity', async () => {
+    const { service, repo } = makeService();
+    const geojson = { type: 'Polygon', coordinates: [[[45, 15], [46, 15], [46, 16], [45, 16], [45, 15]]] };
+    await expect(service.updateZoneCoverage({
+      zoneId: 'zone-1', status: 'verified', actorId: 'admin-1', note: 'تم التحقق من الحدود', geojson,
+    })).resolves.toEqual({ status: 'ok' });
+    expect(repo.updateZoneCoverage).toHaveBeenCalledWith(expect.objectContaining({
+      zoneId: 'zone-1', status: 'verified', actorId: 'admin-1', geojson,
+    }));
   });
 
   it('rejects a customer location outside the approved zone polygon before routing', async () => {
