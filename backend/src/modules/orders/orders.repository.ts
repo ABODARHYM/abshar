@@ -55,7 +55,7 @@ export class OrdersRepository {
       deliveryFee: number;
       originalDeliveryFee: number;
       deliveryPricingSnapshot: {
-        distanceKm: number; zoneId: string; distanceTierId: string;
+        distanceKm: number; zoneId: string; zoneName: string | null; distanceTierId: string;
         distanceTierMinKm: number; distanceTierMaxKm: number | null; distanceTierFee: number;
         distanceSource: string; pricingVersion: number; currency: string;
         originalDeliveryFee: number; customerDeliveryFee: number;
