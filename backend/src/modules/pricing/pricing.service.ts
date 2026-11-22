@@ -78,9 +78,11 @@ export class PricingService {
         message: 'عنوان التوصيل غير مرتبط بمنطقة توصيل. يرجى تحديد المنطقة قبل الطلب.',
       });
     }
-    if (!Number.isFinite(ctx.storeLat) || !Number.isFinite(ctx.storeLng) ||
-        !Number.isFinite(ctx.addressLat) || !Number.isFinite(ctx.addressLng) ||
-        (ctx.storeLat === 0 && ctx.storeLng === 0)) {
+    if (!Number.isFinite(ctx.storeLat) || ctx.storeLat < -90 || ctx.storeLat > 90
+        || !Number.isFinite(ctx.storeLng) || ctx.storeLng < -180 || ctx.storeLng > 180
+        || !Number.isFinite(ctx.addressLat) || ctx.addressLat < -90 || ctx.addressLat > 90
+        || !Number.isFinite(ctx.addressLng) || ctx.addressLng < -180 || ctx.addressLng > 180
+        || (ctx.storeLat === 0 && ctx.storeLng === 0)) {
       throw new BadRequestException({
         code: ErrorCode.ValidationFailed,
         message: 'تعذر تحديد المسافة لعدم اكتمال إحداثيات المتجر أو العنوان.',
