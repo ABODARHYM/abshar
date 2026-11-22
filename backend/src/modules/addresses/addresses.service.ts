@@ -128,6 +128,7 @@ export class AddressesService {
     const nextLongitude = dto.longitude !== undefined ? dto.longitude : Number(existing.longitude);
     const coordinatesChanged = nextLatitude !== Number(existing.latitude) || nextLongitude !== Number(existing.longitude);
     let nextZoneId = dto.zoneId !== undefined ? dto.zoneId : existing.zone_id;
+    let matchedLocationZone: { id: string; city_id: string | null; district_id: string | null } | null = null;
     if (coordinatesChanged) {
       const matched = await this.repo.findVerifiedZoneForPoint(nextLatitude, nextLongitude,
         dto.cityId !== undefined ? dto.cityId : existing.city_id);
@@ -135,10 +136,11 @@ export class AddressesService {
         throw new BadRequestException({ code: ErrorCode.ValidationFailed,
           message: 'الموقع الجديد خارج جميع نطاقات التوصيل المعتمدة. احفظ العنوان دون تغيير الموقع أو تواصل مع الإدارة.' });
       }
+      matchedLocationZone = matched;
       nextZoneId = matched.id;
     }
-    let nextCityId = dto.cityId !== undefined ? dto.cityId : existing.city_id;
-    let nextDistrictId = dto.districtId !== undefined ? dto.districtId : existing.district_id;
+    let nextCityId = dto.cityId !== undefined ? dto.cityId : (matchedLocationZone ? matchedLocationZone.city_id : existing.city_id);
+    let nextDistrictId = dto.districtId !== undefined ? dto.districtId : (matchedLocationZone ? matchedLocationZone.district_id : existing.district_id);
     const nextAreaId = dto.areaId !== undefined ? dto.areaId : existing.area_id;
 
     if (nextZoneId) {
