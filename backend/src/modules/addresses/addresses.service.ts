@@ -59,9 +59,20 @@ export class AddressesService {
     dto: CreateAddressDto,
   ): Promise<AddressResponse> {
     let input: AddressInput = dto;
+    let resolvedZoneId = dto.zoneId;
 
-    if (dto.zoneId) {
-      const zone = await this.repo.findActiveZoneGeography(dto.zoneId);
+    if (!resolvedZoneId) {
+      const matched = await this.repo.findVerifiedZoneForPoint(dto.latitude, dto.longitude, dto.cityId);
+      if (matched) {
+        resolvedZoneId = matched.id;
+        input = { ...dto, zoneId: matched.id,
+          cityId: dto.cityId ?? matched.city_id,
+          districtId: dto.districtId ?? matched.district_id };
+      }
+    }
+
+    if (resolvedZoneId) {
+      const zone = await this.repo.findActiveZoneGeography(resolvedZoneId);
       const cityId = dto.cityId !== undefined ? dto.cityId : zone?.city_id ?? null;
       const districtId = dto.districtId !== undefined ? dto.districtId : zone?.district_id ?? null;
 
@@ -69,7 +80,7 @@ export class AddressesService {
         cityId,
         districtId,
         areaId: dto.areaId,
-        zoneId: dto.zoneId,
+        zoneId: resolvedZoneId,
       });
       if (!valid) {
         throw new BadRequestException({
@@ -80,7 +91,7 @@ export class AddressesService {
       }
 
       // Backfill missing city/district from the selected active zone.
-      input = { ...dto, cityId, districtId };
+      input = { ...input, zoneId: resolvedZoneId, cityId, districtId };
     } else if (dto.cityId || dto.districtId || dto.areaId) {
       const valid = await this.repo.validateAddressGeographyWithoutZone({
         cityId: dto.cityId,
@@ -113,7 +124,18 @@ export class AddressesService {
       });
     }
 
-    const nextZoneId = dto.zoneId ?? existing.zone_id;
+    const coordinatesChanged = (dto.latitude !== undefined && dto.latitude !== Number((existing as any).latitude))
+      || (dto.longitude !== undefined && dto.longitude !== Number((existing as any).longitude));
+    let nextZoneId = dto.zoneId !== undefined ? dto.zoneId : existing.zone_id;
+    if (coordinatesChanged && dto.latitude !== undefined && dto.longitude !== undefined) {
+      const matched = await this.repo.findVerifiedZoneForPoint(dto.latitude, dto.longitude,
+        dto.cityId !== undefined ? dto.cityId : existing.city_id);
+      if (!matched) {
+        throw new BadRequestException({ code: ErrorCode.ValidationFailed,
+          message: 'الموقع الجديد خارج جميع نطاقات التوصيل المعتمدة. احفظ العنوان دون تغيير الموقع أو تواصل مع الإدارة.' });
+      }
+      nextZoneId = matched.id;
+    }
     let nextCityId = dto.cityId !== undefined ? dto.cityId : existing.city_id;
     let nextDistrictId = dto.districtId !== undefined ? dto.districtId : existing.district_id;
     const nextAreaId = dto.areaId !== undefined ? dto.areaId : existing.area_id;
