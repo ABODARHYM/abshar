@@ -60,21 +60,29 @@ export class AddressesService {
   ): Promise<AddressResponse> {
     let input: AddressInput = dto;
     let resolvedZoneId = dto.zoneId;
+    let matchedZone = resolvedZoneId
+      ? null
+      : await this.repo.findVerifiedZoneForPoint(dto.latitude, dto.longitude, dto.cityId);
 
-    if (!resolvedZoneId) {
-      const matched = await this.repo.findVerifiedZoneForPoint(dto.latitude, dto.longitude, dto.cityId);
-      if (matched) {
-        resolvedZoneId = matched.id;
-        input = { ...dto, zoneId: matched.id,
-          cityId: dto.cityId ?? matched.city_id,
-          districtId: dto.districtId ?? matched.district_id };
-      }
+    if (!resolvedZoneId && matchedZone) {
+      resolvedZoneId = matchedZone.id;
+      input = { ...dto, zoneId: matchedZone.id,
+        cityId: dto.cityId ?? matchedZone.city_id,
+        districtId: dto.districtId ?? matchedZone.district_id };
     }
 
     if (resolvedZoneId) {
       const zone = await this.repo.findActiveZoneGeography(resolvedZoneId);
       const cityId = dto.cityId !== undefined ? dto.cityId : zone?.city_id ?? null;
       const districtId = dto.districtId !== undefined ? dto.districtId : zone?.district_id ?? null;
+      matchedZone = matchedZone ?? await this.repo.findVerifiedZoneForPoint(dto.latitude, dto.longitude, cityId);
+      if (!matchedZone || matchedZone.id !== resolvedZoneId) {
+        throw new BadRequestException({
+          code: ErrorCode.ValidationFailed,
+          message: 'إحداثيات العنوان لا تقع داخل حدود منطقة التوصيل المحددة.',
+          details: [{ field: 'zoneId', constraints: ['address point outside selected coverage polygon'] }],
+        });
+      }
 
       const valid = await this.repo.validateAddressGeography({
         cityId,
@@ -133,9 +141,9 @@ export class AddressesService {
     if (coordinatesChanged) {
       const matched = await this.repo.findVerifiedZoneForPoint(nextLatitude, nextLongitude,
         dto.cityId !== undefined ? dto.cityId : existing.city_id);
-      if (!matched) {
+      if (!matched || (dto.zoneId !== undefined && dto.zoneId !== matched.id)) {
         throw new BadRequestException({ code: ErrorCode.ValidationFailed,
-          message: 'الموقع الجديد خارج جميع نطاقات التوصيل المعتمدة. احفظ العنوان دون تغيير الموقع أو تواصل مع الإدارة.' });
+          message: 'الموقع الجديد لا يطابق منطقة توصيل معتمدة واحدة. اختر موقعاً داخل نطاق صحيح أو تواصل مع الإدارة.' });
       }
       matchedLocationZone = matched;
       nextZoneId = matched.id;
@@ -145,6 +153,11 @@ export class AddressesService {
     const nextAreaId = dto.areaId !== undefined ? dto.areaId : existing.area_id;
 
     if (nextZoneId) {
+      const pointZone = matchedLocationZone ?? await this.repo.findVerifiedZoneForPoint(nextLatitude, nextLongitude, nextCityId);
+      if (!pointZone || pointZone.id !== nextZoneId) {
+        throw new BadRequestException({ code: ErrorCode.ValidationFailed,
+          message: 'إحداثيات العنوان لا تقع داخل حدود منطقة التوصيل المحددة.' });
+      }
       const zone = await this.repo.findActiveZoneGeography(nextZoneId);
       if (dto.cityId === undefined && !nextCityId) {
         nextCityId = zone?.city_id ?? null;
