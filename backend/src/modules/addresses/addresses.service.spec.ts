@@ -126,6 +126,52 @@ describe('AddressesService geography validation', () => {
     });
   });
 
+  it('automatically assigns a customer address to the one approved polygon containing its GPS point', async () => {
+    const now = new Date();
+    const repo = {
+      findVerifiedZoneForPoint: jest.fn().mockResolvedValue({ id: 'zone-approved', city_id: 'city-1', district_id: null }),
+      findActiveZoneGeography: jest.fn().mockResolvedValue({ city_id: 'city-1', district_id: null }),
+      validateAddressGeography: jest.fn().mockResolvedValue(true),
+      create: jest.fn().mockResolvedValue({
+        id: 'address-2', user_id: 'customer-1', label: 'المنزل', address_line: 'شارع الجامعة',
+        building: null, floor: null, apartment: null, landmark: null,
+        latitude: 15.41, longitude: 45.31, zone_id: 'zone-approved',
+        city_id: 'city-1', district_id: null, area_id: null,
+        is_default: false, created_at: now, updated_at: now,
+      }),
+    };
+    const service = new AddressesService(repo as any);
+    const result = await service.create('customer-1', {
+      label: 'المنزل', addressLine: 'شارع الجامعة', latitude: 15.41, longitude: 45.31,
+    });
+    expect(result.zoneId).toBe('zone-approved');
+    expect(repo.findVerifiedZoneForPoint).toHaveBeenCalledWith(15.41, 45.31, undefined);
+    expect(repo.create).toHaveBeenCalledWith('customer-1', expect.objectContaining({
+      zoneId: 'zone-approved', cityId: 'city-1',
+    }));
+  });
+
+  it('allows editing a saved address that has no verified delivery zone', async () => {
+    const now = new Date();
+    const repo = {
+      findByIdForUser: jest.fn().mockResolvedValue({
+        id: 'address-3', zone_id: null, city_id: 'city-1', district_id: null, area_id: null,
+        latitude: 15.41, longitude: 45.31,
+      }),
+      validateAddressGeographyWithoutZone: jest.fn().mockResolvedValue(true),
+      update: jest.fn().mockResolvedValue({
+        id: 'address-3', user_id: 'customer-1', label: 'المنزل', address_line: 'وصف جديد',
+        building: null, floor: null, apartment: null, landmark: null,
+        latitude: 15.41, longitude: 45.31, zone_id: null, city_id: 'city-1',
+        district_id: null, area_id: null, is_default: false, created_at: now, updated_at: now,
+      }),
+    };
+    const service = new AddressesService(repo as any);
+    const result = await service.update('customer-1', 'address-3', { addressLine: 'وصف جديد' });
+    expect(result.zoneId).toBeNull();
+    expect(repo.validateAddressGeographyWithoutZone).toHaveBeenCalled();
+  });
+
   it('rejects unverified locality references when saving without a delivery zone', async () => {
     const repo = { validateAddressGeographyWithoutZone: jest.fn().mockResolvedValue(false) };
     const service = new AddressesService(repo as any);
