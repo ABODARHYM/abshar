@@ -382,6 +382,21 @@ export class PricingService {
       isActive?: boolean;
     },
   ): Promise<ZoneResponseDto> {
+    if (dto.isActive === true) {
+      if (!(await this.repo.isZoneVerifiedForDelivery(id))) {
+        throw new BadRequestException({ code: ErrorCode.ValidationFailed,
+          message: 'لا يمكن تفعيل المنطقة قبل اعتماد حدود التغطية الجغرافية.' });
+      }
+      if ((await this.repo.listActiveDistanceTiers(id)).length === 0) {
+        throw new BadRequestException({ code: ErrorCode.ValidationFailed,
+          message: 'لا يمكن تفعيل المنطقة قبل إدخال شريحة رسوم واحدة على الأقل.' });
+      }
+      const endpoint = process.env.ROUTING_API_URL?.trim();
+      if (!endpoint || !/^https:\/\//i.test(endpoint)) {
+        throw new BadRequestException({ code: ErrorCode.ValidationFailed,
+          message: 'لا يمكن تفعيل التوصيل قبل إعداد مزود موثوق لحساب مسافة الطريق عبر HTTPS.' });
+      }
+    }
     const z = await this.repo.updateZone(id, dto);
     if (!z) {
       throw new NotFoundException({
