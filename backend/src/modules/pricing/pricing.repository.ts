@@ -159,7 +159,7 @@ export class PricingRepository {
        WHERE id = $1 RETURNING id`,
       [input.zoneId, input.geojson ? JSON.stringify(input.geojson) : null, input.status, input.actorId, input.note],
     );
-    return r.rowCount > 0;
+    return r.rows.length > 0;
   }
 
   async listActiveDistanceTiers(zoneId: string): Promise<DistanceTierRow[]> {
