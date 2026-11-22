@@ -124,11 +124,12 @@ export class AddressesService {
       });
     }
 
-    const coordinatesChanged = (dto.latitude !== undefined && dto.latitude !== Number((existing as any).latitude))
-      || (dto.longitude !== undefined && dto.longitude !== Number((existing as any).longitude));
+    const nextLatitude = dto.latitude !== undefined ? dto.latitude : Number(existing.latitude);
+    const nextLongitude = dto.longitude !== undefined ? dto.longitude : Number(existing.longitude);
+    const coordinatesChanged = nextLatitude !== Number(existing.latitude) || nextLongitude !== Number(existing.longitude);
     let nextZoneId = dto.zoneId !== undefined ? dto.zoneId : existing.zone_id;
-    if (coordinatesChanged && dto.latitude !== undefined && dto.longitude !== undefined) {
-      const matched = await this.repo.findVerifiedZoneForPoint(dto.latitude, dto.longitude,
+    if (coordinatesChanged) {
+      const matched = await this.repo.findVerifiedZoneForPoint(nextLatitude, nextLongitude,
         dto.cityId !== undefined ? dto.cityId : existing.city_id);
       if (!matched) {
         throw new BadRequestException({ code: ErrorCode.ValidationFailed,
