@@ -143,14 +143,12 @@ export class AddressesRepository {
        LEFT JOIN districts d ON d.id = z.district_id
        WHERE z.is_active = true AND z.coverage_status = 'verified'
          AND z.coverage_geojson IS NOT NULL AND z.coverage_verified_at IS NOT NULL
-         AND ($3::uuid IS NULL OR z.city_id IS NULL OR z.city_id = $3::uuid)
+         AND ($1::uuid IS NULL OR z.city_id IS NULL OR z.city_id = $1::uuid)
        ORDER BY z.city ASC, z.name_ar ASC`,
-      [latitude, longitude, cityId ?? null],
+      [cityId ?? null],
     );
     const matches = result.rows.filter((row) => pointInGeoJsonCoverage(row.coverage_geojson, longitude, latitude));
-    if (matches.length > 1) {
-      throw new Error('Customer location overlaps multiple verified delivery zones; resolve coverage overlap before saving.');
-    }
+    if (matches.length > 1) return null;
     return matches[0] ?? null;
   }
 
