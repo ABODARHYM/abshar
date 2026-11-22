@@ -34,6 +34,7 @@ interface PricingResult {
   zoneId: string | null;
   zoneName: string | null;
   distanceTierId: string | null;
+  distanceSource: 'routing_api';
 }
 
 @Injectable()
@@ -147,6 +148,7 @@ export class PricingService {
       zoneId: zone.id,
       zoneName: zone.name_ar,
       distanceTierId: tier.id,
+      distanceSource: 'routing_api',
     };
   }
 
