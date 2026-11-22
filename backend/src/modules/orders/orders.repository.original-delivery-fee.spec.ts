@@ -51,5 +51,13 @@ describe('OrdersRepository original delivery fee', () => {
     expect(params[5]).toBe(120);
     expect(params[6]).toBe(0);
     expect(params[7]).toBe(1000);
+    expect(params[17]).toBe(4.2);
+    expect(params[18]).toBe('zone-1');
+    expect(params[19]).toBe('tier-1');
+    expect(params[20]).toBe('routing_api');
+    expect(JSON.parse(String(params[22]))).toMatchObject({
+      distanceKm: 4.2, zoneId: 'zone-1', distanceTierId: 'tier-1',
+      distanceSource: 'routing_api', pricingVersion: 1,
+    });
   });
 });
