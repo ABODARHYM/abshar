@@ -1,6 +1,28 @@
 import { Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { DatabaseService } from '../../database/database.service';
 
+function pricingPointInCoverage(value: unknown, longitude: number, latitude: number): boolean {
+  const geometry = value as { type?: unknown; coordinates?: unknown };
+  if (!geometry || (geometry.type !== 'Polygon' && geometry.type !== 'MultiPolygon')) return false;
+  const polygons: any[] = geometry.type === 'Polygon' ? [geometry.coordinates]
+    : (Array.isArray(geometry.coordinates) ? geometry.coordinates : []);
+  const insideRing = (ring: number[][]): boolean => {
+    let inside = false;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const [xi, yi] = ring[i]; const [xj, yj] = ring[j];
+      const cross = (longitude - xi) * (yj - yi) - (latitude - yi) * (xj - xi);
+      if (Math.abs(cross) < 1e-10 && longitude >= Math.min(xi, xj) - 1e-10
+        && longitude <= Math.max(xi, xj) + 1e-10 && latitude >= Math.min(yi, yj) - 1e-10
+        && latitude <= Math.max(yi, yj) + 1e-10) return true;
+      if (((yi > latitude) !== (yj > latitude))
+        && longitude < ((xj - xi) * (latitude - yi)) / (yj - yi) + xi) inside = !inside;
+    }
+    return inside;
+  };
+  return polygons.some((polygon) => Array.isArray(polygon) && Array.isArray(polygon[0])
+    && insideRing(polygon[0]) && !polygon.slice(1).some((hole: number[][]) => insideRing(hole)));
+}
+
 export interface DistanceTierRow {
   id: string;
   zone_id: string;
@@ -61,39 +83,26 @@ export class PricingRepository {
     latitude?: number;
     longitude?: number;
   }): Promise<ZoneRow | null> {
-    if (params.city) {
-      const r = await this.db.query<ZoneRow>(
-        `
-        SELECT id, city, name_ar, name_en, city_id, district_id,
-               base_delivery_fee, fee_per_km, min_order_amount,
-               free_delivery_threshold, surge_multiplier, fuel_surcharge,
-               is_active
-        FROM delivery_zones
-        WHERE is_active = true AND coverage_status = 'verified' AND coverage_geojson IS NOT NULL AND city = $1
-        ORDER BY base_delivery_fee ASC
-        LIMIT 1
-        `,
-        [params.city],
-      );
-      if (r.rows[0]) return r.rows[0];
-    }
-
-    // Fallback: أول zone نشط
-    const r = await this.db.query<ZoneRow>(
-      `
-      SELECT id, city, name_ar, name_en, city_id, district_id,
-             base_delivery_fee, fee_per_km, min_order_amount,
-             free_delivery_threshold, surge_multiplier, fuel_surcharge,
-             is_active
-      FROM delivery_zones
-      WHERE is_active = true AND coverage_status = 'verified' AND coverage_geojson IS NOT NULL
-      ORDER BY city ASC, base_delivery_fee ASC
-      LIMIT 1
-      `,
+    if (!Number.isFinite(params.latitude) || !Number.isFinite(params.longitude)) return null;
+    const r = await this.db.query<ZoneRow & { coverage_geojson: unknown }>(
+      `SELECT z.id, z.city, z.name_ar, z.name_en, z.city_id, z.district_id,
+              z.base_delivery_fee, z.fee_per_km, z.min_order_amount,
+              z.free_delivery_threshold, z.surge_multiplier, z.fuel_surcharge,
+              z.is_active, z.coverage_geojson
+       FROM delivery_zones z
+       WHERE z.is_active = true AND z.coverage_status = 'verified'
+         AND z.coverage_geojson IS NOT NULL AND z.coverage_verified_at IS NOT NULL
+         AND z.coverage_verified_by IS NOT NULL
+         AND length(trim(coalesce(z.coverage_verification_note, ''))) >= 8
+         AND ($1::text IS NULL OR z.city = $1)
+       ORDER BY z.city ASC, z.name_ar ASC`,
+      [params.city ?? null],
     );
-    return r.rows[0] ?? null;
+    const matches = r.rows.filter((zone) => pricingPointInCoverage(
+      zone.coverage_geojson, params.longitude!, params.latitude!,
+    ));
+    return matches.length === 1 ? matches[0] : null;
   }
-
 
   async findAddressForUser(addressId: string, userId: string): Promise<{
     zone_id: string | null;
