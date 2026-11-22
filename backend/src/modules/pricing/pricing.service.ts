@@ -102,6 +102,15 @@ export class PricingService {
       });
     }
 
+    const coverage = await this.repo.getZoneCoverage(zone.id);
+    if (!coverage || !this.isPointInsideCoverage(coverage, ctx.addressLng, ctx.addressLat)) {
+      throw new BadRequestException({
+        code: ErrorCode.ValidationFailed,
+        message: 'موقع العنوان خارج نطاق التوصيل المعتمد لهذه المنطقة.',
+        details: [{ field: 'addressLocation', constraints: ['outside_verified_delivery_coverage'] }],
+      });
+    }
+
     const distanceKm = Math.round((await this.repo.calculateRouteDistanceKm(
       ctx.storeLat, ctx.storeLng, ctx.addressLat, ctx.addressLng,
     )) * 100) / 100;
@@ -197,6 +206,79 @@ export class PricingService {
     };
   }
 
+
+  async updateZoneCoverage(input: {
+    zoneId: string; geojson: Record<string, unknown> | null;
+    status: 'unverified' | 'verified' | 'rejected'; actorId: string; note: string;
+  }): Promise<{ status: string }> {
+    const zone = await this.repo.getZoneById(input.zoneId);
+    if (!zone) throw new NotFoundException({ code: ErrorCode.NotFound, message: 'Delivery zone not found' });
+    if (input.status === 'verified') {
+      if (!input.geojson || !this.isValidCoverageGeometry(input.geojson)) {
+        throw new BadRequestException({
+          code: ErrorCode.ValidationFailed,
+          message: 'حدود التغطية غير صالحة. استخدم GeoJSON من نوع Polygon أو MultiPolygon بحلقات مغلقة وإحداثيات صحيحة.',
+        });
+      }
+      if (input.note.trim().length < 8) {
+        throw new BadRequestException({ code: ErrorCode.ValidationFailed, message: 'أدخل ملاحظة توثيق لا تقل عن 8 أحرف.' });
+      }
+    }
+    if (input.status === 'rejected' && !input.note.trim()) {
+      throw new BadRequestException({ code: ErrorCode.ValidationFailed, message: 'سبب رفض نطاق التغطية مطلوب.' });
+    }
+    const updated = await this.repo.updateZoneCoverage(input);
+    if (!updated) throw new NotFoundException({ code: ErrorCode.NotFound, message: 'Delivery zone not found' });
+    return { status: 'ok' };
+  }
+
+  private isValidCoverageGeometry(value: Record<string, unknown>): boolean {
+    const geometryType = value.type;
+    const raw = value.coordinates;
+    if (geometryType !== 'Polygon' && geometryType !== 'MultiPolygon') return false;
+    const polygons: unknown[] = geometryType === 'Polygon' ? [raw] : (Array.isArray(raw) ? raw : []);
+    if (!polygons.length) return false;
+    const validPosition = (p: unknown): p is [number, number] =>
+      Array.isArray(p) && p.length >= 2 && Number.isFinite(p[0]) && Number.isFinite(p[1])
+      && p[0] >= -180 && p[0] <= 180 && p[1] >= -90 && p[1] <= 90;
+    for (const polygon of polygons) {
+      if (!Array.isArray(polygon) || polygon.length === 0) return false;
+      for (const ring of polygon) {
+        if (!Array.isArray(ring) || ring.length < 4 || !ring.every(validPosition)) return false;
+        const first = ring[0] as number[], last = ring[ring.length - 1] as number[];
+        if (first[0] !== last[0] || first[1] !== last[1]) return false;
+      }
+    }
+    return true;
+  }
+
+  private isPointInsideCoverage(value: unknown, longitude: number, latitude: number): boolean {
+    if (!Number.isFinite(longitude) || !Number.isFinite(latitude)) return false;
+    const geometry = value as { type?: unknown; coordinates?: unknown };
+    if (!geometry || (geometry.type !== 'Polygon' && geometry.type !== 'MultiPolygon')) return false;
+    const polygons: any[] = geometry.type === 'Polygon'
+      ? [geometry.coordinates]
+      : (Array.isArray(geometry.coordinates) ? geometry.coordinates : []);
+    const insideRing = (ring: number[][]): boolean => {
+      let inside = false;
+      for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+        const [xi, yi] = ring[i]; const [xj, yj] = ring[j];
+        const cross = (longitude - xi) * (yj - yi) - (latitude - yi) * (xj - xi);
+        if (Math.abs(cross) < 1e-10 && longitude >= Math.min(xi, xj) - 1e-10
+          && longitude <= Math.max(xi, xj) + 1e-10 && latitude >= Math.min(yi, yj) - 1e-10
+          && latitude <= Math.max(yi, yj) + 1e-10) return true;
+        const intersects = ((yi > latitude) !== (yj > latitude))
+          && (longitude < ((xj - xi) * (latitude - yi)) / (yj - yi) + xi);
+        if (intersects) inside = !inside;
+      }
+      return inside;
+    };
+    return polygons.some((polygon) => {
+      if (!Array.isArray(polygon) || !Array.isArray(polygon[0])) return false;
+      if (!insideRing(polygon[0])) return false;
+      return !polygon.slice(1).some((hole: number[][]) => insideRing(hole));
+    });
+  }
 
   async listDistanceTiers(zoneId: string): Promise<DistanceTierRow[]> {
     const zone = await this.repo.getZoneById(zoneId);
