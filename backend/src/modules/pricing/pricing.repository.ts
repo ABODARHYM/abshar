@@ -109,6 +109,19 @@ export class PricingRepository {
     );
     return r.rows[0] ?? null;
   }
+  async isZoneVerifiedForDelivery(zoneId: string): Promise<boolean> {
+    const r = await this.db.query<{ eligible: boolean }>(
+      `SELECT EXISTS (
+         SELECT 1 FROM delivery_zones z
+         JOIN districts d ON d.id = z.district_id
+         WHERE z.id = $1 AND z.is_active = true
+           AND COALESCE(to_jsonb(d)->>'source_status', 'legacy_unverified') IN ('verified', 'community_verified')
+       ) AS eligible`,
+      [zoneId],
+    );
+    return r.rows[0]?.eligible === true;
+  }
+
   async listActiveDistanceTiers(zoneId: string): Promise<DistanceTierRow[]> {
     const r = await this.db.query<DistanceTierRow>(
       `SELECT id, zone_id, min_distance_km, max_distance_km, delivery_fee, is_active
@@ -186,8 +199,12 @@ export class PricingRepository {
              base_delivery_fee, fee_per_km, min_order_amount,
              free_delivery_threshold, surge_multiplier, fuel_surcharge,
              is_active
-      FROM delivery_zones
-      WHERE is_active = true
+      FROM delivery_zones z
+      WHERE z.is_active = true
+        AND EXISTS (
+          SELECT 1 FROM districts d WHERE d.id = z.district_id
+            AND COALESCE(to_jsonb(d)->>'source_status', 'legacy_unverified') IN ('verified', 'community_verified')
+        )
       ORDER BY city ASC, name_ar ASC
       `,
     );
