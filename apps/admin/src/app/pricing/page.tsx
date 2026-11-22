@@ -4,7 +4,11 @@ import { FormEvent, useCallback, useEffect, useState } from 'react';
 import AdminHeader from '@/components/AdminHeader';
 import { authFetch } from '@/lib/auth';
 
-type Zone = { id: string; city: string; nameAr: string; nameEn?: string };
+type Zone = {
+  id: string; city: string; nameAr: string; nameEn?: string;
+  district_id?: string | null; district_source_status?: string | null;
+  coverage_status?: 'unverified' | 'verified' | 'rejected'; is_active?: boolean;
+};
 type Tier = {
   id: string; zone_id: string; min_distance_km: string | number;
   max_distance_km: string | number | null; delivery_fee: string | number; is_active: boolean;
@@ -20,12 +24,14 @@ export default function PricingPage() {
   const [form, setForm] = useState({ minDistanceKm: '0', maxDistanceKm: '', deliveryFee: '' });
 
   const loadZones = useCallback(async () => {
-    const response = await authFetch('/api/v1/pricing/zones');
+    const response = await authFetch('/api/v1/pricing/zones/admin');
     if (!response.ok) throw new Error('تعذر تحميل مناطق التوصيل');
     const data = await response.json();
     const rows = Array.isArray(data) ? data : [];
     setZones(rows);
-    if (!zoneId && rows[0]?.id) setZoneId(rows[0].id);
+    const usable = rows.find((zone: Zone) => !zone.district_id
+      || zone.district_source_status === 'verified' || zone.district_source_status === 'community_verified');
+    if ((!zoneId || !rows.some((zone: Zone) => zone.id === zoneId)) && usable?.id) setZoneId(usable.id);
   }, [zoneId]);
 
   const loadTiers = useCallback(async () => {
@@ -94,10 +100,32 @@ export default function PricingPage() {
         <label className="block text-sm font-bold mb-2">مدينة / منطقة التوصيل</label>
         <select className="input w-full" value={zoneId} onChange={(e) => setZoneId(e.target.value)}>
           <option value="">اختر المنطقة</option>
-          {zones.map((z) => <option key={z.id} value={z.id}>{z.city} — {z.nameAr}</option>)}
+          {zones.map((z) => {
+            const legacy = Boolean(z.district_id && z.district_source_status !== 'verified' && z.district_source_status !== 'community_verified');
+            return <option key={z.id} value={z.id} disabled={legacy}>{z.city} — {z.nameAr}{legacy ? ' — سجل قديم غير موثق' : z.coverage_status === 'verified' ? ' — حدود معتمدة' : ' — الحدود غير معتمدة'}</option>;
+          })}
         </select>
-        {!loading && zones.length === 0 && <p className="text-sm text-amber-500 mt-2">لا توجد مناطق توصيل معرفة. أضف المدن والمناطق أولاً.</p>}
+        {!loading && zones.length === 0 && <p className="text-sm text-amber-500 mt-2">لا توجد مناطق تشغيلية. أنشئ منطقة وارسم حدودها من صفحة مناطق التغطية.</p>}
+        {zones.length > 0 && <p className="text-xs text-[var(--text-muted)] mt-2">تظهر السجلات القديمة للقراءة فقط؛ أنشئ مناطق تشغيلية جديدة من صفحة «مناطق التغطية».</p>}
       </section>
+      {zoneId && (() => {
+        const selected = zones.find((z) => z.id === zoneId);
+        const legacy = Boolean(selected?.district_id && selected.district_source_status !== 'verified' && selected.district_source_status !== 'community_verified');
+        return <section className="card p-4 mb-5 flex flex-wrap items-center justify-between gap-3">
+          <div><div className="font-bold">حالة تشغيل المنطقة</div><div className="text-xs text-[var(--text-muted)] mt-1">التغطية: {selected?.coverage_status === 'verified' ? 'معتمدة' : 'غير معتمدة'} — التشغيل: {selected?.is_active ? 'نشط' : 'متوقف'}</div></div>
+          <button type="button" className="btn btn-primary" disabled={saving || legacy || selected?.coverage_status !== 'verified'} onClick={async () => {
+            setSaving(true); setError('');
+            try {
+              const response = await authFetch(`/api/v1/pricing/zones/${zoneId}`, { method: 'PATCH', body: JSON.stringify({ isActive: !selected?.is_active }) });
+              const body = await response.json().catch(() => ({}));
+              if (!response.ok) throw new Error(body.message || 'تعذر تغيير حالة المنطقة');
+              await loadZones();
+            } catch (e) { setError(e instanceof Error ? e.message : 'تعذر تغيير حالة المنطقة'); }
+            finally { setSaving(false); }
+          }}>{selected?.is_active ? 'إيقاف المنطقة' : 'تفعيل المنطقة بعد اكتمال المتطلبات'}</button>
+        </section>;
+      })()}
+
       <section className="card p-4 mb-5">
         <h2 className="font-black mb-3">إضافة شريحة مسافة</h2>
         <form onSubmit={createTier} className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
@@ -106,7 +134,7 @@ export default function PricingPage() {
           <label className="text-sm">رسوم التوصيل<input className="input w-full mt-1" type="number" min="0" step="0.01" required value={form.deliveryFee} onChange={(e) => setForm({ ...form, deliveryFee: e.target.value })} /></label>
           <button className="btn btn-primary" type="submit" disabled={saving || !zoneId || !form.deliveryFee}>{saving ? 'جارٍ الحفظ...' : 'إضافة الشريحة'}</button>
         </form>
-        <p className="text-xs text-[var(--text-muted)] mt-3">المسافات تُحسب تقديرياً بخط مستقيم بين إحداثيات المتجر والعميل. لا تُضاف أسعار افتراضية، ويجب تغطية كامل نطاق الخدمة بشرائح غير متداخلة.</p>
+        <p className="text-xs text-[var(--text-muted)] mt-3">تُحسب الرسوم من مسافة الطريق عبر مزود التوجيه المهيأ. لا تُضاف أسعار افتراضية، ويجب أن تغطي الشرائح المسافات المطلوبة دون تداخل.</p>
       </section>
       <section className="card p-4">
         <h2 className="font-black mb-3">الشرائح المسجلة</h2>
