@@ -20,7 +20,8 @@ describe('OrdersRepository original delivery fee', () => {
       deliveryFee: 0,
       originalDeliveryFee: 120,
       deliveryPricingSnapshot: {
-        distanceKm: 4.2, zoneId: 'zone-1', distanceTierId: 'tier-1',
+        distanceKm: 4.2, zoneId: 'zone-1', zoneName: 'Zone 1', distanceTierId: 'tier-1',
+        distanceTierMinKm: 4, distanceTierMaxKm: 6, distanceTierFee: 120,
         distanceSource: 'routing_api', pricingVersion: 1, currency: 'YER',
         originalDeliveryFee: 120, customerDeliveryFee: 0,
       },
@@ -56,7 +57,8 @@ describe('OrdersRepository original delivery fee', () => {
     expect(params[19]).toBe('tier-1');
     expect(params[20]).toBe('routing_api');
     expect(JSON.parse(String(params[22]))).toMatchObject({
-      distanceKm: 4.2, zoneId: 'zone-1', distanceTierId: 'tier-1',
+      distanceKm: 4.2, zoneId: 'zone-1', zoneName: 'Zone 1', distanceTierId: 'tier-1',
+      distanceTierMinKm: 4, distanceTierMaxKm: 6, distanceTierFee: 120,
       distanceSource: 'routing_api', pricingVersion: 1,
     });
   });
