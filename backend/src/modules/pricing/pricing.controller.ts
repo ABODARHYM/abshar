@@ -21,6 +21,10 @@ import {
 } from '@nestjs/swagger';
 import {
   IsBoolean,
+  IsIn,
+  IsObject,
+  IsString,
+  MinLength,
   IsNumber,
   IsOptional,
   IsUUID,
@@ -113,6 +117,20 @@ class UpdateZoneDto {
 
   @ApiPropertyOptional() @IsOptional() @IsBoolean()
   isActive?: boolean;
+}
+
+class UpdateZoneCoverageDto {
+  @ApiProperty({ enum: ['unverified', 'verified', 'rejected'] })
+  @IsIn(['unverified', 'verified', 'rejected'])
+  status!: 'unverified' | 'verified' | 'rejected';
+
+  @ApiPropertyOptional({ nullable: true, description: 'GeoJSON Polygon or MultiPolygon using [longitude, latitude] positions' })
+  @IsOptional() @IsObject()
+  geojson?: Record<string, unknown> | null;
+
+  @ApiProperty({ minLength: 8 })
+  @IsString() @MinLength(8)
+  note!: string;
 }
 
 class UpdateSettingsDto {
@@ -219,6 +237,20 @@ export class PricingController {
     return this.service.updateZone(id, dto);
   }
 
+
+  @Patch('zones/:id/coverage')
+  @RequirePermission('zones.manage')
+  @ApiOperation({ summary: 'Set and explicitly approve a delivery coverage polygon (admin)' })
+  updateZoneCoverage(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: AuthUser,
+    @Body() dto: UpdateZoneCoverageDto,
+  ) {
+    return this.service.updateZoneCoverage({
+      zoneId: id, geojson: dto.geojson ?? null, status: dto.status,
+      actorId: user.id, note: dto.note,
+    });
+  }
 
   @Get('zones/:id/distance-tiers')
   @RequirePermission('zones.manage')
