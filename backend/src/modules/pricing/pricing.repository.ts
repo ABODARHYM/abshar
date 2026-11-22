@@ -317,11 +317,14 @@ export class PricingRepository {
           origin: { latitude: originLat, longitude: originLng },
           destination: { latitude: destinationLat, longitude: destinationLng },
         }),
+        redirect: 'error',
         signal: AbortSignal.timeout(10000),
       });
       if (!response.ok) throw new Error(`Routing provider returned HTTP ${response.status}`);
       const data = await response.json() as { distanceKm?: unknown };
-      const distance = Number(data?.distanceKm);
+      const rawDistance = data?.distanceKm;
+      const distance = typeof rawDistance === 'number' ? rawDistance
+        : (typeof rawDistance === 'string' && rawDistance.trim() ? Number(rawDistance) : Number.NaN);
       if (!Number.isFinite(distance) || distance < 0 || distance > 500) {
         throw new Error('Routing provider returned an invalid distanceKm');
       }
