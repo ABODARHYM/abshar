@@ -252,6 +252,7 @@ export class OrdersService {
       deliveryPricingSnapshot: {
         distanceKm: pricing.distanceKm,
         zoneId: pricing.zoneId!,
+        zoneName: pricing.zoneName,
         distanceTierId: pricing.distanceTierId!,
         distanceTierMinKm: pricing.distanceTierMinKm,
         distanceTierMaxKm: pricing.distanceTierMaxKm,
