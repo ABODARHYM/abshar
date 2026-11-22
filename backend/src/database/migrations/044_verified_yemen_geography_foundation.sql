@@ -1,6 +1,6 @@
 -- 044: Separate Yemen administrative divisions from delivery localities.
--- Safe, additive migration: preserve all existing IDs and historical address links.
--- No national geography is seeded here until an authoritative source is selected.
+-- Additive and rerunnable: preserve every legacy row, ID, address link and coordinate.
+-- No national geography or delivery coverage is seeded without an authoritative source.
 
 CREATE TABLE IF NOT EXISTS governorates (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -41,19 +41,33 @@ ALTER TABLE districts
   ADD COLUMN IF NOT EXISTS administrative_district_id uuid
     REFERENCES administrative_districts(id) ON DELETE RESTRICT,
   ADD COLUMN IF NOT EXISTS locality_type varchar(24) NOT NULL DEFAULT 'neighborhood',
-  ADD COLUMN IF NOT EXISTS source_status varchar(24) NOT NULL DEFAULT 'legacy_unverified',
-  ADD CONSTRAINT districts_locality_type_check
-    CHECK (locality_type IN ('administrative_district', 'neighborhood', 'locality', 'delivery_zone')),
-  ADD CONSTRAINT districts_source_status_check
-    CHECK (source_status IN ('verified', 'community_verified', 'legacy_unverified', 'imported_unverified'));
+  ADD COLUMN IF NOT EXISTS source_status varchar(24) NOT NULL DEFAULT 'legacy_unverified';
 
 ALTER TABLE areas
   ADD COLUMN IF NOT EXISTS locality_type varchar(24) NOT NULL DEFAULT 'locality',
-  ADD COLUMN IF NOT EXISTS source_status varchar(24) NOT NULL DEFAULT 'legacy_unverified',
-  ADD CONSTRAINT areas_locality_type_check
-    CHECK (locality_type IN ('neighborhood', 'street', 'landmark', 'locality')),
-  ADD CONSTRAINT areas_source_status_check
-    CHECK (source_status IN ('verified', 'community_verified', 'legacy_unverified', 'imported_unverified'));
+  ADD COLUMN IF NOT EXISTS source_status varchar(24) NOT NULL DEFAULT 'legacy_unverified';
+
+-- Add named checks idempotently. PostgreSQL has no ADD CONSTRAINT IF NOT EXISTS.
+DO $migration$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'districts_locality_type_check') THEN
+    ALTER TABLE districts ADD CONSTRAINT districts_locality_type_check
+      CHECK (locality_type IN ('administrative_district', 'neighborhood', 'locality', 'delivery_zone'));
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'districts_source_status_check') THEN
+    ALTER TABLE districts ADD CONSTRAINT districts_source_status_check
+      CHECK (source_status IN ('verified', 'community_verified', 'legacy_unverified', 'imported_unverified'));
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'areas_locality_type_check') THEN
+    ALTER TABLE areas ADD CONSTRAINT areas_locality_type_check
+      CHECK (locality_type IN ('neighborhood', 'street', 'landmark', 'locality'));
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'areas_source_status_check') THEN
+    ALTER TABLE areas ADD CONSTRAINT areas_source_status_check
+      CHECK (source_status IN ('verified', 'community_verified', 'legacy_unverified', 'imported_unverified'));
+  END IF;
+END
+$migration$;
 
 CREATE INDEX IF NOT EXISTS cities_governorate_idx
   ON cities (governorate_id, is_active, sort_order);
@@ -80,24 +94,9 @@ CREATE TABLE IF NOT EXISTS geography_name_aliases (
 CREATE INDEX IF NOT EXISTS geography_name_aliases_lookup_idx
   ON geography_name_aliases (entity_type, normalized_name);
 
--- Migration 019 generated random offsets for Marib area coordinates and used
--- neighborhood names in the districts table. These points are not reliable
--- enough for distance charging. Keep all rows and IDs, but clear only the
--- untrustworthy coordinates; distance calculation must use verified points.
-UPDATE areas a
-SET latitude = NULL, longitude = NULL, source_status = 'legacy_unverified'
-FROM districts d
-JOIN cities c ON c.id = d.city_id
-WHERE a.district_id = d.id
-  AND c.slug = 'marib';
-
-UPDATE districts d
-SET latitude = NULL, longitude = NULL,
-    locality_type = 'neighborhood',
-    source_status = 'legacy_unverified'
-FROM cities c
-WHERE d.city_id = c.id
-  AND c.slug = 'marib';
-
--- Do not auto-apply a fee or create distance tiers. Admins must configure
--- reviewed service areas and distance bands after verified coordinates exist.
+-- Deliberately do not rewrite or clear legacy coordinates. Their provenance is
+-- unverified, so they must not be used for charging until reviewed, but remain
+-- available for historical addresses and existing customer map behavior.
+-- Existing localities stay marked legacy_unverified by the additive defaults.
+-- Do not seed fictional governorates, administrative districts, delivery zones,
+-- coverage geometry, or delivery prices in this migration.
