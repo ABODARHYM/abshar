@@ -5,7 +5,7 @@ import AdminHeader from '@/components/AdminHeader';
 import { authFetch } from '@/lib/auth';
 
 type Zone = {
-  id: string; city: string; nameAr: string; nameEn?: string;
+  id: string; city: string; name_ar: string; name_en?: string;
   district_id?: string | null; district_source_status?: string | null;
   coverage_status?: 'unverified' | 'verified' | 'rejected'; is_active?: boolean;
 };
@@ -102,7 +102,7 @@ export default function PricingPage() {
           <option value="">اختر المنطقة</option>
           {zones.map((z) => {
             const legacy = Boolean(z.district_id && z.district_source_status !== 'verified' && z.district_source_status !== 'community_verified');
-            return <option key={z.id} value={z.id} disabled={legacy}>{z.city} — {z.nameAr}{legacy ? ' — سجل قديم غير موثق' : z.coverage_status === 'verified' ? ' — حدود معتمدة' : ' — الحدود غير معتمدة'}</option>;
+            return <option key={z.id} value={z.id} disabled={legacy}>{z.city} — {z.name_ar}{legacy ? ' — سجل قديم غير موثق' : z.coverage_status === 'verified' ? ' — حدود معتمدة' : ' — الحدود غير معتمدة'}</option>;
           })}
         </select>
         {!loading && zones.length === 0 && <p className="text-sm text-amber-500 mt-2">لا توجد مناطق تشغيلية. أنشئ منطقة وارسم حدودها من صفحة مناطق التغطية.</p>}
