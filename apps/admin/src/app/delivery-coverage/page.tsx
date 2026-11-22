@@ -215,6 +215,7 @@ export default function DeliveryCoveragePage() {
           </label>
         </div>
         {selectedZoneIsLegacy && <p className="text-sm text-amber-600 mb-3">هذا سجل قديم مرتبط بحي غير موثق، ولن يسمح النظام باعتماده. أنشئ منطقة جديدة مستقلة عنه.</p>}
+        {selectedZone?.is_active && <p className="text-sm text-amber-600 mb-3">أوقف المنطقة من صفحة تعرفة التوصيل أولاً قبل تعديل حدودها. إلغاء الاعتماد يوقفها تلقائياً.</p>}
         <div className="flex flex-wrap gap-2 mb-3">
           <button type="button" className="btn" onClick={() => setPoints((current) => current.slice(0, -1))} disabled={!points.length}>تراجع عن آخر نقطة</button>
           <button type="button" className="btn" onClick={() => setPoints([])} disabled={!points.length}>مسح الرسم</button>
@@ -222,7 +223,7 @@ export default function DeliveryCoveragePage() {
         </div>
         <div ref={mapElement} className="w-full rounded-xl border border-[var(--bg-border)]" style={{ height: 440, zIndex: 0 }} />
         <div className="flex flex-wrap gap-2 mt-3">
-          <button type="button" className="btn btn-primary" onClick={saveCoverage} disabled={saving || points.length < 3 || !zoneId || selectedZoneIsLegacy}>
+          <button type="button" className="btn btn-primary" onClick={saveCoverage} disabled={saving || points.length < 3 || !zoneId || selectedZoneIsLegacy || selectedZone?.is_active}>
             {saving ? 'جارٍ الحفظ...' : 'اعتماد حدود التغطية'}
           </button>
           {selectedZone?.coverage_status === 'verified' && <button type="button" className="btn text-red-500" onClick={revokeCoverage} disabled={saving}>إلغاء اعتماد التغطية</button>}
