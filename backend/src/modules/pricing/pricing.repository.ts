@@ -8,8 +8,6 @@ export interface DistanceTierRow {
   max_distance_km: string | number | null;
   delivery_fee: string | number;
   is_active: boolean;
-  coverage_geojson?: unknown | null;
-  coverage_status?: 'unverified' | 'verified' | 'rejected';
 }
 
 export interface ZoneRow {
@@ -26,6 +24,8 @@ export interface ZoneRow {
   surge_multiplier: string | number;
   fuel_surcharge: string | number;
   is_active: boolean;
+  coverage_geojson?: unknown | null;
+  coverage_status?: 'unverified' | 'verified' | 'rejected';
 }
 
 @Injectable()
@@ -67,7 +67,7 @@ export class PricingRepository {
                free_delivery_threshold, surge_multiplier, fuel_surcharge,
                is_active
         FROM delivery_zones
-        WHERE is_active = true AND city = $1
+        WHERE is_active = true AND coverage_status = 'verified' AND coverage_geojson IS NOT NULL AND city = $1
         ORDER BY base_delivery_fee ASC
         LIMIT 1
         `,
@@ -84,7 +84,7 @@ export class PricingRepository {
              free_delivery_threshold, surge_multiplier, fuel_surcharge,
              is_active
       FROM delivery_zones
-      WHERE is_active = true
+      WHERE is_active = true AND coverage_status = 'verified' AND coverage_geojson IS NOT NULL
       ORDER BY city ASC, base_delivery_fee ASC
       LIMIT 1
       `,
