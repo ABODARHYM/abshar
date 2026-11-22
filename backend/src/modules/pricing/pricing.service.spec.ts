@@ -18,19 +18,22 @@ describe('PricingService distance-tier pricing', () => {
   };
 
   function makeService(tiers: any[] = [{
-    id: 'tier-2-5', zone_id: 'zone-1', min_distance_km: 2,
-    max_distance_km: 5, delivery_fee: 700, is_active: true,
+    id: 'tier-2-4', zone_id: 'zone-1', min_distance_km: 2,
+    max_distance_km: 4, delivery_fee: 700, is_active: true,
   }], zoneOverride: any = zone) {
     const repo = {
       getZoneById: jest.fn().mockResolvedValue(zoneOverride),
       isZoneVerifiedForDelivery: jest.fn().mockResolvedValue(true),
       getZoneCoverage: jest.fn().mockResolvedValue({"type":"Polygon","coordinates":[[[45.3,15.4],[45.32,15.4],[45.32,15.42],[45.3,15.42],[45.3,15.4]]]}),
-      calculateRouteDistanceKm: jest.fn().mockResolvedValue(4.2),
+      calculateRouteDistanceKm: jest.fn().mockResolvedValue(3.2),
       listActiveDistanceTiers: jest.fn().mockResolvedValue(tiers),
       getPricingSettings: jest.fn().mockResolvedValue({}),
       findAddressForUser: jest.fn().mockResolvedValue({ zone_id: 'zone-1', latitude: 15.41, longitude: 45.31 }),
       updateZoneCoverage: jest.fn().mockResolvedValue(true),
       updateZone: jest.fn().mockResolvedValue({ ...zone, is_active: true }),
+      getDistanceTierById: jest.fn().mockResolvedValue({ id: 'tier-2-4', zone_id: 'zone-1', min_distance_km: 2, max_distance_km: 4, delivery_fee: 700, is_active: true }),
+      createDistanceTier: jest.fn().mockResolvedValue({ id: 'tier-0-2', zone_id: 'zone-1', min_distance_km: 0, max_distance_km: 2, delivery_fee: 300, is_active: true }),
+      updateDistanceTier: jest.fn().mockResolvedValue({ id: 'tier-2-4', zone_id: 'zone-1', min_distance_km: 2, max_distance_km: 4, delivery_fee: 700, is_active: true }),
     };
     return { service: new PricingService(repo as any), repo };
   }
@@ -59,7 +62,7 @@ describe('PricingService distance-tier pricing', () => {
     const result = await service.calculate(context);
     expect(result.deliveryFee).toBe(700);
     expect(result.originalDeliveryFee).toBe(700);
-    expect(result.distanceKm).toBe(4.2);
+    expect(result.distanceKm).toBe(3.2);
     expect(result.distanceTierId).toBe('tier-2-5');
     expect(result.zoneId).toBe('zone-1');
     expect(result.source).toBe('zone');
@@ -165,13 +168,34 @@ describe('PricingService distance-tier pricing', () => {
     await expect(service.calculate(context)).rejects.toBeInstanceOf(BadRequestException);
   });
 
-  it('uses the next tier at an exact upper boundary', async () => {
+  it('keeps an exact upper boundary in the lower approved band', async () => {
     const { service, repo } = makeService([
-      { id: 'tier-a', zone_id: 'zone-1', min_distance_km: 0, max_distance_km: 4.2, delivery_fee: 500, is_active: true },
-      { id: 'tier-b', zone_id: 'zone-1', min_distance_km: 4.2, max_distance_km: null, delivery_fee: 900, is_active: true },
+      { id: 'tier-2-4', zone_id: 'zone-1', min_distance_km: 2, max_distance_km: 4, delivery_fee: 500, is_active: true },
+      { id: 'tier-4-6', zone_id: 'zone-1', min_distance_km: 4, max_distance_km: 6, delivery_fee: 900, is_active: true },
     ]);
+    repo.calculateRouteDistanceKm.mockResolvedValue(4);
+    const result = await service.calculate(context);
+    expect(result.deliveryFee).toBe(500);
+    expect(result.distanceTierId).toBe('tier-2-4');
+    expect(repo.listActiveDistanceTiers).toHaveBeenCalledWith('zone-1');
+  });
+
+  it('moves to the next approved band immediately above an upper boundary', async () => {
+    const { service, repo } = makeService([
+      { id: 'tier-2-4', zone_id: 'zone-1', min_distance_km: 2, max_distance_km: 4, delivery_fee: 500, is_active: true },
+      { id: 'tier-4-6', zone_id: 'zone-1', min_distance_km: 4, max_distance_km: 6, delivery_fee: 900, is_active: true },
+    ]);
+    repo.calculateRouteDistanceKm.mockResolvedValue(4.01);
     const result = await service.calculate(context);
     expect(result.deliveryFee).toBe(900);
-    expect(repo.listActiveDistanceTiers).toHaveBeenCalledWith('zone-1');
+    expect(result.distanceTierId).toBe('tier-4-6');
+  });
+
+  it('accepts only the six approved distance band boundaries', async () => {
+    const { service, repo } = makeService();
+    await service.createDistanceTier({ zoneId: 'zone-1', minDistanceKm: 0, maxDistanceKm: 2, deliveryFee: 300 });
+    expect(repo.createDistanceTier).toHaveBeenCalledWith({ zoneId: 'zone-1', minDistanceKm: 0, maxDistanceKm: 2, deliveryFee: 300 });
+    await expect(service.createDistanceTier({ zoneId: 'zone-1', minDistanceKm: 2, maxDistanceKm: 5, deliveryFee: 500 }))
+      .rejects.toBeInstanceOf(BadRequestException);
   });
 });
