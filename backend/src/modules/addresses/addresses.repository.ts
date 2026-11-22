@@ -124,6 +124,8 @@ export class AddressesRepository {
        LEFT JOIN districts d ON d.id = z.district_id
        WHERE z.id = $1 AND z.is_active = true AND z.coverage_status = 'verified'
          AND z.coverage_geojson IS NOT NULL AND z.coverage_verified_at IS NOT NULL
+         AND z.coverage_verified_by IS NOT NULL
+         AND length(trim(coalesce(z.coverage_verification_note, ''))) >= 8
        LIMIT 1`, [zoneId],
     );
     return result.rows[0] ?? null;
@@ -143,6 +145,8 @@ export class AddressesRepository {
        LEFT JOIN districts d ON d.id = z.district_id
        WHERE z.is_active = true AND z.coverage_status = 'verified'
          AND z.coverage_geojson IS NOT NULL AND z.coverage_verified_at IS NOT NULL
+         AND z.coverage_verified_by IS NOT NULL
+         AND length(trim(coalesce(z.coverage_verification_note, ''))) >= 8
          AND ($1::uuid IS NULL OR z.city_id IS NULL OR z.city_id = $1::uuid)
        ORDER BY z.city ASC, z.name_ar ASC`,
       [cityId ?? null],
@@ -165,6 +169,8 @@ export class AddressesRepository {
             SELECT 1 FROM delivery_zones z
             WHERE z.id = $4 AND z.is_active = true AND z.coverage_status = 'verified'
               AND z.coverage_geojson IS NOT NULL AND z.coverage_verified_at IS NOT NULL
+              AND z.coverage_verified_by IS NOT NULL
+              AND length(trim(coalesce(z.coverage_verification_note, ''))) >= 8
               AND (z.city_id IS NULL OR $1::uuid IS NULL OR z.city_id = $1::uuid)
               AND (z.district_id IS NULL OR $2::uuid IS NULL OR z.district_id = $2::uuid)
           )
