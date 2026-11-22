@@ -226,6 +226,10 @@ export class PricingService {
     const zone = await this.repo.getZoneById(input.zoneId);
     if (!zone) throw new NotFoundException({ code: ErrorCode.NotFound, message: 'Delivery zone not found' });
     if (input.status === 'verified') {
+      if (zone.is_active) {
+        throw new BadRequestException({ code: ErrorCode.ValidationFailed,
+          message: 'أوقف المنطقة أولاً قبل تعديل حدودها أو إعادة اعتمادها.' });
+      }
       if (zone.district_id && zone.district_source_status !== 'verified' && zone.district_source_status !== 'community_verified') {
         throw new BadRequestException({
           code: ErrorCode.ValidationFailed,
