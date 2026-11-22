@@ -166,11 +166,16 @@ export class AddressesService {
         });
       }
     } else if (nextCityId || nextDistrictId || nextAreaId) {
-      throw new BadRequestException({
-        code: ErrorCode.ValidationFailed,
-        message: 'يجب تحديد منطقة التوصيل المتوافقة مع العنوان.',
-        details: [{ field: 'zoneId', constraints: ['required with geographic fields'] }],
+      const valid = await this.repo.validateAddressGeographyWithoutZone({
+        cityId: nextCityId, districtId: nextDistrictId, areaId: nextAreaId,
       });
+      if (!valid) {
+        throw new BadRequestException({
+          code: ErrorCode.ValidationFailed,
+          message: 'البيانات الجغرافية غير موثقة أو غير متطابقة.',
+          details: [{ field: 'geography', constraints: ['unverified or mismatched locality'] }],
+        });
+      }
     }
 
     const updateInput: AddressInput = nextZoneId
