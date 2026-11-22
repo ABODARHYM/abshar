@@ -34,6 +34,9 @@ interface PricingResult {
   zoneId: string | null;
   zoneName: string | null;
   distanceTierId: string | null;
+  distanceTierMinKm: number;
+  distanceTierMaxKm: number | null;
+  distanceTierFee: number;
   distanceSource: 'routing_api';
 }
 
@@ -165,6 +168,9 @@ export class PricingService {
       zoneId: zone.id,
       zoneName: zone.name_ar,
       distanceTierId: tier.id,
+      distanceTierMinKm: Number(tier.min_distance_km),
+      distanceTierMaxKm: tier.max_distance_km === null ? null : Number(tier.max_distance_km),
+      distanceTierFee: tierFee,
       distanceSource: 'routing_api',
     };
   }
