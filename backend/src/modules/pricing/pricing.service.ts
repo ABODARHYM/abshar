@@ -435,15 +435,9 @@ export class PricingService {
           message: 'لا يمكن تفعيل المنطقة قبل اعتماد حدود التغطية الجغرافية.' });
       }
       const activeTiers = await this.repo.listActiveDistanceTiers(id);
-      const configuredBands = new Set(activeTiers.map((tier) =>
-        `${Number(tier.min_distance_km)}-${tier.max_distance_km === null ? 'open' : Number(tier.max_distance_km)}`,
-      ));
-      const missingBands = APPROVED_DISTANCE_BANDS.filter((band) =>
-        !configuredBands.has(`${band.min}-${band.max === null ? 'open' : band.max}`),
-      );
-      if (missingBands.length > 0) {
+      if (activeTiers.length === 0) {
         throw new BadRequestException({ code: ErrorCode.ValidationFailed,
-          message: 'لا يمكن تفعيل المنطقة قبل إعداد رسوم الشرائح الست كاملة دون نقص.' });
+          message: 'لا يمكن تفعيل المنطقة قبل إعداد شريحة رسوم نشطة واحدة على الأقل.' });
       }
       const routingStatus = this.getRoutingProviderStatus();
       if (!routingStatus.configured) {
