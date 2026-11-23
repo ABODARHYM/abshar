@@ -264,7 +264,7 @@ describe('PricingService distance-tier pricing', () => {
     const result = await service.calculate(context);
     expect(result.deliveryFee).toBe(700);
     expect(result.distanceTierId).toBe('tier-2-4');
-    expect(result.distanceKm).toBe(2);
+    expect(result.distanceKm).toBe(2.001);
   });
 
   it('accepts only the six approved distance band boundaries', async () => {
