@@ -7,6 +7,7 @@ on:
       - fix/verified-geography-api-20261123
       - fix/admin-geography-city-access-20261123
       - fix/pricing-coverage-status-param-20261123
+      - fix/require-complete-distance-bands-20261123
   pull_request:
     branches:
       - main
