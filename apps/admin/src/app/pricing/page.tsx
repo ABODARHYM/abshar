@@ -109,6 +109,20 @@ export default function PricingPage() {
     await loadTiers();
   };
 
+  const reactivate = async (id: string) => {
+    setSaving(true); setError('');
+    try {
+      const response = await authFetch(`/api/v1/pricing/distance-tiers/${id}`, {
+        method: 'PATCH', body: JSON.stringify({ isActive: true }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.message || 'تعذر إعادة تفعيل الشريحة؛ تحقق من عدم تداخلها مع شريحة نشطة.');
+      await loadTiers();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'تعذر إعادة تفعيل الشريحة');
+    } finally { setSaving(false); }
+  };
+
   return (
     <div style={{ padding: '24px', maxWidth: 1100, margin: '0 auto' }}>
       <AdminHeader title="🚚 تعرفة التوصيل" subtitle="شرائح المسافة لكل مدينة ومنطقة" />
@@ -184,7 +198,11 @@ export default function PricingPage() {
                 <td className="p-2">{t.max_distance_km === null ? 'مفتوح' : Number(t.max_distance_km).toFixed(2)}</td>
                 <td className="p-2 font-bold">{Number(t.delivery_fee).toLocaleString('ar-YE')}</td>
                 <td className="p-2">{t.is_active ? 'نشطة' : 'متوقفة'}</td>
-                <td className="p-2">{t.is_active && <button className="text-red-500 font-bold" onClick={() => deactivate(t.id)}>إيقاف</button>}</td>
+                <td className="p-2">
+                  {t.is_active
+                    ? <button className="text-red-500 font-bold" disabled={saving} onClick={() => deactivate(t.id)}>إيقاف</button>
+                    : <button className="text-emerald-600 font-bold" disabled={saving} onClick={() => reactivate(t.id)}>إعادة تفعيل</button>}
+                </td>
               </tr>)}</tbody>
             </table>
           </div>
