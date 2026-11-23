@@ -469,10 +469,10 @@ export class PricingService {
     const apiKey = process.env.ROUTING_API_KEY?.trim();
     try {
       const parsed = new URL(endpoint ?? '');
-      const configured = parsed.protocol === 'https:'
-        && parsed.hostname === 'api.heigit.org'
+      const configured = parsed.origin === 'https://api.heigit.org'
         && parsed.pathname === '/openrouteservice/v2/directions/driving-car/json'
-        && !parsed.username && !parsed.password && Boolean(apiKey);
+        && !parsed.username && !parsed.password && !parsed.search && !parsed.hash
+        && Boolean(apiKey);
       return { provider: 'openrouteservice', configured, protocol: configured ? 'https' : 'missing_or_invalid' };
     } catch {
       return { provider: 'openrouteservice', configured: false, protocol: 'missing_or_invalid' };
