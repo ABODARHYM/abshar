@@ -30,6 +30,17 @@ describe('GeographyRepository verified public geography', () => {
     expect(db.query.mock.calls[0][1]).toEqual(['governorate-1']);
   });
 
+  it('scopes city selection to the requested active, sourced governorate', async () => {
+    await repository.listCitiesByGovernorate('governorate-1');
+    const [sql, params] = db.query.mock.calls[0] as [string, unknown[]];
+    expect(sql).toContain('c.governorate_id = $1');
+    expect(sql).toContain('g.is_active = true');
+    expect(sql).toContain("NULLIF(BTRIM(g.source_name), '') IS NOT NULL");
+    expect(sql).toContain("NULLIF(BTRIM(g.source_url), '') IS NOT NULL");
+    expect(sql).toContain('g.source_updated_at IS NOT NULL');
+    expect(params).toEqual(['governorate-1']);
+  });
+
   it('does not expose legacy cities without an active, sourced governorate', async () => {
     await repository.listCities();
     await repository.findCity('city-1');
