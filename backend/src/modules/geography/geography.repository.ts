@@ -84,6 +84,22 @@ export class GeographyRepository {
     return r.rows;
   }
 
+  async listCitiesByGovernorate(governorateId: string): Promise<CityRow[]> {
+    const r = await this.db.query<CityRow>(
+      `SELECT c.id, c.country_code, c.name_ar, c.name_en, c.slug,
+              c.latitude, c.longitude, c.timezone, c.is_active, c.sort_order
+       FROM cities c
+       JOIN governorates g ON g.id = c.governorate_id
+       WHERE c.governorate_id = $1 AND c.is_active = true AND g.is_active = true
+         AND NULLIF(BTRIM(g.source_name), '') IS NOT NULL
+         AND NULLIF(BTRIM(g.source_url), '') IS NOT NULL
+         AND g.source_updated_at IS NOT NULL
+       ORDER BY c.sort_order ASC, c.name_ar ASC`,
+      [governorateId],
+    );
+    return r.rows;
+  }
+
   async findCity(id: string): Promise<CityRow | null> {
     const r = await this.db.query<CityRow>(
       `SELECT c.id, c.country_code, c.name_ar, c.name_en, c.slug,
