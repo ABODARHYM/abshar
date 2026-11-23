@@ -99,7 +99,9 @@ describe('PricingService distance-tier pricing', () => {
 
   it('allows activation with at least one active approved distance tier and secure routing', async () => {
     const previous = process.env.ROUTING_API_URL;
-    process.env.ROUTING_API_URL = 'https://routing.example.test/route';
+    const previousKey = process.env.ROUTING_API_KEY;
+    process.env.ROUTING_API_URL = 'https://api.heigit.org/openrouteservice/v2/directions/driving-car/json';
+    process.env.ROUTING_API_KEY = 'test-api-key';
     try {
       const { service, repo } = makeService([{
         id: 'tier-0-2', zone_id: 'zone-1', min_distance_km: 0,
@@ -110,6 +112,8 @@ describe('PricingService distance-tier pricing', () => {
     } finally {
       if (previous === undefined) delete process.env.ROUTING_API_URL;
       else process.env.ROUTING_API_URL = previous;
+      if (previousKey === undefined) delete process.env.ROUTING_API_KEY;
+      else process.env.ROUTING_API_KEY = previousKey;
     }
   });
 
