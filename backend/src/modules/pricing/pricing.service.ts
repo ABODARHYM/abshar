@@ -342,7 +342,7 @@ export class PricingService {
     if (!zone) {
       throw new NotFoundException({ code: ErrorCode.NotFound, message: 'Delivery zone not found' });
     }
-    return this.repo.listActiveDistanceTiers(zoneId);
+    return this.repo.listDistanceTiers(zoneId);
   }
 
   async createDistanceTier(input: {
