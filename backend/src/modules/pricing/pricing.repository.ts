@@ -317,8 +317,9 @@ export class PricingRepository {
 
   /**
    * Road distance from the configured routing provider.
-   * ROUTING_API_URL must implement POST {origin:{latitude,longitude},destination:{latitude,longitude}}
-   * and return {distanceKm:number}. No straight-line fallback is permitted for charging.
+   * ROUTING_API_URL must be the HeiGIT ORS driving-car JSON directions endpoint.
+   * Sends [longitude, latitude] coordinates and reads routes[0].summary.distance in meters.
+   * No straight-line fallback is permitted for charging.
    */
   async calculateRouteDistanceKm(
     originLat: number, originLng: number, destinationLat: number, destinationLng: number,
