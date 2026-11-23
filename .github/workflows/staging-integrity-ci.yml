@@ -7,6 +7,7 @@ on:
   pull_request:
     branches:
       - main
+      - fix/staging-integrity-completion-20261120
 
 permissions:
   contents: read
