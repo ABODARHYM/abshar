@@ -135,7 +135,7 @@ export class PricingRepository {
     const r = await this.db.query<{ eligible: boolean }>(
       `SELECT EXISTS (
          SELECT 1 FROM delivery_zones z
-         WHERE z.id = $1 AND z.is_active = true
+         WHERE z.id = $1
            AND z.coverage_status = 'verified' AND z.coverage_geojson IS NOT NULL
            AND z.coverage_verified_at IS NOT NULL AND z.coverage_verified_by IS NOT NULL
            AND length(trim(coalesce(z.coverage_verification_note, ''))) >= 8
