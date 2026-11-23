@@ -8,8 +8,9 @@ describe('PricingRepository road routing provider', () => {
   let fetchMock: jest.Mock;
 
   beforeEach(() => {
-    process.env.ROUTING_API_URL = 'https://routing.example.test/route';
-    delete process.env.ROUTING_API_KEY;
+    process.env.ROUTING_API_URL = 'https://api.heigit.org/openrouteservice/v2/directions/driving-car/json';
+    process.env.ROUTING_API_KEY = 'test-api-key';
+    process.env.ROUTING_API_KEY = 'test-api-key';
     fetchMock = jest.fn();
     global.fetch = fetchMock as unknown as typeof fetch;
   });
@@ -26,19 +27,17 @@ describe('PricingRepository road routing provider', () => {
   const repository = () => new PricingRepository({} as any);
 
   it('uses the configured HTTPS route endpoint and returns its road distance', async () => {
-    fetchMock.mockResolvedValue(new Response(JSON.stringify({ distanceKm: 4.25 }), {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ routes: [{ summary: { distance: 4250 } }] }), {
       status: 200, headers: { 'content-type': 'application/json' },
     }));
     await expect(repository().calculateRouteDistanceKm(15.4, 45.3, 15.41, 45.31)).resolves.toBe(4.25);
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url, options] = fetchMock.mock.calls[0];
-    expect(String(url)).toBe('https://routing.example.test/route');
+    expect(String(url)).toBe('https://api.heigit.org/openrouteservice/v2/directions/driving-car/json');
     expect(options).toEqual(expect.objectContaining({
       method: 'POST', redirect: 'error',
-      body: JSON.stringify({
-        origin: { latitude: 15.4, longitude: 45.3 },
-        destination: { latitude: 15.41, longitude: 45.31 },
-      }),
+      headers: { 'content-type': 'application/json', authorization: 'test-api-key' },
+      body: JSON.stringify({ coordinates: [[45.3, 15.4], [45.31, 15.41]], units: 'm' }),
     }));
   });
 
@@ -52,7 +51,7 @@ describe('PricingRepository road routing provider', () => {
   it.each([null, ' ', -1, 501, 'not-a-number'])(
     'rejects malformed or out-of-range route distance %s',
     async (distanceKm) => {
-      fetchMock.mockResolvedValue(new Response(JSON.stringify({ distanceKm }), {
+      fetchMock.mockResolvedValue(new Response(JSON.stringify({ routes: [{ summary: { distance: typeof distanceKm === 'number' ? distanceKm * 1000 : distanceKm } }] }), {
         status: 200, headers: { 'content-type': 'application/json' },
       }));
       await expect(repository().calculateRouteDistanceKm(15.4, 45.3, 15.41, 45.31))
