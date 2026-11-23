@@ -27,6 +27,11 @@ export interface AreaRow {
 export class GeographyRepository {
   constructor(private readonly db: DatabaseService) {}
 
+export interface AdminCityRow extends CityRow {
+  governorate_id: string | null;
+  geography_status: 'verified' | 'legacy_unverified';
+}
+
   /**
    * Public administrative geography is exposed only when an active record has
    * complete source provenance. Empty/unverified staging tables stay empty;
@@ -69,6 +74,28 @@ export class GeographyRepository {
    * governorate. Legacy operational cities without that link remain in the
    * database for historical/address and delivery-zone references.
    */
+  /**
+   * Admin-only list for operational setup. Active legacy cities remain selectable
+   * by authorized operators without becoming visible in public geography APIs.
+   */
+  async listCitiesForAdmin(): Promise<AdminCityRow[]> {
+    const r = await this.db.query<AdminCityRow>(
+      `SELECT c.id, c.country_code, c.name_ar, c.name_en, c.slug,
+              c.latitude, c.longitude, c.timezone, c.is_active, c.sort_order,
+              c.governorate_id,
+              CASE WHEN g.id IS NOT NULL AND g.is_active = true
+                AND NULLIF(BTRIM(g.source_name), '') IS NOT NULL
+                AND NULLIF(BTRIM(g.source_url), '') IS NOT NULL
+                AND g.source_updated_at IS NOT NULL
+                THEN 'verified' ELSE 'legacy_unverified' END AS geography_status
+       FROM cities c
+       LEFT JOIN governorates g ON g.id = c.governorate_id
+       WHERE c.is_active = true
+       ORDER BY c.sort_order ASC, c.name_ar ASC`,
+    );
+    return r.rows;
+  }
+
   async listCities(): Promise<CityRow[]> {
     const r = await this.db.query<CityRow>(
       `SELECT c.id, c.country_code, c.name_ar, c.name_en, c.slug,
