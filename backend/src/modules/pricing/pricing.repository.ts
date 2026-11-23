@@ -336,8 +336,9 @@ export class PricingRepository {
       throw new ServiceUnavailableException({ code: 'ROUTING_CONFIG_INVALID', message: 'إعداد خدمة التوجيه غير صالح.' });
     }
     const apiKey = process.env.ROUTING_API_KEY?.trim();
-    if (url.protocol !== 'https:' || url.hostname !== 'api.heigit.org'
-        || url.pathname !== '/openrouteservice/v2/directions/driving-car/json' || !apiKey) {
+    if (url.origin !== 'https://api.heigit.org'
+        || url.pathname !== '/openrouteservice/v2/directions/driving-car/json'
+        || url.username || url.password || url.search || url.hash || !apiKey) {
       throw new ServiceUnavailableException({
         code: 'ROUTING_CONFIG_INVALID',
         message: 'يجب إعداد عنوان ORS الرسمي ومفتاح API صالحين عبر إعدادات الخدمة.',
