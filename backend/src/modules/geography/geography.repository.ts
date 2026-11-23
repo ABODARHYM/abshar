@@ -22,15 +22,14 @@ export interface AreaRow {
   latitude: string | number | null; longitude: string | number | null;
   is_active: boolean; sort_order: number;
 }
-
-@Injectable()
-export class GeographyRepository {
-  constructor(private readonly db: DatabaseService) {}
-
 export interface AdminCityRow extends CityRow {
   governorate_id: string | null;
   geography_status: 'verified' | 'legacy_unverified';
 }
+
+@Injectable()
+export class GeographyRepository {
+  constructor(private readonly db: DatabaseService) {}
 
   /**
    * Public administrative geography is exposed only when an active record has
@@ -70,11 +69,6 @@ export interface AdminCityRow extends CityRow {
   }
 
   /**
-   * A selectable city must be explicitly attached to an active, sourced
-   * governorate. Legacy operational cities without that link remain in the
-   * database for historical/address and delivery-zone references.
-   */
-  /**
    * Admin-only list for operational setup. Active legacy cities remain selectable
    * by authorized operators without becoming visible in public geography APIs.
    */
@@ -96,6 +90,11 @@ export interface AdminCityRow extends CityRow {
     return r.rows;
   }
 
+  /**
+   * A selectable city must be explicitly attached to an active, sourced
+   * governorate. Legacy operational cities without that link remain in the
+   * database for historical/address and delivery-zone references.
+   */
   async listCities(): Promise<CityRow[]> {
     const r = await this.db.query<CityRow>(
       `SELECT c.id, c.country_code, c.name_ar, c.name_en, c.slug,
