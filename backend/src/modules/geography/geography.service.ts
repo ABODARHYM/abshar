@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { ErrorCode } from '../../common/error-codes';
 import {
-  AdministrativeDistrictRow, AreaRow, CityRow, DistrictRow, GeographyRepository, GovernorateRow,
+  AdminCityRow, AdministrativeDistrictRow, AreaRow, CityRow, DistrictRow, GeographyRepository, GovernorateRow,
 } from './geography.repository';
 import {
   AdministrativeDistrictResponseDto, AreaResponseDto, CityResponseDto,
@@ -31,6 +31,16 @@ export class GeographyService {
       throw new NotFoundException({ code: ErrorCode.NotFound, message: 'Governorate not found or not verified' });
     }
     return (await this.repo.listCitiesByGovernorate(governorateId)).map((c) => this.toCity(c));
+  }
+
+  async listCitiesForAdmin(): Promise<Array<CityResponseDto & {
+    governorateId: string | null; geographyStatus: 'verified' | 'legacy_unverified';
+  }>> {
+    return (await this.repo.listCitiesForAdmin()).map((c: AdminCityRow) => ({
+      ...this.toCity(c),
+      governorateId: c.governorate_id,
+      geographyStatus: c.geography_status,
+    }));
   }
 
   async listCities(): Promise<CityResponseDto[]> {

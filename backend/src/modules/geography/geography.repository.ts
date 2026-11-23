@@ -22,6 +22,10 @@ export interface AreaRow {
   latitude: string | number | null; longitude: string | number | null;
   is_active: boolean; sort_order: number;
 }
+export interface AdminCityRow extends CityRow {
+  governorate_id: string | null;
+  geography_status: 'verified' | 'legacy_unverified';
+}
 
 @Injectable()
 export class GeographyRepository {
@@ -60,6 +64,28 @@ export class GeographyRepository {
          AND g.source_updated_at IS NOT NULL
        ORDER BY ad.sort_order ASC, ad.name_ar ASC`,
       [governorateId],
+    );
+    return r.rows;
+  }
+
+  /**
+   * Admin-only list for operational setup. Active legacy cities remain selectable
+   * by authorized operators without becoming visible in public geography APIs.
+   */
+  async listCitiesForAdmin(): Promise<AdminCityRow[]> {
+    const r = await this.db.query<AdminCityRow>(
+      `SELECT c.id, c.country_code, c.name_ar, c.name_en, c.slug,
+              c.latitude, c.longitude, c.timezone, c.is_active, c.sort_order,
+              c.governorate_id,
+              CASE WHEN g.id IS NOT NULL AND g.is_active = true
+                AND NULLIF(BTRIM(g.source_name), '') IS NOT NULL
+                AND NULLIF(BTRIM(g.source_url), '') IS NOT NULL
+                AND g.source_updated_at IS NOT NULL
+                THEN 'verified' ELSE 'legacy_unverified' END AS geography_status
+       FROM cities c
+       LEFT JOIN governorates g ON g.id = c.governorate_id
+       WHERE c.is_active = true
+       ORDER BY c.sort_order ASC, c.name_ar ASC`,
     );
     return r.rows;
   }

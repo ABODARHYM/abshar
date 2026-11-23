@@ -1,6 +1,9 @@
-import { Controller, Get, Param, ParseUUIDPipe, Query } from '@nestjs/common';
+import { Controller, Get, Param, ParseUUIDPipe, Query, UseGuards } from '@nestjs/common';
 import { ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { GeographyService } from './geography.service';
+import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
+import { PermissionsGuard } from '../../auth/guards/permissions.guard';
+import { RequirePermission } from '../../auth/decorators/require-permission.decorator';
 
 @ApiTags('geography')
 @Controller('geography')
@@ -22,6 +25,12 @@ export class GeographyController {
   listCitiesByGovernorate(@Param('id', ParseUUIDPipe) id: string) {
     return this.service.listCitiesByGovernorate(id);
   }
+
+  @Get('admin/cities')
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission('zones.manage')
+  @ApiOperation({ summary: 'List active cities for authorized operational setup, including legacy unverified records' })
+  listCitiesForAdmin() { return this.service.listCitiesForAdmin(); }
 
   @Get('cities')
   @ApiOperation({ summary: 'List selectable cities linked to an active, sourced governorate' })

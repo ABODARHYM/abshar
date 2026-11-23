@@ -10,6 +10,16 @@ describe('GeographyRepository verified public geography', () => {
     repository = new GeographyRepository(db as any);
   });
 
+  it('provides active legacy cities to authorized admin workflows without public verification filtering', async () => {
+    await repository.listCitiesForAdmin();
+    const sql = db.query.mock.calls[0][0] as string;
+    expect(sql).toContain('FROM cities c');
+    expect(sql).toContain('LEFT JOIN governorates g');
+    expect(sql).toContain('WHERE c.is_active = true');
+    expect(sql).toContain("THEN 'verified' ELSE 'legacy_unverified' END AS geography_status");
+    expect(sql).not.toContain('WHERE c.is_active = true AND g.is_active = true');
+  });
+
   it('lists only active governorates with complete source provenance', async () => {
     await repository.listGovernorates();
     const sql = db.query.mock.calls[0][0] as string;
