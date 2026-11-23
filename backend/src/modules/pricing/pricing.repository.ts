@@ -163,6 +163,17 @@ export class PricingRepository {
     return r.rows.length > 0;
   }
 
+  async listDistanceTiers(zoneId: string): Promise<DistanceTierRow[]> {
+    const r = await this.db.query<DistanceTierRow>(
+      `SELECT id, zone_id, min_distance_km, max_distance_km, delivery_fee, is_active
+       FROM delivery_zone_distance_tiers
+       WHERE zone_id = $1
+       ORDER BY min_distance_km ASC, created_at ASC`,
+      [zoneId],
+    );
+    return r.rows;
+  }
+
   async listActiveDistanceTiers(zoneId: string): Promise<DistanceTierRow[]> {
     const r = await this.db.query<DistanceTierRow>(
       `SELECT id, zone_id, min_distance_km, max_distance_km, delivery_fee, is_active
