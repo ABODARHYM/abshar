@@ -66,3 +66,25 @@ describe('PricingRepository road routing provider', () => {
       .rejects.toBeInstanceOf(ServiceUnavailableException);
   });
 });
+
+
+describe('PricingRepository updateZoneCoverage SQL parameter typing', () => {
+  it('casts the status parameter consistently in assignment and CASE expressions', async () => {
+    const query = jest.fn().mockResolvedValue({ rows: [{ id: 'zone-1' }] });
+    const repository = new PricingRepository({ query } as any);
+
+    await expect(repository.updateZoneCoverage({
+      zoneId: 'zone-1',
+      geojson: { type: 'Polygon', coordinates: [] },
+      status: 'verified',
+      actorId: '00000000-0000-4000-8000-000000000001',
+      note: 'Reviewed boundary',
+    })).resolves.toBe(true);
+
+    const [sql, params] = query.mock.calls[0];
+    expect(sql).toContain('coverage_status = $3::text');
+    expect(sql).toContain("CASE WHEN $3::text = 'verified'");
+    expect(sql).toContain("CASE WHEN $3::text <> 'verified'");
+    expect(params[2]).toBe('verified');
+  });
+});
