@@ -1,4 +1,4 @@
-import { Injectable, ServiceUnavailableException } from '@nestjs/common';
+import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
 import { DatabaseService } from '../../database/database.service';
 
 function pricingPointInCoverage(value: unknown, longitude: number, latitude: number): boolean {
@@ -54,6 +54,8 @@ export interface ZoneRow {
 
 @Injectable()
 export class PricingRepository {
+  private readonly logger = new Logger(PricingRepository.name);
+
   constructor(private readonly db: DatabaseService) {}
 
   async getStoreQuoteDetails(storeId: string): Promise<{
@@ -355,6 +357,7 @@ export class PricingRepository {
         message: 'يجب إعداد عنوان ORS الرسمي ومفتاح API صالحين عبر إعدادات الخدمة.',
       });
     }
+    let providerStatus: number | null = null;
     try {
       const response = await fetch(url, {
         method: 'POST',
@@ -372,7 +375,8 @@ export class PricingRepository {
         redirect: 'error',
         signal: AbortSignal.timeout(10000),
       });
-      if (!response.ok) throw new Error(`ORS returned HTTP ${response.status}`);
+      providerStatus = response.status;
+      if (!response.ok) throw new Error('ORS_REQUEST_FAILED');
       const data = await response.json() as {
         routes?: Array<{ summary?: { distance?: unknown } }>;
       };
@@ -383,6 +387,10 @@ export class PricingRepository {
       }
       return distance;
     } catch (error) {
+      const errorType = error instanceof Error ? error.name : 'UnknownError';
+      this.logger.warn(
+        `ORS directions request failed${providerStatus === null ? '' : ` (HTTP ${providerStatus})`}; ${errorType}`,
+      );
       throw new ServiceUnavailableException({
         code: 'ROUTING_UNAVAILABLE',
         message: 'تعذر حساب مسافة الطريق من مزود التوجيه؛ لم يتم استخدام مسافة خط مستقيم أو رسوم بديلة.',
