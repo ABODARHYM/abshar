@@ -100,3 +100,19 @@ describe('PricingRepository updateZoneCoverage SQL parameter typing', () => {
     expect(params[2]).toBe('verified');
   });
 });
+
+describe('PricingRepository zone activation eligibility', () => {
+  it('checks verified coverage independently of the current active flag', async () => {
+    const query = jest.fn().mockResolvedValue({ rows: [{ eligible: true }] });
+    const repository = new PricingRepository({ query } as any);
+
+    await expect(repository.isZoneVerifiedForDelivery('zone-1')).resolves.toBe(true);
+
+    const [sql, params] = query.mock.calls[0];
+    expect(sql).toContain("coverage_status = 'verified'");
+    expect(sql).toContain('coverage_verified_at IS NOT NULL');
+    expect(sql).toContain('coverage_verified_by IS NOT NULL');
+    expect(sql).not.toContain('z.is_active');
+    expect(params).toEqual(['zone-1']);
+  });
+});
