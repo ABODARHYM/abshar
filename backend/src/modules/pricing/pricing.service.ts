@@ -116,16 +116,25 @@ export class PricingService {
       });
     }
 
-    const distanceKm = Math.round((await this.repo.calculateRouteDistanceKm(
+    const routeDistanceKm = await this.repo.calculateRouteDistanceKm(
       ctx.storeLat, ctx.storeLng, ctx.addressLat, ctx.addressLng,
-    )) * 100) / 100;
+    );
+    if (!Number.isFinite(routeDistanceKm) || routeDistanceKm < 0) {
+      throw new BadRequestException({
+        code: ErrorCode.ValidationFailed,
+        message: 'تعذر التحقق من مسافة الطريق؛ لا يمكن احتساب رسوم التوصيل.',
+      });
+    }
+    // Use the unrounded route distance for tier selection to avoid undercharging
+    // when a route is just above a band boundary; round only the displayed snapshot.
+    const distanceKm = Math.round(routeDistanceKm * 100) / 100;
 
     const tiers = await this.repo.listActiveDistanceTiers(zone.id);
     const tier = tiers.find((item) => {
       const min = Number(item.min_distance_km);
       const max = item.max_distance_km === null ? null : Number(item.max_distance_km);
-      return (min === 0 ? distanceKm >= 0 : distanceKm > min)
-        && (max === null || distanceKm <= max);
+      return (min === 0 ? routeDistanceKm >= 0 : routeDistanceKm > min)
+        && (max === null || routeDistanceKm <= max);
     });
 
     if (!tier) {
