@@ -5,10 +5,13 @@ on:
     branches:
       - fix/staging-integrity-completion-20261120
       - fix/verified-geography-api-20261123
+      - fix/admin-geography-city-access-20261123
   pull_request:
     branches:
       - main
       - fix/staging-integrity-completion-20261120
+      - fix/verified-geography-api-20261123
+      - fix/admin-geography-city-access-20261123
 
 permissions:
   contents: read
