@@ -1,6 +1,9 @@
 name: Staging Integrity CI
 
 on:
+  workflow_dispatch:
+
+on:
   push:
     branches:
       - fix/staging-integrity-completion-20261120
