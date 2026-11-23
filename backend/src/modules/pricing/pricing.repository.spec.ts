@@ -116,3 +116,21 @@ describe('PricingRepository zone activation eligibility', () => {
     expect(params).toEqual(['zone-1']);
   });
 });
+
+
+describe('PricingRepository administrator distance-tier listing', () => {
+  it('returns active and inactive tiers in deterministic distance order', async () => {
+    const rows = [
+      { id: 'tier-0-2', zone_id: 'zone-1', min_distance_km: 0, max_distance_km: 2, delivery_fee: 300, is_active: false },
+      { id: 'tier-2-4', zone_id: 'zone-1', min_distance_km: 2, max_distance_km: 4, delivery_fee: 700, is_active: true },
+    ];
+    const query = jest.fn().mockResolvedValue({ rows });
+    const repository = new PricingRepository({ query } as any);
+    await expect(repository.listDistanceTiers('zone-1')).resolves.toEqual(rows);
+    const [sql, params] = query.mock.calls[0];
+    expect(sql).toContain('WHERE zone_id = $1');
+    expect(sql).toContain('ORDER BY min_distance_km ASC, created_at ASC');
+    expect(sql).not.toContain('is_active = true');
+    expect(params).toEqual(['zone-1']);
+  });
+});
