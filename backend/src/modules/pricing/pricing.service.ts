@@ -127,7 +127,7 @@ export class PricingService {
     }
     // Use the unrounded route distance for tier selection to avoid undercharging
     // when a route is just above a band boundary; round only the displayed snapshot.
-    const distanceKm = Math.round(routeDistanceKm * 100) / 100;
+    const distanceKm = Math.round(routeDistanceKm * 1000) / 1000;
 
     const tiers = await this.repo.listActiveDistanceTiers(zone.id);
     const tier = tiers.find((item) => {
