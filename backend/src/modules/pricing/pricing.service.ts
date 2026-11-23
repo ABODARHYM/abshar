@@ -455,15 +455,18 @@ export class PricingService {
     return this.toZoneResponse(z);
   }
 
-  getRoutingProviderStatus(): { configured: boolean; protocol: 'https' | 'missing_or_invalid' } {
+  getRoutingProviderStatus(): { provider: 'openrouteservice'; configured: boolean; protocol: 'https' | 'missing_or_invalid' } {
     const endpoint = process.env.ROUTING_API_URL?.trim();
+    const apiKey = process.env.ROUTING_API_KEY?.trim();
     try {
       const parsed = new URL(endpoint ?? '');
-      const configured = parsed.protocol === 'https:' && Boolean(parsed.hostname)
-        && !parsed.username && !parsed.password;
-      return { configured, protocol: configured ? 'https' : 'missing_or_invalid' };
+      const configured = parsed.protocol === 'https:'
+        && parsed.hostname === 'api.heigit.org'
+        && parsed.pathname === '/openrouteservice/v2/directions/driving-car/json'
+        && !parsed.username && !parsed.password && Boolean(apiKey);
+      return { provider: 'openrouteservice', configured, protocol: configured ? 'https' : 'missing_or_invalid' };
     } catch {
-      return { configured: false, protocol: 'missing_or_invalid' };
+      return { provider: 'openrouteservice', configured: false, protocol: 'missing_or_invalid' };
     }
   }
 
