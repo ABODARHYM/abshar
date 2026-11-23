@@ -214,6 +214,18 @@ describe('PricingService distance-tier pricing', () => {
     expect(result.distanceTierId).toBe('tier-4-6');
   });
 
+  it('selects the next band using exact route distance before rounding the displayed value', async () => {
+    const { service, repo } = makeService([
+      { id: 'tier-0-2', zone_id: 'zone-1', min_distance_km: 0, max_distance_km: 2, delivery_fee: 300, is_active: true },
+      { id: 'tier-2-4', zone_id: 'zone-1', min_distance_km: 2, max_distance_km: 4, delivery_fee: 700, is_active: true },
+    ]);
+    repo.calculateRouteDistanceKm.mockResolvedValue(2.001);
+    const result = await service.calculate(context);
+    expect(result.deliveryFee).toBe(700);
+    expect(result.distanceTierId).toBe('tier-2-4');
+    expect(result.distanceKm).toBe(2);
+  });
+
   it('accepts only the six approved distance band boundaries', async () => {
     const { service, repo } = makeService();
     await service.createDistanceTier({ zoneId: 'zone-1', minDistanceKm: 0, maxDistanceKm: 2, deliveryFee: 300 });
