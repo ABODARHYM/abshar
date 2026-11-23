@@ -17,6 +17,12 @@ export class GeographyController {
     return this.service.listAdministrativeDistricts(id);
   }
 
+  @Get('governorates/:id/cities')
+  @ApiOperation({ summary: 'List selectable cities belonging to a verified governorate' })
+  listCitiesByGovernorate(@Param('id', ParseUUIDPipe) id: string) {
+    return this.service.listCitiesByGovernorate(id);
+  }
+
   @Get('cities')
   @ApiOperation({ summary: 'List selectable cities linked to an active, sourced governorate' })
   listCities() { return this.service.listCities(); }
