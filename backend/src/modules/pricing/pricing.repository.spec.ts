@@ -74,7 +74,7 @@ describe('PricingRepository road routing provider', () => {
 
   it.each([403, 429])('logs only sanitized ORS status for HTTP %s failures', async (status) => {
     const instance = repository();
-    const warn = jest.spyOn((instance as any).logger, 'warn').mockImplementation();
+    const warn = jest.spyOn((instance as any).logger, 'warn').mockImplementation(() => undefined);
     fetchMock.mockResolvedValue(new Response('', { status }));
     await expect(instance.calculateRouteDistanceKm(15.4, 45.3, 15.41, 45.31))
       .rejects.toBeInstanceOf(ServiceUnavailableException);
