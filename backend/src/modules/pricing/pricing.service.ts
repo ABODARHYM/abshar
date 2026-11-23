@@ -434,18 +434,19 @@ export class PricingService {
         throw new BadRequestException({ code: ErrorCode.ValidationFailed,
           message: 'لا يمكن تفعيل المنطقة قبل اعتماد حدود التغطية الجغرافية.' });
       }
-      if ((await this.repo.listActiveDistanceTiers(id)).length === 0) {
+      const activeTiers = await this.repo.listActiveDistanceTiers(id);
+      const configuredBands = new Set(activeTiers.map((tier) =>
+        `${Number(tier.min_distance_km)}-${tier.max_distance_km === null ? 'open' : Number(tier.max_distance_km)}`,
+      ));
+      const missingBands = APPROVED_DISTANCE_BANDS.filter((band) =>
+        !configuredBands.has(`${band.min}-${band.max === null ? 'open' : band.max}`),
+      );
+      if (missingBands.length > 0) {
         throw new BadRequestException({ code: ErrorCode.ValidationFailed,
-          message: 'لا يمكن تفعيل المنطقة قبل إدخال شريحة رسوم واحدة على الأقل.' });
+          message: 'لا يمكن تفعيل المنطقة قبل إعداد رسوم الشرائح الست كاملة دون نقص.' });
       }
-      const endpoint = process.env.ROUTING_API_URL?.trim();
-      let secureRoutingConfigured = false;
-      try {
-        const parsed = new URL(endpoint ?? '');
-        secureRoutingConfigured = parsed.protocol === 'https:' && Boolean(parsed.hostname)
-          && !parsed.username && !parsed.password;
-      } catch { secureRoutingConfigured = false; }
-      if (!secureRoutingConfigured) {
+      const routingStatus = this.getRoutingProviderStatus();
+      if (!routingStatus.configured) {
         throw new BadRequestException({ code: ErrorCode.ValidationFailed,
           message: 'لا يمكن تفعيل التوصيل قبل إعداد عنوان HTTPS صالح وآمن لمزود مسافة الطريق.' });
       }
@@ -458,6 +459,18 @@ export class PricingService {
       });
     }
     return this.toZoneResponse(z);
+  }
+
+  getRoutingProviderStatus(): { configured: boolean; protocol: 'https' | 'missing_or_invalid' } {
+    const endpoint = process.env.ROUTING_API_URL?.trim();
+    try {
+      const parsed = new URL(endpoint ?? '');
+      const configured = parsed.protocol === 'https:' && Boolean(parsed.hostname)
+        && !parsed.username && !parsed.password;
+      return { configured, protocol: configured ? 'https' : 'missing_or_invalid' };
+    } catch {
+      return { configured: false, protocol: 'missing_or_invalid' };
+    }
   }
 
   async getSettings(): Promise<Record<string, number>> {
