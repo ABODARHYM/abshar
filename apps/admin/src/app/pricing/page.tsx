@@ -32,6 +32,8 @@ export default function PricingPage() {
   const [error, setError] = useState('');
   const [routingConfigured, setRoutingConfigured] = useState(false);
   const [form, setForm] = useState({ band: '0-2', deliveryFee: '' });
+  const [editingTierId, setEditingTierId] = useState<string | null>(null);
+  const [editingFee, setEditingFee] = useState('');
 
   const loadZones = useCallback(async () => {
     const [response, routingResponse] = await Promise.all([
@@ -102,11 +104,38 @@ export default function PricingPage() {
     } finally { setSaving(false); }
   };
 
+  const saveTierFee = async (id: string) => {
+    const fee = Number(editingFee);
+    if (!Number.isFinite(fee) || fee < 0) {
+      setError('أدخل رسوماً صحيحة لا تقل عن صفر.');
+      return;
+    }
+    if (!confirm('سيُطبّق المبلغ الجديد على الطلبات القادمة فقط، ولن تتغير رسوم الطلبات السابقة. هل تريد المتابعة؟')) return;
+    setSaving(true); setError('');
+    try {
+      const response = await authFetch(`/api/v1/pricing/distance-tiers/${id}`, {
+        method: 'PATCH', body: JSON.stringify({ deliveryFee: fee }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.message || 'تعذر تعديل رسوم الشريحة');
+      setEditingTierId(null); setEditingFee('');
+      await loadTiers();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'تعذر تعديل رسوم الشريحة');
+    } finally { setSaving(false); }
+  };
+
   const deactivate = async (id: string) => {
     if (!confirm('هل تريد إيقاف هذه الشريحة؟')) return;
-    const response = await authFetch(`/api/v1/pricing/distance-tiers/${id}`, { method: 'DELETE' });
-    if (!response.ok) { setError('تعذر إيقاف الشريحة'); return; }
-    await loadTiers();
+    setSaving(true); setError('');
+    try {
+      const response = await authFetch(`/api/v1/pricing/distance-tiers/${id}`, { method: 'DELETE' });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.message || 'تعذر إيقاف الشريحة');
+      await loadTiers();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'تعذر إيقاف الشريحة');
+    } finally { setSaving(false); }
   };
 
   const reactivate = async (id: string) => {
@@ -129,7 +158,9 @@ export default function PricingPage() {
       {error && <div role="alert" className="card mb-4 border border-red-500/40 text-red-600">{error}</div>}
       <section className="card p-4 mb-5">
         <label className="block text-sm font-bold mb-2">مدينة / منطقة التوصيل</label>
-        <select className="input w-full" value={zoneId} onChange={(e) => setZoneId(e.target.value)}>
+        <select className="input w-full" value={zoneId} onChange={(e) => {
+          setZoneId(e.target.value); setEditingTierId(null); setEditingFee('');
+        }}>
           <option value="">اختر المنطقة</option>
           {zones.map((z) => {
             const legacy = Boolean(z.district_id && z.district_source_status !== 'verified' && z.district_source_status !== 'community_verified');
@@ -196,12 +227,23 @@ export default function PricingPage() {
               <tbody>{tiers.map((t) => <tr key={t.id} className="border-b">
                 <td className="p-2">{Number(t.min_distance_km).toFixed(2)}</td>
                 <td className="p-2">{t.max_distance_km === null ? 'مفتوح' : Number(t.max_distance_km).toFixed(2)}</td>
-                <td className="p-2 font-bold">{Number(t.delivery_fee).toLocaleString('ar-YE')}</td>
+                <td className="p-2 font-bold">
+                  {editingTierId === t.id
+                    ? <input aria-label="رسوم الشريحة الجديدة" className="input w-28" type="number" min="0" step="0.01"
+                        value={editingFee} onChange={(e) => setEditingFee(e.target.value)} />
+                    : Number(t.delivery_fee).toLocaleString('ar-YE')}
+                </td>
                 <td className="p-2">{t.is_active ? 'نشطة' : 'متوقفة'}</td>
-                <td className="p-2">
-                  {t.is_active
-                    ? <button className="text-red-500 font-bold" disabled={saving} onClick={() => deactivate(t.id)}>إيقاف</button>
-                    : <button className="text-emerald-600 font-bold" disabled={saving} onClick={() => reactivate(t.id)}>إعادة تفعيل</button>}
+                <td className="p-2 whitespace-nowrap">
+                  {editingTierId === t.id ? <>
+                    <button type="button" className="text-emerald-600 font-bold ml-3" disabled={saving} onClick={() => saveTierFee(t.id)}>حفظ</button>
+                    <button type="button" className="text-[var(--text-muted)] font-bold" disabled={saving} onClick={() => { setEditingTierId(null); setEditingFee(''); }}>إلغاء</button>
+                  </> : <>
+                    <button type="button" className="text-blue-600 font-bold ml-3" disabled={saving} onClick={() => { setEditingTierId(t.id); setEditingFee(String(t.delivery_fee)); }}>تعديل الرسوم</button>
+                    {t.is_active
+                      ? <button type="button" className="text-red-500 font-bold ml-3" disabled={saving} onClick={() => deactivate(t.id)}>إيقاف</button>
+                      : <button type="button" className="text-emerald-600 font-bold" disabled={saving} onClick={() => reactivate(t.id)}>إعادة تفعيل</button>}
+                  </>}
                 </td>
               </tr>)}</tbody>
             </table>
