@@ -97,10 +97,42 @@ describe('PricingService distance-tier pricing', () => {
     expect(repo.updateZone).not.toHaveBeenCalled();
   });
 
-  it('blocks activation when no active distance tier exists', async () => {
-    const { service, repo } = makeService([]);
-    await expect(service.updateZone('zone-1', { isActive: true })).rejects.toBeInstanceOf(BadRequestException);
-    expect(repo.updateZone).not.toHaveBeenCalled();
+  it('blocks activation unless all six approved distance bands are configured', async () => {
+    const previous = process.env.ROUTING_API_URL;
+    process.env.ROUTING_API_URL = 'https://routing.example.test/route';
+    try {
+      const incomplete = [
+        { id: 'tier-0-2', min_distance_km: 0, max_distance_km: 2, is_active: true },
+        { id: 'tier-2-4', min_distance_km: 2, max_distance_km: 4, is_active: true },
+      ];
+      const { service, repo } = makeService(incomplete);
+      await expect(service.updateZone('zone-1', { isActive: true })).rejects.toBeInstanceOf(BadRequestException);
+      expect(repo.updateZone).not.toHaveBeenCalled();
+    } finally {
+      if (previous === undefined) delete process.env.ROUTING_API_URL;
+      else process.env.ROUTING_API_URL = previous;
+    }
+  });
+
+  it('allows activation only when all six approved bands and secure routing are configured', async () => {
+    const previous = process.env.ROUTING_API_URL;
+    process.env.ROUTING_API_URL = 'https://routing.example.test/route';
+    const allBands = [
+      { id: 'tier-0-2', min_distance_km: 0, max_distance_km: 2, is_active: true },
+      { id: 'tier-2-4', min_distance_km: 2, max_distance_km: 4, is_active: true },
+      { id: 'tier-4-6', min_distance_km: 4, max_distance_km: 6, is_active: true },
+      { id: 'tier-6-10', min_distance_km: 6, max_distance_km: 10, is_active: true },
+      { id: 'tier-10-15', min_distance_km: 10, max_distance_km: 15, is_active: true },
+      { id: 'tier-15-open', min_distance_km: 15, max_distance_km: null, is_active: true },
+    ];
+    try {
+      const { service, repo } = makeService(allBands);
+      await expect(service.updateZone('zone-1', { isActive: true })).resolves.toBeDefined();
+      expect(repo.updateZone).toHaveBeenCalledWith('zone-1', { isActive: true });
+    } finally {
+      if (previous === undefined) delete process.env.ROUTING_API_URL;
+      else process.env.ROUTING_API_URL = previous;
+    }
   });
 
   it('blocks activation when a secure routing provider is not configured', async () => {
