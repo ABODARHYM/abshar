@@ -106,7 +106,7 @@ export default function PricingPage() {
 
   const saveTierFee = async (id: string) => {
     const fee = Number(editingFee);
-    if (!Number.isFinite(fee) || fee < 0) {
+    if (!editingFee.trim() || !Number.isFinite(fee) || fee < 0) {
       setError('أدخل رسوماً صحيحة لا تقل عن صفر.');
       return;
     }
