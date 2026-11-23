@@ -117,6 +117,47 @@ describe('PricingService distance-tier pricing', () => {
     }
   });
 
+  it('reports only safe readiness metadata for the canonical ORS configuration', () => {
+    const previousUrl = process.env.ROUTING_API_URL;
+    const previousKey = process.env.ROUTING_API_KEY;
+    process.env.ROUTING_API_URL = 'https://api.heigit.org/openrouteservice/v2/directions/driving-car/json';
+    process.env.ROUTING_API_KEY = 'never-return-this-secret';
+    try {
+      const { service } = makeService();
+      expect(service.getRoutingProviderStatus()).toEqual({
+        provider: 'openrouteservice', configured: true, protocol: 'https',
+      });
+      expect(JSON.stringify(service.getRoutingProviderStatus())).not.toContain('never-return-this-secret');
+    } finally {
+      if (previousUrl === undefined) delete process.env.ROUTING_API_URL;
+      else process.env.ROUTING_API_URL = previousUrl;
+      if (previousKey === undefined) delete process.env.ROUTING_API_KEY;
+      else process.env.ROUTING_API_KEY = previousKey;
+    }
+  });
+
+  it.each([
+    'http://api.heigit.org/openrouteservice/v2/directions/driving-car/json',
+    'https://api.heigit.org.evil.test/openrouteservice/v2/directions/driving-car/json',
+    'https://user:pass@api.heigit.org/openrouteservice/v2/directions/driving-car/json',
+    'https://api.heigit.org:8443/openrouteservice/v2/directions/driving-car/json',
+    'https://api.heigit.org/openrouteservice/v2/directions/driving-car/json?debug=true',
+  ])('rejects non-canonical ORS readiness endpoint %s', (endpoint) => {
+    const previousUrl = process.env.ROUTING_API_URL;
+    const previousKey = process.env.ROUTING_API_KEY;
+    process.env.ROUTING_API_URL = endpoint;
+    process.env.ROUTING_API_KEY = 'test-api-key';
+    try {
+      const { service } = makeService();
+      expect(service.getRoutingProviderStatus().configured).toBe(false);
+    } finally {
+      if (previousUrl === undefined) delete process.env.ROUTING_API_URL;
+      else process.env.ROUTING_API_URL = previousUrl;
+      if (previousKey === undefined) delete process.env.ROUTING_API_KEY;
+      else process.env.ROUTING_API_KEY = previousKey;
+    }
+  });
+
   it('blocks activation when a secure routing provider is not configured', async () => {
     const previous = process.env.ROUTING_API_URL;
     delete process.env.ROUTING_API_URL;
