@@ -334,30 +334,39 @@ export class PricingRepository {
     try { url = new URL(endpoint); } catch {
       throw new ServiceUnavailableException({ code: 'ROUTING_CONFIG_INVALID', message: 'إعداد خدمة التوجيه غير صالح.' });
     }
-    if (url.protocol !== 'https:' && process.env.NODE_ENV === 'production') {
-      throw new ServiceUnavailableException({ code: 'ROUTING_CONFIG_INSECURE', message: 'يجب استخدام HTTPS لخدمة التوجيه.' });
+    const apiKey = process.env.ROUTING_API_KEY?.trim();
+    if (url.protocol !== 'https:' || url.hostname !== 'api.heigit.org'
+        || url.pathname !== '/openrouteservice/v2/directions/driving-car/json' || !apiKey) {
+      throw new ServiceUnavailableException({
+        code: 'ROUTING_CONFIG_INVALID',
+        message: 'يجب إعداد عنوان ORS الرسمي ومفتاح API صالحين عبر إعدادات الخدمة.',
+      });
     }
     try {
       const response = await fetch(url, {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
-          ...(process.env.ROUTING_API_KEY ? { authorization: `Bearer ${process.env.ROUTING_API_KEY}` } : {}),
+          authorization: apiKey,
         },
         body: JSON.stringify({
-          origin: { latitude: originLat, longitude: originLng },
-          destination: { latitude: destinationLat, longitude: destinationLng },
+          coordinates: [
+            [originLng, originLat],
+            [destinationLng, destinationLat],
+          ],
+          units: 'm',
         }),
         redirect: 'error',
         signal: AbortSignal.timeout(10000),
       });
-      if (!response.ok) throw new Error(`Routing provider returned HTTP ${response.status}`);
-      const data = await response.json() as { distanceKm?: unknown };
-      const rawDistance = data?.distanceKm;
-      const distance = typeof rawDistance === 'number' ? rawDistance
-        : (typeof rawDistance === 'string' && rawDistance.trim() ? Number(rawDistance) : Number.NaN);
+      if (!response.ok) throw new Error(`ORS returned HTTP ${response.status}`);
+      const data = await response.json() as {
+        routes?: Array<{ summary?: { distance?: unknown } }>;
+      };
+      const meters = data?.routes?.[0]?.summary?.distance;
+      const distance = typeof meters === 'number' ? meters / 1000 : Number.NaN;
       if (!Number.isFinite(distance) || distance < 0 || distance > 500) {
-        throw new Error('Routing provider returned an invalid distanceKm');
+        throw new Error('ORS returned an invalid or missing route distance');
       }
       return distance;
     } catch (error) {
