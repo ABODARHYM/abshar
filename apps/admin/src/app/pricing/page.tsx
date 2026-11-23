@@ -132,14 +132,15 @@ export default function PricingPage() {
           tier.is_active && Number(tier.min_distance_km) === band.min
           && (tier.max_distance_km === null ? null : Number(tier.max_distance_km)) === band.max,
         ));
+        const hasActiveTier = tiers.some((tier) => tier.is_active);
         const canActivate = selected?.coverage_status === 'verified' && !legacy
-          && missingBands.length === 0 && routingConfigured;
+          && hasActiveTier && routingConfigured;
         return <section className="card p-4 mb-5 flex flex-wrap items-center justify-between gap-3">
           <div>
             <div className="font-bold">حالة تشغيل المنطقة</div>
             <div className="text-xs text-[var(--text-muted)] mt-1">التغطية: {selected?.coverage_status === 'verified' ? 'معتمدة' : 'غير معتمدة'} — التشغيل: {selected?.is_active ? 'نشط' : 'متوقف'}</div>
-            <div className="text-xs mt-1">شرائح الرسوم: {6 - missingBands.length}/6 مكتملة — مزود الطرق: {routingConfigured ? 'عنوان HTTPS مضبوط' : 'غير مهيأ'}</div>
-            {!selected?.is_active && missingBands.length > 0 && <div className="text-xs text-amber-600 mt-1">المتبقي: {missingBands.map((band) => band.label).join('، ')}</div>}
+            <div className="text-xs mt-1">شرائح الرسوم: {6 - missingBands.length}/6 مهيأة — مزود الطرق: {routingConfigured ? 'عنوان HTTPS مضبوط' : 'غير مهيأ'}</div>
+            {!selected?.is_active && missingBands.length > 0 && <div className="text-xs text-amber-600 mt-1">شرائح لم تُسعّر بعد؛ الطلبات التي تقع مسافاتها ضمنها ستُرفض حتى إضافة رسومها: {missingBands.map((band) => band.label).join('، ')}</div>}
             {!selected?.is_active && !routingConfigured && <div className="text-xs text-amber-600 mt-1">يجب إعداد ROUTING_API_URL بعنوان HTTPS صالح في إعدادات Backend Staging.</div>}
           </div>
           <button type="button" className="btn btn-primary" disabled={saving || legacy || (selected?.is_active ? false : !canActivate)} onClick={async () => {
@@ -169,7 +170,7 @@ export default function PricingPage() {
           <button className="btn btn-primary" type="submit" disabled={saving || !zoneId || !form.deliveryFee}>{saving ? 'جارٍ الحفظ...' : 'إضافة الشريحة'}</button>
         </form>
         <p className="text-xs text-[var(--text-muted)] mt-3">الحدود ثابتة ومعتمدة؛ أدخل رسوم كل شريحة فقط. الشريحة الأخيرة لا تتجاوز حدود التغطية الجغرافية المعتمدة.</p>
-        <p className="text-xs text-[var(--text-muted)] mt-3">تُحسب الرسوم من مسافة الطريق عبر مزود التوجيه المهيأ. لا تُضاف أسعار افتراضية، ويجب أن تُسجل الشرائح الست كاملة دون تداخل قبل تفعيل المنطقة.</p>
+        <p className="text-xs text-[var(--text-muted)] mt-3">تُحسب الرسوم من مسافة الطريق عبر مزود التوجيه المهيأ. لا تُضاف أسعار افتراضية، وأضف الشرائح المطلوبة لتغطية مسافات المنطقة؛ أي مسافة لا تطابق شريحة نشطة لن تحصل على عرض سعر.</p>
         <p className="text-xs mt-2">حالة إعداد عنوان مزود الطرق: {routingConfigured ? 'عنوان HTTPS مضبوط (لم يُجرَ اختبار اتصال فعلي بعد)' : 'غير مهيأ أو غير صالح — يضبطه مسؤول الخدمة في متغير ROUTING_API_URL على Render.'}</p>
       </section>
       <section className="card p-4">
