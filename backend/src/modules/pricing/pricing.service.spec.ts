@@ -28,6 +28,7 @@ describe('PricingService distance-tier pricing', () => {
       getZoneCoverage: jest.fn().mockResolvedValue({"type":"Polygon","coordinates":[[[45.3,15.4],[45.32,15.4],[45.32,15.42],[45.3,15.42],[45.3,15.4]]]}),
       calculateRouteDistanceKm: jest.fn().mockResolvedValue(3.2),
       listActiveDistanceTiers: jest.fn().mockResolvedValue(tiers),
+      listDistanceTiers: jest.fn().mockResolvedValue(tiers),
       getPricingSettings: jest.fn().mockResolvedValue({}),
       findAddressForUser: jest.fn().mockResolvedValue({ zone_id: 'zone-1', latitude: 15.41, longitude: 45.31 }),
       updateZoneCoverage: jest.fn().mockResolvedValue(true),
@@ -64,6 +65,17 @@ describe('PricingService distance-tier pricing', () => {
     await expect(service.getZone('legacy-zone')).rejects.toBeInstanceOf(NotFoundException);
     expect(repo.getActiveVerifiedZoneById).toHaveBeenCalledWith('legacy-zone');
     expect(repo.getZoneById).not.toHaveBeenCalled();
+  });
+
+  it('lists inactive and active distance tiers for administrator recovery', async () => {
+    const { service, repo } = makeService();
+    const tiers = [
+      { id: 'tier-0-2', zone_id: 'zone-1', min_distance_km: 0, max_distance_km: 2, delivery_fee: 300, is_active: false },
+      { id: 'tier-2-4', zone_id: 'zone-1', min_distance_km: 2, max_distance_km: 4, delivery_fee: 700, is_active: true },
+    ];
+    repo.listDistanceTiers.mockResolvedValue(tiers);
+    await expect(service.listDistanceTiers('zone-1')).resolves.toEqual(tiers);
+    expect(repo.listDistanceTiers).toHaveBeenCalledWith('zone-1');
   });
 
   it('uses the configured fee for the matching distance band', async () => {
