@@ -139,9 +139,9 @@ export default function PricingPage() {
           <div>
             <div className="font-bold">حالة تشغيل المنطقة</div>
             <div className="text-xs text-[var(--text-muted)] mt-1">التغطية: {selected?.coverage_status === 'verified' ? 'معتمدة' : 'غير معتمدة'} — التشغيل: {selected?.is_active ? 'نشط' : 'متوقف'}</div>
-            <div className="text-xs mt-1">شرائح الرسوم: {6 - missingBands.length}/6 مهيأة — مزود الطرق: {routingConfigured ? 'عنوان HTTPS مضبوط' : 'غير مهيأ'}</div>
+            <div className="text-xs mt-1">شرائح الرسوم: {6 - missingBands.length}/6 مهيأة — مزود الطرق: {routingConfigured ? 'ORS مضبوط' : 'غير مهيأ'}</div>
             {!selected?.is_active && missingBands.length > 0 && <div className="text-xs text-amber-600 mt-1">شرائح لم تُسعّر بعد؛ الطلبات التي تقع مسافاتها ضمنها ستُرفض حتى إضافة رسومها: {missingBands.map((band) => band.label).join('، ')}</div>}
-            {!selected?.is_active && !routingConfigured && <div className="text-xs text-amber-600 mt-1">يجب إعداد ROUTING_API_URL بعنوان HTTPS صالح في إعدادات Backend Staging.</div>}
+            {!selected?.is_active && !routingConfigured && <div className="text-xs text-amber-600 mt-1">يجب ضبط عنوان ORS الرسمي ومفتاح ROUTING_API_KEY في إعدادات Backend Staging.</div>}
           </div>
           <button type="button" className="btn btn-primary" disabled={saving || legacy || (selected?.is_active ? false : !canActivate)} onClick={async () => {
             setSaving(true); setError('');
@@ -171,7 +171,7 @@ export default function PricingPage() {
         </form>
         <p className="text-xs text-[var(--text-muted)] mt-3">الحدود ثابتة ومعتمدة؛ أدخل رسوم كل شريحة فقط. الشريحة الأخيرة لا تتجاوز حدود التغطية الجغرافية المعتمدة.</p>
         <p className="text-xs text-[var(--text-muted)] mt-3">تُحسب الرسوم من مسافة الطريق عبر مزود التوجيه المهيأ. لا تُضاف أسعار افتراضية، وأضف الشرائح المطلوبة لتغطية مسافات المنطقة؛ أي مسافة لا تطابق شريحة نشطة لن تحصل على عرض سعر.</p>
-        <p className="text-xs mt-2">حالة إعداد عنوان مزود الطرق: {routingConfigured ? 'عنوان HTTPS مضبوط (لم يُجرَ اختبار اتصال فعلي بعد)' : 'غير مهيأ أو غير صالح — يضبطه مسؤول الخدمة في متغير ROUTING_API_URL على Render.'}</p>
+        <p className="text-xs mt-2">حالة إعداد عنوان مزود الطرق: {routingConfigured ? 'عنوان HTTPS مضبوط (لم يُجرَ اختبار اتصال فعلي بعد)' : 'غير مهيأ أو غير صالح — يجب ضبط ROUTING_API_URL وROUTING_API_KEY في Render.'}</p>
       </section>
       <section className="card p-4">
         <h2 className="font-black mb-3">الشرائح المسجلة</h2>
