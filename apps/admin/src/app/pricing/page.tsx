@@ -30,12 +30,18 @@ export default function PricingPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [routingConfigured, setRoutingConfigured] = useState(false);
   const [form, setForm] = useState({ band: '0-2', deliveryFee: '' });
 
   const loadZones = useCallback(async () => {
-    const response = await authFetch('/api/v1/pricing/zones/admin');
+    const [response, routingResponse] = await Promise.all([
+      authFetch('/api/v1/pricing/zones/admin'),
+      authFetch('/api/v1/pricing/routing/status'),
+    ]);
     if (!response.ok) throw new Error('تعذر تحميل مناطق التوصيل');
     const data = await response.json();
+    const routingData = routingResponse.ok ? await routingResponse.json() : { configured: false };
+    setRoutingConfigured(routingData.configured === true);
     const rows = Array.isArray(data) ? data : [];
     setZones(rows);
     const usable = rows.find((zone: Zone) => !zone.district_id
@@ -122,9 +128,21 @@ export default function PricingPage() {
       {zoneId && (() => {
         const selected = zones.find((z) => z.id === zoneId);
         const legacy = Boolean(selected?.district_id && selected.district_source_status !== 'verified' && selected.district_source_status !== 'community_verified');
+        const missingBands = DISTANCE_BANDS.filter((band) => !tiers.some((tier) =>
+          tier.is_active && Number(tier.min_distance_km) === band.min
+          && (tier.max_distance_km === null ? null : Number(tier.max_distance_km)) === band.max,
+        ));
+        const canActivate = selected?.coverage_status === 'verified' && !legacy
+          && missingBands.length === 0 && routingConfigured;
         return <section className="card p-4 mb-5 flex flex-wrap items-center justify-between gap-3">
-          <div><div className="font-bold">حالة تشغيل المنطقة</div><div className="text-xs text-[var(--text-muted)] mt-1">التغطية: {selected?.coverage_status === 'verified' ? 'معتمدة' : 'غير معتمدة'} — التشغيل: {selected?.is_active ? 'نشط' : 'متوقف'}</div></div>
-          <button type="button" className="btn btn-primary" disabled={saving || legacy || selected?.coverage_status !== 'verified'} onClick={async () => {
+          <div>
+            <div className="font-bold">حالة تشغيل المنطقة</div>
+            <div className="text-xs text-[var(--text-muted)] mt-1">التغطية: {selected?.coverage_status === 'verified' ? 'معتمدة' : 'غير معتمدة'} — التشغيل: {selected?.is_active ? 'نشط' : 'متوقف'}</div>
+            <div className="text-xs mt-1">شرائح الرسوم: {6 - missingBands.length}/6 مكتملة — مزود الطرق: {routingConfigured ? 'عنوان HTTPS مضبوط' : 'غير مهيأ'}</div>
+            {!selected?.is_active && missingBands.length > 0 && <div className="text-xs text-amber-600 mt-1">المتبقي: {missingBands.map((band) => band.label).join('، ')}</div>}
+            {!selected?.is_active && !routingConfigured && <div className="text-xs text-amber-600 mt-1">يجب إعداد ROUTING_API_URL بعنوان HTTPS صالح في إعدادات Backend Staging.</div>}
+          </div>
+          <button type="button" className="btn btn-primary" disabled={saving || legacy || (selected?.is_active ? false : !canActivate)} onClick={async () => {
             setSaving(true); setError('');
             try {
               const response = await authFetch(`/api/v1/pricing/zones/${zoneId}`, { method: 'PATCH', body: JSON.stringify({ isActive: !selected?.is_active }) });
@@ -151,7 +169,8 @@ export default function PricingPage() {
           <button className="btn btn-primary" type="submit" disabled={saving || !zoneId || !form.deliveryFee}>{saving ? 'جارٍ الحفظ...' : 'إضافة الشريحة'}</button>
         </form>
         <p className="text-xs text-[var(--text-muted)] mt-3">الحدود ثابتة ومعتمدة؛ أدخل رسوم كل شريحة فقط. الشريحة الأخيرة لا تتجاوز حدود التغطية الجغرافية المعتمدة.</p>
-        <p className="text-xs text-[var(--text-muted)] mt-3">تُحسب الرسوم من مسافة الطريق عبر مزود التوجيه المهيأ. لا تُضاف أسعار افتراضية، ويجب أن تغطي الشرائح المسافات المطلوبة دون تداخل.</p>
+        <p className="text-xs text-[var(--text-muted)] mt-3">تُحسب الرسوم من مسافة الطريق عبر مزود التوجيه المهيأ. لا تُضاف أسعار افتراضية، ويجب أن تُسجل الشرائح الست كاملة دون تداخل قبل تفعيل المنطقة.</p>
+        <p className="text-xs mt-2">حالة إعداد عنوان مزود الطرق: {routingConfigured ? 'عنوان HTTPS مضبوط (لم يُجرَ اختبار اتصال فعلي بعد)' : 'غير مهيأ أو غير صالح — يضبطه مسؤول الخدمة في متغير ROUTING_API_URL على Render.'}</p>
       </section>
       <section className="card p-4">
         <h2 className="font-black mb-3">الشرائح المسجلة</h2>
