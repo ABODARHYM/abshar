@@ -10,7 +10,6 @@ describe('PricingRepository road routing provider', () => {
   beforeEach(() => {
     process.env.ROUTING_API_URL = 'https://api.heigit.org/openrouteservice/v2/directions/driving-car/json';
     process.env.ROUTING_API_KEY = 'test-api-key';
-    process.env.ROUTING_API_KEY = 'test-api-key';
     fetchMock = jest.fn();
     global.fetch = fetchMock as unknown as typeof fetch;
   });
@@ -43,6 +42,20 @@ describe('PricingRepository road routing provider', () => {
 
   it('fails closed when the routing provider is not configured', async () => {
     delete process.env.ROUTING_API_URL;
+    await expect(repository().calculateRouteDistanceKm(15.4, 45.3, 15.41, 45.31))
+      .rejects.toBeInstanceOf(ServiceUnavailableException);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('fails closed when the ORS API key is missing', async () => {
+    delete process.env.ROUTING_API_KEY;
+    await expect(repository().calculateRouteDistanceKm(15.4, 45.3, 15.41, 45.31))
+      .rejects.toBeInstanceOf(ServiceUnavailableException);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects non-ORS endpoints', async () => {
+    process.env.ROUTING_API_URL = 'https://routing.example.test/route';
     await expect(repository().calculateRouteDistanceKm(15.4, 45.3, 15.41, 45.31))
       .rejects.toBeInstanceOf(ServiceUnavailableException);
     expect(fetchMock).not.toHaveBeenCalled();
