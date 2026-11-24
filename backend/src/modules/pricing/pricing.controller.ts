@@ -222,6 +222,13 @@ export class PricingController {
     });
   }
 
+  @Get('routing/status')
+  @RequirePermission('zones.manage')
+  @ApiOperation({ summary: 'Get safe routing-provider configuration status (admin)' })
+  getRoutingProviderStatus() {
+    return this.service.getRoutingProviderStatus();
+  }
+
   // ═══ Zones (Public read, Admin write) ═══
 
   @Get('zones/admin')

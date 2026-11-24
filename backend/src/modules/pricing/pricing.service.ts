@@ -116,16 +116,25 @@ export class PricingService {
       });
     }
 
-    const distanceKm = Math.round((await this.repo.calculateRouteDistanceKm(
+    const routeDistanceKm = await this.repo.calculateRouteDistanceKm(
       ctx.storeLat, ctx.storeLng, ctx.addressLat, ctx.addressLng,
-    )) * 100) / 100;
+    );
+    if (!Number.isFinite(routeDistanceKm) || routeDistanceKm < 0) {
+      throw new BadRequestException({
+        code: ErrorCode.ValidationFailed,
+        message: 'تعذر التحقق من مسافة الطريق؛ لا يمكن احتساب رسوم التوصيل.',
+      });
+    }
+    // Use the unrounded route distance for tier selection to avoid undercharging
+    // when a route is just above a band boundary; round only the displayed snapshot.
+    const distanceKm = Math.round(routeDistanceKm * 1000) / 1000;
 
     const tiers = await this.repo.listActiveDistanceTiers(zone.id);
     const tier = tiers.find((item) => {
       const min = Number(item.min_distance_km);
       const max = item.max_distance_km === null ? null : Number(item.max_distance_km);
-      return (min === 0 ? distanceKm >= 0 : distanceKm > min)
-        && (max === null || distanceKm <= max);
+      return (min === 0 ? routeDistanceKm >= 0 : routeDistanceKm > min)
+        && (max === null || routeDistanceKm <= max);
     });
 
     if (!tier) {
@@ -333,7 +342,7 @@ export class PricingService {
     if (!zone) {
       throw new NotFoundException({ code: ErrorCode.NotFound, message: 'Delivery zone not found' });
     }
-    return this.repo.listActiveDistanceTiers(zoneId);
+    return this.repo.listDistanceTiers(zoneId);
   }
 
   async createDistanceTier(input: {
@@ -434,18 +443,13 @@ export class PricingService {
         throw new BadRequestException({ code: ErrorCode.ValidationFailed,
           message: 'لا يمكن تفعيل المنطقة قبل اعتماد حدود التغطية الجغرافية.' });
       }
-      if ((await this.repo.listActiveDistanceTiers(id)).length === 0) {
+      const activeTiers = await this.repo.listActiveDistanceTiers(id);
+      if (activeTiers.length === 0) {
         throw new BadRequestException({ code: ErrorCode.ValidationFailed,
-          message: 'لا يمكن تفعيل المنطقة قبل إدخال شريحة رسوم واحدة على الأقل.' });
+          message: 'لا يمكن تفعيل المنطقة قبل إعداد شريحة رسوم نشطة واحدة على الأقل.' });
       }
-      const endpoint = process.env.ROUTING_API_URL?.trim();
-      let secureRoutingConfigured = false;
-      try {
-        const parsed = new URL(endpoint ?? '');
-        secureRoutingConfigured = parsed.protocol === 'https:' && Boolean(parsed.hostname)
-          && !parsed.username && !parsed.password;
-      } catch { secureRoutingConfigured = false; }
-      if (!secureRoutingConfigured) {
+      const routingStatus = this.getRoutingProviderStatus();
+      if (!routingStatus.configured) {
         throw new BadRequestException({ code: ErrorCode.ValidationFailed,
           message: 'لا يمكن تفعيل التوصيل قبل إعداد عنوان HTTPS صالح وآمن لمزود مسافة الطريق.' });
       }
@@ -458,6 +462,21 @@ export class PricingService {
       });
     }
     return this.toZoneResponse(z);
+  }
+
+  getRoutingProviderStatus(): { provider: 'openrouteservice'; configured: boolean; protocol: 'https' | 'missing_or_invalid' } {
+    const endpoint = process.env.ROUTING_API_URL?.trim();
+    const apiKey = process.env.ROUTING_API_KEY?.trim();
+    try {
+      const parsed = new URL(endpoint ?? '');
+      const configured = parsed.origin === 'https://api.heigit.org'
+        && parsed.pathname === '/openrouteservice/v2/directions/driving-car/json'
+        && !parsed.username && !parsed.password && !parsed.search && !parsed.hash
+        && Boolean(apiKey);
+      return { provider: 'openrouteservice', configured, protocol: configured ? 'https' : 'missing_or_invalid' };
+    } catch {
+      return { provider: 'openrouteservice', configured: false, protocol: 'missing_or_invalid' };
+    }
   }
 
   async getSettings(): Promise<Record<string, number>> {

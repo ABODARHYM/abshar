@@ -28,6 +28,7 @@ describe('PricingService distance-tier pricing', () => {
       getZoneCoverage: jest.fn().mockResolvedValue({"type":"Polygon","coordinates":[[[45.3,15.4],[45.32,15.4],[45.32,15.42],[45.3,15.42],[45.3,15.4]]]}),
       calculateRouteDistanceKm: jest.fn().mockResolvedValue(3.2),
       listActiveDistanceTiers: jest.fn().mockResolvedValue(tiers),
+      listDistanceTiers: jest.fn().mockResolvedValue(tiers),
       getPricingSettings: jest.fn().mockResolvedValue({}),
       findAddressForUser: jest.fn().mockResolvedValue({ zone_id: 'zone-1', latitude: 15.41, longitude: 45.31 }),
       updateZoneCoverage: jest.fn().mockResolvedValue(true),
@@ -66,6 +67,17 @@ describe('PricingService distance-tier pricing', () => {
     expect(repo.getZoneById).not.toHaveBeenCalled();
   });
 
+  it('lists inactive and active distance tiers for administrator recovery', async () => {
+    const { service, repo } = makeService();
+    const tiers = [
+      { id: 'tier-0-2', zone_id: 'zone-1', min_distance_km: 0, max_distance_km: 2, delivery_fee: 300, is_active: false },
+      { id: 'tier-2-4', zone_id: 'zone-1', min_distance_km: 2, max_distance_km: 4, delivery_fee: 700, is_active: true },
+    ];
+    repo.listDistanceTiers.mockResolvedValue(tiers);
+    await expect(service.listDistanceTiers('zone-1')).resolves.toEqual(tiers);
+    expect(repo.listDistanceTiers).toHaveBeenCalledWith('zone-1');
+  });
+
   it('uses the configured fee for the matching distance band', async () => {
     const { service } = makeService();
     const result = await service.calculate(context);
@@ -97,10 +109,65 @@ describe('PricingService distance-tier pricing', () => {
     expect(repo.updateZone).not.toHaveBeenCalled();
   });
 
-  it('blocks activation when no active distance tier exists', async () => {
-    const { service, repo } = makeService([]);
-    await expect(service.updateZone('zone-1', { isActive: true })).rejects.toBeInstanceOf(BadRequestException);
-    expect(repo.updateZone).not.toHaveBeenCalled();
+  it('allows activation with at least one active approved distance tier and secure routing', async () => {
+    const previous = process.env.ROUTING_API_URL;
+    const previousKey = process.env.ROUTING_API_KEY;
+    process.env.ROUTING_API_URL = 'https://api.heigit.org/openrouteservice/v2/directions/driving-car/json';
+    process.env.ROUTING_API_KEY = 'test-api-key';
+    try {
+      const { service, repo } = makeService([{
+        id: 'tier-0-2', zone_id: 'zone-1', min_distance_km: 0,
+        max_distance_km: 2, delivery_fee: 300, is_active: true,
+      }]);
+      await expect(service.updateZone('zone-1', { isActive: true })).resolves.toBeDefined();
+      expect(repo.updateZone).toHaveBeenCalledWith('zone-1', { isActive: true });
+    } finally {
+      if (previous === undefined) delete process.env.ROUTING_API_URL;
+      else process.env.ROUTING_API_URL = previous;
+      if (previousKey === undefined) delete process.env.ROUTING_API_KEY;
+      else process.env.ROUTING_API_KEY = previousKey;
+    }
+  });
+
+  it('reports only safe readiness metadata for the canonical ORS configuration', () => {
+    const previousUrl = process.env.ROUTING_API_URL;
+    const previousKey = process.env.ROUTING_API_KEY;
+    process.env.ROUTING_API_URL = 'https://api.heigit.org/openrouteservice/v2/directions/driving-car/json';
+    process.env.ROUTING_API_KEY = 'never-return-this-secret';
+    try {
+      const { service } = makeService();
+      expect(service.getRoutingProviderStatus()).toEqual({
+        provider: 'openrouteservice', configured: true, protocol: 'https',
+      });
+      expect(JSON.stringify(service.getRoutingProviderStatus())).not.toContain('never-return-this-secret');
+    } finally {
+      if (previousUrl === undefined) delete process.env.ROUTING_API_URL;
+      else process.env.ROUTING_API_URL = previousUrl;
+      if (previousKey === undefined) delete process.env.ROUTING_API_KEY;
+      else process.env.ROUTING_API_KEY = previousKey;
+    }
+  });
+
+  it.each([
+    'http://api.heigit.org/openrouteservice/v2/directions/driving-car/json',
+    'https://api.heigit.org.evil.test/openrouteservice/v2/directions/driving-car/json',
+    'https://user:pass@api.heigit.org/openrouteservice/v2/directions/driving-car/json',
+    'https://api.heigit.org:8443/openrouteservice/v2/directions/driving-car/json',
+    'https://api.heigit.org/openrouteservice/v2/directions/driving-car/json?debug=true',
+  ])('rejects non-canonical ORS readiness endpoint %s', (endpoint) => {
+    const previousUrl = process.env.ROUTING_API_URL;
+    const previousKey = process.env.ROUTING_API_KEY;
+    process.env.ROUTING_API_URL = endpoint;
+    process.env.ROUTING_API_KEY = 'test-api-key';
+    try {
+      const { service } = makeService();
+      expect(service.getRoutingProviderStatus().configured).toBe(false);
+    } finally {
+      if (previousUrl === undefined) delete process.env.ROUTING_API_URL;
+      else process.env.ROUTING_API_URL = previousUrl;
+      if (previousKey === undefined) delete process.env.ROUTING_API_KEY;
+      else process.env.ROUTING_API_KEY = previousKey;
+    }
   });
 
   it('blocks activation when a secure routing provider is not configured', async () => {
@@ -198,6 +265,18 @@ describe('PricingService distance-tier pricing', () => {
     const result = await service.calculate(context);
     expect(result.deliveryFee).toBe(900);
     expect(result.distanceTierId).toBe('tier-4-6');
+  });
+
+  it('selects the next band using exact route distance before rounding the displayed value', async () => {
+    const { service, repo } = makeService([
+      { id: 'tier-0-2', zone_id: 'zone-1', min_distance_km: 0, max_distance_km: 2, delivery_fee: 300, is_active: true },
+      { id: 'tier-2-4', zone_id: 'zone-1', min_distance_km: 2, max_distance_km: 4, delivery_fee: 700, is_active: true },
+    ]);
+    repo.calculateRouteDistanceKm.mockResolvedValue(2.001);
+    const result = await service.calculate(context);
+    expect(result.deliveryFee).toBe(700);
+    expect(result.distanceTierId).toBe('tier-2-4');
+    expect(result.distanceKm).toBe(2.001);
   });
 
   it('accepts only the six approved distance band boundaries', async () => {

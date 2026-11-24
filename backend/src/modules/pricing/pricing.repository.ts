@@ -1,4 +1,4 @@
-import { Injectable, ServiceUnavailableException } from '@nestjs/common';
+import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
 import { DatabaseService } from '../../database/database.service';
 
 function pricingPointInCoverage(value: unknown, longitude: number, latitude: number): boolean {
@@ -54,6 +54,8 @@ export interface ZoneRow {
 
 @Injectable()
 export class PricingRepository {
+  private readonly logger = new Logger(PricingRepository.name);
+
   constructor(private readonly db: DatabaseService) {}
 
   async getStoreQuoteDetails(storeId: string): Promise<{
@@ -135,7 +137,7 @@ export class PricingRepository {
     const r = await this.db.query<{ eligible: boolean }>(
       `SELECT EXISTS (
          SELECT 1 FROM delivery_zones z
-         WHERE z.id = $1 AND z.is_active = true
+         WHERE z.id = $1
            AND z.coverage_status = 'verified' AND z.coverage_geojson IS NOT NULL
            AND z.coverage_verified_at IS NOT NULL AND z.coverage_verified_by IS NOT NULL
            AND length(trim(coalesce(z.coverage_verification_note, ''))) >= 8
@@ -161,6 +163,17 @@ export class PricingRepository {
       [input.zoneId, input.geojson ? JSON.stringify(input.geojson) : null, input.status, input.actorId, input.note],
     );
     return r.rows.length > 0;
+  }
+
+  async listDistanceTiers(zoneId: string): Promise<DistanceTierRow[]> {
+    const r = await this.db.query<DistanceTierRow>(
+      `SELECT id, zone_id, min_distance_km, max_distance_km, delivery_fee, is_active
+       FROM delivery_zone_distance_tiers
+       WHERE zone_id = $1
+       ORDER BY min_distance_km ASC, created_at ASC`,
+      [zoneId],
+    );
+    return r.rows;
   }
 
   async listActiveDistanceTiers(zoneId: string): Promise<DistanceTierRow[]> {
@@ -317,8 +330,9 @@ export class PricingRepository {
 
   /**
    * Road distance from the configured routing provider.
-   * ROUTING_API_URL must implement POST {origin:{latitude,longitude},destination:{latitude,longitude}}
-   * and return {distanceKm:number}. No straight-line fallback is permitted for charging.
+   * ROUTING_API_URL must be the HeiGIT ORS driving-car JSON directions endpoint.
+   * Sends [longitude, latitude] coordinates and reads routes[0].summary.distance in meters.
+   * No straight-line fallback is permitted for charging.
    */
   async calculateRouteDistanceKm(
     originLat: number, originLng: number, destinationLat: number, destinationLng: number,
@@ -334,33 +348,49 @@ export class PricingRepository {
     try { url = new URL(endpoint); } catch {
       throw new ServiceUnavailableException({ code: 'ROUTING_CONFIG_INVALID', message: 'إعداد خدمة التوجيه غير صالح.' });
     }
-    if (url.protocol !== 'https:' && process.env.NODE_ENV === 'production') {
-      throw new ServiceUnavailableException({ code: 'ROUTING_CONFIG_INSECURE', message: 'يجب استخدام HTTPS لخدمة التوجيه.' });
+    const apiKey = process.env.ROUTING_API_KEY?.trim();
+    if (url.origin !== 'https://api.heigit.org'
+        || url.pathname !== '/openrouteservice/v2/directions/driving-car/json'
+        || url.username || url.password || url.search || url.hash || !apiKey) {
+      throw new ServiceUnavailableException({
+        code: 'ROUTING_CONFIG_INVALID',
+        message: 'يجب إعداد عنوان ORS الرسمي ومفتاح API صالحين عبر إعدادات الخدمة.',
+      });
     }
+    let providerStatus: number | null = null;
     try {
       const response = await fetch(url, {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
-          ...(process.env.ROUTING_API_KEY ? { authorization: `Bearer ${process.env.ROUTING_API_KEY}` } : {}),
+          authorization: apiKey,
         },
         body: JSON.stringify({
-          origin: { latitude: originLat, longitude: originLng },
-          destination: { latitude: destinationLat, longitude: destinationLng },
+          coordinates: [
+            [originLng, originLat],
+            [destinationLng, destinationLat],
+          ],
+          units: 'm',
         }),
         redirect: 'error',
         signal: AbortSignal.timeout(10000),
       });
-      if (!response.ok) throw new Error(`Routing provider returned HTTP ${response.status}`);
-      const data = await response.json() as { distanceKm?: unknown };
-      const rawDistance = data?.distanceKm;
-      const distance = typeof rawDistance === 'number' ? rawDistance
-        : (typeof rawDistance === 'string' && rawDistance.trim() ? Number(rawDistance) : Number.NaN);
+      providerStatus = response.status;
+      if (!response.ok) throw new Error('ORS_REQUEST_FAILED');
+      const data = await response.json() as {
+        routes?: Array<{ summary?: { distance?: unknown } }>;
+      };
+      const meters = data?.routes?.[0]?.summary?.distance;
+      const distance = typeof meters === 'number' ? meters / 1000 : Number.NaN;
       if (!Number.isFinite(distance) || distance < 0 || distance > 500) {
-        throw new Error('Routing provider returned an invalid distanceKm');
+        throw new Error('ORS returned an invalid or missing route distance');
       }
       return distance;
     } catch (error) {
+      const errorType = error instanceof Error ? error.name : 'UnknownError';
+      this.logger.warn(
+        `ORS directions request failed${providerStatus === null ? '' : ` (HTTP ${providerStatus})`}; ${errorType}`,
+      );
       throw new ServiceUnavailableException({
         code: 'ROUTING_UNAVAILABLE',
         message: 'تعذر حساب مسافة الطريق من مزود التوجيه؛ لم يتم استخدام مسافة خط مستقيم أو رسوم بديلة.',
