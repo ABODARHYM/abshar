@@ -85,7 +85,7 @@ describe('real migration files', () => {
     const sql = readFileSync(join(dir, '049_original_delivery_fee_provenance.sql'), 'utf8');
     expect(sql).toContain('original_delivery_fee_verified boolean NOT NULL DEFAULT FALSE');
     expect(sql).toContain('ADD COLUMN IF NOT EXISTS');
-    expect(sql).not.toMatch(/UPDATE\\s+orders/i);
+    expect(sql).not.toMatch(/UPDATE\s+orders/i);
   });
 
   it('preflights duplicate order-based loyalty earns without mutating historical ledger rows', () => {
