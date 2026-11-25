@@ -634,7 +634,7 @@ export class StoreOwnerRepository {
     total_products: number;
     available_products: number;
     total_revenue: number;
-    revenue_by_currency: Array<{ currency: string; total_revenue: string }>;
+    revenue_by_currency: Array<{ currency: string; total_revenue: string; delivered_orders: string }>;
   }> {
     const r = await this.db.query<{
       total_orders: string;
@@ -664,11 +664,13 @@ export class StoreOwnerRepository {
     const revenue = await this.db.query<{
       currency: string;
       total_revenue: string;
+      delivered_orders: string;
     }>(
       `
       SELECT
         COALESCE(NULLIF(BTRIM(currency), ''), 'UNKNOWN') AS currency,
-        COALESCE(SUM(total), 0)::text AS total_revenue
+        COALESCE(SUM(total), 0)::text AS total_revenue,
+        COUNT(*)::text AS delivered_orders
       FROM orders
       WHERE store_id = $1 AND status = 'delivered'
       GROUP BY COALESCE(NULLIF(BTRIM(currency), ''), 'UNKNOWN')
