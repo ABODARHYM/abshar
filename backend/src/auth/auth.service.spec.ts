@@ -3,6 +3,7 @@ jest.mock('@nestjs/jwt', () => ({
 }));
 
 import { UnauthorizedException } from '@nestjs/common';
+import * as bcrypt from 'bcryptjs';
 import { AuthService } from './auth.service';
 
 describe('AuthService refresh-token lifecycle', () => {
@@ -93,5 +94,65 @@ describe('AuthService refresh-token lifecycle', () => {
     expect(db.query).toHaveBeenCalledTimes(1);
     expect(String(db.query.mock.calls[0][0])).toContain('WHERE token_hash = $1');
     expect(db.query.mock.calls[0][1][0]).not.toBe('logout-refresh-token');
+  });
+});
+
+describe('AuthService login lockout concurrency', () => {
+  let db: any;
+  let service: AuthService;
+
+  beforeEach(() => {
+    db = {
+      query: jest.fn().mockResolvedValue({ rows: [] }),
+      transaction: jest.fn(),
+    };
+    const config = {
+      all: { jwt: { accessTtlSeconds: 900, refreshTtlSeconds: 86400, accessSecret: 'test-secret' } },
+    };
+    const jwt = { signAsync: jest.fn().mockResolvedValue('new-access-token') };
+    service = new AuthService(db, config as any, jwt as any);
+  });
+
+  it('increments failed attempts atomically in SQL instead of using a stale count', async () => {
+    await (service as any).recordFailedLogin('user-1');
+
+    expect(db.query).toHaveBeenCalledTimes(1);
+    const sql = String(db.query.mock.calls[0][0]);
+    expect(sql).toContain('failed_login_attempts + 1 >= 5');
+    expect(sql).toContain('ELSE failed_login_attempts + 1');
+    expect(sql).toContain("now() + interval '15 minutes'");
+    expect(db.query.mock.calls[0][1]).toEqual(['user-1']);
+  });
+
+  it('does not clear a lock applied while a correct password was being checked', async () => {
+    const compare = jest.spyOn(bcrypt, 'compare').mockResolvedValue(true);
+    db.query
+      .mockResolvedValueOnce({
+        rows: [{
+          id: 'user-1',
+          email: 'test@example.com',
+          phone: null,
+          password_hash: 'stored-hash',
+          full_name: 'Test User',
+          status: 'active',
+          failed_login_attempts: 4,
+          locked_until: null,
+        }],
+      })
+      .mockResolvedValueOnce({ rows: [] });
+
+    try {
+      await expect(service.login({
+        identifier: 'test@example.com',
+        password: 'correct-password',
+      } as any)).rejects.toThrow('Account is temporarily locked');
+
+      const updateSql = String(db.query.mock.calls[1][0]);
+      expect(updateSql).toContain("locked_until <= now()");
+      expect(updateSql).toContain('RETURNING id');
+      expect(db.query).toHaveBeenCalledTimes(2);
+    } finally {
+      compare.mockRestore();
+    }
   });
 });
