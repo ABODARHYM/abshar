@@ -231,6 +231,23 @@ describe('FinanceRepository shared delivery transaction', () => {
     ]);
   });
 
+  it('blocks commission creation when a non-null historical original fee is not verified', async () => {
+    const client = {
+      query: jest.fn()
+        .mockResolvedValueOnce({ rows: [{
+          id: 'legacy-unverified-order', store_id: 'store-1', driver_id: 'driver-1',
+          subtotal: '100.00', delivery_fee: '0.00', original_delivery_fee: '25.00',
+          original_delivery_fee_verified: false,
+          discount_total: '0.00', total: '100.00', currency: 'YER',
+        }], rowCount: 1 }),
+    };
+    const repo = new FinanceRepository({} as any);
+
+    await expect(repo.computeCommissionForOrder('legacy-unverified-order', client as any))
+      .rejects.toThrow('unknown or unverified');
+    expect(client.query).toHaveBeenCalledTimes(1);
+  });
+
   it('refuses to invent a driver fee for historical free-delivery orders with unknown originals', async () => {
     const client = {
       query: jest.fn()
