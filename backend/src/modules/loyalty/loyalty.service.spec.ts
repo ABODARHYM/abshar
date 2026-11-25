@@ -7,7 +7,7 @@ describe('LoyaltyService.earnFromOrderInTransaction', () => {
     const repo = { addPoints: jest.fn().mockResolvedValue(undefined) };
     const service = new LoyaltyService(repo as any);
 
-    await service.earnFromOrderInTransaction(client, 'customer-1', 'order-1', 12500, 'YER');
+    await service.earnFromOrderInTransaction(client, 'customer-1', 'order-1', 12500);
 
     expect(repo.addPoints).toHaveBeenCalledTimes(1);
     expect(repo.addPoints).toHaveBeenCalledWith(client, expect.objectContaining({
@@ -22,7 +22,7 @@ describe('LoyaltyService.earnFromOrderInTransaction', () => {
     const repo = { addPoints: jest.fn() };
     const service = new LoyaltyService(repo as any);
 
-    await service.earnFromOrderInTransaction({} as PoolClient, 'customer-1', 'order-2', 99, 'YER');
+    await service.earnFromOrderInTransaction({} as PoolClient, 'customer-1', 'order-2', 99);
 
     expect(repo.addPoints).not.toHaveBeenCalled();
   });
