@@ -70,8 +70,8 @@ export class LoyaltyService {
         reward: this.toReward(reward),
       };
     } catch (e) {
-      if ((e as Error).message === 'INSUFFICIENT_POINTS') {
-        throw new BadRequestException({ code: ErrorCode.ValidationFailed, message: 'رصيدك غير كافٍ' });
+      if (['INSUFFICIENT_POINTS', 'REWARD_OUT_OF_STOCK', 'REWARD_UNAVAILABLE'].includes((e as Error).message)) {
+        throw new BadRequestException({ code: ErrorCode.ValidationFailed, message: (e as Error).message === 'INSUFFICIENT_POINTS' ? 'رصيدك غير كافٍ' : 'المكافأة لم تعد متاحة أو نفدت كميتها' });
       }
       throw e;
     }
