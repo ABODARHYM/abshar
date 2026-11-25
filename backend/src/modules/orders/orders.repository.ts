@@ -183,7 +183,8 @@ export class OrdersRepository {
           delivery_latitude, delivery_longitude,
           recipient_name, recipient_phone, idempotency_key, coupon_id,
           delivery_distance_km, delivery_zone_id, delivery_distance_tier_id,
-          delivery_distance_source, delivery_pricing_version, delivery_pricing_snapshot
+          delivery_distance_source, delivery_pricing_version, delivery_pricing_snapshot,
+          original_delivery_fee_verified
         )
         VALUES (
           $1, $2, 'pending', 'cash_on_delivery', 'pending',
@@ -191,7 +192,7 @@ export class OrdersRepository {
           $9, $10, $11,
           $12, $13,
           $14, $15, $16, $17,
-          $18, $19, $20, $21, $22, $23::jsonb
+          $18, $19, $20, $21, $22, $23::jsonb, TRUE
         )
         RETURNING *
         `,
