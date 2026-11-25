@@ -153,42 +153,55 @@ export class LoyaltyRepository {
     currency: string,
   ): Promise<{ transactionId: string; newBalance: number }> {
     return this.db.transaction(async (client) => {
-      // 1) تحقق من الرصيد
+      // Lock the reward first so concurrent redemptions cannot exceed finite stock.
+      const lockedReward = await client.query<{
+        id: string; name_ar: string; points_cost: number;
+        stock: number | null; used_count: number; is_active: boolean;
+      }>(
+        `SELECT id, name_ar, points_cost, stock, used_count, is_active
+         FROM rewards WHERE id = $1 FOR UPDATE`,
+        [reward.id],
+      );
+      const currentReward = lockedReward.rows[0];
+      if (!currentReward || !currentReward.is_active) {
+        throw new Error('REWARD_UNAVAILABLE');
+      }
+      if (currentReward.stock !== null && currentReward.used_count >= currentReward.stock) {
+        throw new Error('REWARD_OUT_OF_STOCK');
+      }
+
+      // Lock the customer balance and use the authoritative reward cost.
       const bal = await client.query<{ loyalty_points: number }>(
         `SELECT loyalty_points FROM customers WHERE user_id = $1 FOR UPDATE`,
         [customerId],
       );
       const current = bal.rows[0]?.loyalty_points ?? 0;
-      if (current < reward.points_cost) {
+      if (current < currentReward.points_cost) {
         throw new Error('INSUFFICIENT_POINTS');
       }
 
-      // 2) سجّل transaction
       const tx = await client.query<{ id: string }>(
         `INSERT INTO loyalty_transactions (customer_id, type, points, reward_id, description)
          VALUES ($1, 'redeem', $2, $3, $4)
          RETURNING id::text`,
-        [customerId, -reward.points_cost, reward.id, `Redeemed: ${reward.name_ar}`],
+        [customerId, -currentReward.points_cost, currentReward.id, `Redeemed: ${currentReward.name_ar}`],
       );
 
-      // 3) حدّث الرصيد (upsert لضمان وجود السجل)
       await client.query(
         `INSERT INTO customers (user_id, loyalty_points)
          VALUES ($2::uuid, 0)
          ON CONFLICT (user_id) DO UPDATE
          SET loyalty_points = GREATEST(0, customers.loyalty_points - $1::int),
              updated_at = now()`,
-        [reward.points_cost, customerId],
+        [currentReward.points_cost, customerId],
       );
 
-      // 4) حدّث عدد استخدامات المكافأة
       await client.query(
         `UPDATE rewards SET used_count = used_count + 1 WHERE id = $1`,
-        [reward.id],
+        [currentReward.id],
       );
 
-      const newBalance = current - reward.points_cost;
-
+      const newBalance = current - currentReward.points_cost;
       return { transactionId: tx.rows[0].id, newBalance };
     });
   }
