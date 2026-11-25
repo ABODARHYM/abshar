@@ -12,6 +12,7 @@ interface PlatformStats {
   totalRevenue: number;
   todayOrders: number;
   todayRevenue: number;
+  revenueByCurrency: Array<{ currency: string; totalRevenue: number; todayRevenue: number }>;
   activeStores: number;
   activeDrivers: number;
   pendingOrders: number;
@@ -71,15 +72,17 @@ export default function AdminDashboard() {
                 </div>
               </div>
             </div>
-            <div className="card">
-              <div className="flex items-center gap-3">
-                <span className="text-3xl">💰</span>
-                <div>
-                  <div className="text-xs text-[var(--text-muted)]">إيرادات اليوم</div>
-                  <div className="text-3xl font-black">{fmt(stats?.todayRevenue)} <span className="text-sm">ر.ي</span></div>
+            {stats?.revenueByCurrency?.map((item) => (
+              <div className="card" key={item.currency}>
+                <div className="flex items-center gap-3">
+                  <span className="text-3xl">💰</span>
+                  <div>
+                    <div className="text-xs text-[var(--text-muted)]">إيرادات اليوم — {item.currency}</div>
+                    <div className="text-3xl font-black">{fmt(item.todayRevenue)}</div>
+                  </div>
                 </div>
               </div>
-            </div>
+            ))}
             <div className="card">
               <div className="flex items-center gap-3">
                 <span className="text-3xl">⏳</span>
@@ -109,14 +112,17 @@ export default function AdminDashboard() {
           </div>
 
           <div className="card card-accent mt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-sm text-[var(--text-muted)] mb-1">إجمالي إيرادات المنصة</div>
-                <div className="text-4xl font-black text-accent">
-                  {fmt(stats?.totalRevenue)} <span className="text-lg">ر.ي</span>
+            <div className="flex items-center justify-between mb-3">
+              <div className="text-sm text-[var(--text-muted)]">إجمالي إيرادات المنصة حسب العملة</div>
+              <div className="text-4xl">💎</div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              {stats?.revenueByCurrency?.length ? stats.revenueByCurrency.map((item) => (
+                <div key={item.currency} className="rounded-xl border border-[var(--bg-border)] p-3">
+                  <div className="text-xs text-[var(--text-muted)]">{item.currency}</div>
+                  <div className="text-2xl font-black text-accent">{fmt(item.totalRevenue)}</div>
                 </div>
-              </div>
-              <div className="text-6xl">💎</div>
+              )) : <div className="text-sm text-[var(--text-muted)]">لا توجد إيرادات مسجلة</div>}
             </div>
           </div>
         </>
