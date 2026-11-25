@@ -90,6 +90,35 @@ export class ProfileRepository {
     return result.rows[0]?.password_hash ?? null;
   }
 
+  async changePasswordAndRevokeAllRefreshTokens(
+    userId: string,
+    currentPasswordHash: string,
+    newPasswordHash: string,
+  ): Promise<number | null> {
+    return this.db.transaction(async (client) => {
+      // Compare-and-swap prevents concurrent password changes from both succeeding.
+      // Password update and session revocation commit or roll back together.
+      const updated = await client.query<{ id: string }>(
+        `UPDATE users
+         SET password_hash = $1
+         WHERE id = $2
+           AND password_hash = $3
+           AND deleted_at IS NULL
+         RETURNING id`,
+        [newPasswordHash, userId, currentPasswordHash],
+      );
+      if (updated.rowCount === 0) return null;
+
+      const revoked = await client.query(
+        `UPDATE refresh_tokens
+         SET revoked_at = COALESCE(revoked_at, now())
+         WHERE user_id = $1 AND revoked_at IS NULL`,
+        [userId],
+      );
+      return revoked.rowCount ?? 0;
+    });
+  }
+
   async updatePassword(userId: string, passwordHash: string): Promise<void> {
     await this.db.query(
       `UPDATE users SET password_hash = $1 WHERE id = $2 AND deleted_at IS NULL`,
