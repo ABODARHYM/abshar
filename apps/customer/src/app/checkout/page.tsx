@@ -181,7 +181,7 @@ export default function CheckoutPage() {
       return;
     }
     if (store.minOrderAmount && subtotal < store.minOrderAmount) {
-      setError(`الحد الأدنى ${store.minOrderAmount} {currencyLabel}`);
+      setError(`الحد الأدنى ${store.minOrderAmount} ${currencyLabel}`);
       return;
     }
 
