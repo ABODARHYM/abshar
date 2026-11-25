@@ -16,7 +16,7 @@ interface StatsData {
   totalProducts?: number;
   availableProducts?: number;
   totalRevenue?: number;
-  revenueByCurrency?: Array<{ currency: string; totalRevenue: number }>;
+  revenueByCurrency?: Array<{ currency: string; totalRevenue: number; deliveredOrders: number }>;
 }
 
 export default function StatsPage() {
@@ -36,6 +36,8 @@ export default function StatsPage() {
   }, [router]);
 
   const fmt = (v?: number) => Number(v || 0).toLocaleString('en-US');
+  const currencyNames: Record<string, string> = { YER: 'ر.ي', SAR: 'ر.س', USD: 'دولار أمريكي' };
+  const currencyLabel = (currency: string) => currencyNames[currency] || currency;
 
   return (
     <div className="app-shell bg-[var(--bg-base)] pb-20">
@@ -71,13 +73,13 @@ export default function StatsPage() {
                     <StatBox
                       key={item.currency}
                       icon="💰"
-                      label={`الإيرادات — ${item.currency}`}
-                      value={fmt(item.totalRevenue)}
+                      label={`قيمة الطلبات المسلّمة — ${currencyLabel(item.currency)}`}
+                      value={`${fmt(item.totalRevenue)} ${currencyLabel(item.currency)}`}
                       color="emerald"
                     />
                   ))
                 ) : (
-                  <StatBox icon="💰" label="الإيرادات" value="0" color="emerald" />
+                  <StatBox icon="💰" label="قيمة الطلبات المسلّمة" value="0" color="emerald" />
                 )}
               </div>
             </section>
@@ -90,7 +92,15 @@ export default function StatsPage() {
                 <StatBox icon="✅" label="جاهزة" value={fmt(stats.readyOrders)} color="emerald" />
                 <StatBox icon="🎉" label="تم التسليم" value={fmt(stats.deliveredOrders)} color="purple" />
                 <StatBox icon="❌" label="ملغاة" value={fmt(stats.cancelledOrders)} color="red" />
-                <StatBox icon="💵" label="متوسط الطلب" value={`${stats.totalOrders ? Math.round((stats.totalRevenue || 0) / stats.totalOrders) : 0} ر.ي`} color="gold" />
+                {stats.revenueByCurrency?.map((item) => (
+                  <StatBox
+                    key={`average-${item.currency}`}
+                    icon="💵"
+                    label={`متوسط الطلب المسلّم — ${currencyLabel(item.currency)}`}
+                    value={`${fmt(item.deliveredOrders ? item.totalRevenue / item.deliveredOrders : 0)} ${currencyLabel(item.currency)}`}
+                    color="gold"
+                  />
+                ))}
               </div>
             </section>
 
