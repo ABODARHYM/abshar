@@ -255,6 +255,7 @@ describe('FinanceRepository shared delivery transaction', () => {
           id: 'order-review', status: 'delivered', driver_id: 'driver-1',
           delivery_fee: '5.00', original_delivery_fee: null, verified: false,
         }], rowCount: 1 })
+        .mockResolvedValueOnce({ rows: [{ has_commission: false, has_settlement_item: false }], rowCount: 1 })
         .mockResolvedValueOnce({ rows: [{ id: 'order-review' }], rowCount: 1 })
         .mockResolvedValueOnce({ rows: [], rowCount: 1 }),
     };
@@ -265,9 +266,10 @@ describe('FinanceRepository shared delivery transaction', () => {
       actorId: 'admin-1', actorRole: 'admin',
     });
     expect(result).toEqual({ orderId: 'order-review', originalDeliveryFee: 12.5, verified: true });
-    expect(String(client.query.mock.calls[1][0])).toContain('original_delivery_fee_verified = TRUE');
-    expect(String(client.query.mock.calls[2][0])).toContain('INSERT INTO audit_logs');
-    expect(client.query.mock.calls[2][1][0]).toBe('admin-1');
+    expect(String(client.query.mock.calls[1][0])).toContain('has_commission');
+    expect(String(client.query.mock.calls[2][0])).toContain('original_delivery_fee_verified = TRUE');
+    expect(String(client.query.mock.calls[3][0])).toContain('INSERT INTO audit_logs');
+    expect(client.query.mock.calls[3][1][0]).toBe('admin-1');
     expect(db.transaction).toHaveBeenCalledTimes(1);
   });
 
@@ -301,7 +303,7 @@ describe('FinanceRepository shared delivery transaction', () => {
 
     await expect(repo.computeCommissionForOrder('legacy-order', client as any))
       .rejects.toThrow('Original delivery fee is unknown');
-    expect(client.query).toHaveBeenCalledTimes(2);
+    expect(client.query).toHaveBeenCalledTimes(1);
   });
 
   it('blocks fee verification when historical commission records exist', async () => {
