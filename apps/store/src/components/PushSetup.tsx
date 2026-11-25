@@ -111,12 +111,12 @@ export default function PushSetup() {
     try {
       const perm = await Notification.requestPermission();
       setPermission(perm);
-      if (perm !== 'granted') { setError('لم يتم السماح بالإشعارات'); setLoading(false); return; }
+      if (perm !== 'granted') { setError('لم يتم السماح بالإشعارات'); return; }
       const reg = await navigator.serviceWorker.ready;
       const kRes = await authFetch('/api/v1/notifications/push/public-key');
-      if (!kRes.ok) { setError('فشل جلب مفتاح الإشعارات'); setLoading(false); return; }
+      if (!kRes.ok) { setError('فشل جلب مفتاح الإشعارات'); return; }
       const { publicKey, enabled } = await kRes.json();
-      if (!enabled || !publicKey) { setError('الإشعارات غير مفعلة على الخادم'); setLoading(false); return; }
+      if (!enabled || !publicKey) { setError('الإشعارات غير مفعلة على الخادم'); return; }
       let sub = await reg.pushManager.getSubscription();
       if (sub && !subscriptionUsesKey(sub, publicKey)) {
         const removeResponse = await authFetch('/api/v1/notifications/push/unsubscribe', {
@@ -125,13 +125,11 @@ export default function PushSetup() {
         });
         if (!removeResponse.ok) {
           setError('تعذر إزالة الاشتراك القديم من الخادم. أعد المحاولة.');
-          setLoading(false);
           return;
         }
         const removed = await sub.unsubscribe();
         if (!removed) {
           setError('تعذر إزالة الاشتراك القديم من هذا الجهاز.');
-          setLoading(false);
           return;
         }
         sub = null;
@@ -147,10 +145,13 @@ export default function PushSetup() {
         method: 'POST',
         body: JSON.stringify({ endpoint: json.endpoint, p256dh: json.keys?.p256dh, auth: json.keys?.auth, userAgent: navigator.userAgent }),
       });
-      if (!sRes.ok) { setError('فشل حفظ الاشتراك'); setLoading(false); return; }
+      if (!sRes.ok) { setError('فشل حفظ الاشتراك'); return; }
       setSubscribed(true);
-    } catch (e) { setError('خطأ: ' + (e as Error).message); }
-    setLoading(false);
+    } catch (e) {
+      setError('خطأ: ' + (e as Error).message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const disable = async () => {
@@ -165,14 +166,16 @@ export default function PushSetup() {
         });
         if (!response.ok) {
           setError('تعذر إلغاء الاشتراك من الخادم. أعد المحاولة.');
-          setLoading(false);
           return;
         }
         await sub.unsubscribe();
       }
       setSubscribed(false);
-    } catch (e) { setError('خطأ: ' + (e as Error).message); }
-    setLoading(false);
+    } catch (e) {
+      setError('خطأ: ' + (e as Error).message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (!supported) return <div className="card bg-amber-500/10 border-amber-500/30"><p className="text-sm text-amber-400">⚠️ الإشعارات غير مدعومة في هذا المتصفح</p></div>;
