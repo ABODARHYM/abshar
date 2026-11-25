@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { PoolClient } from 'pg';
 import { ErrorCode } from '../../common/error-codes';
 import { buildPage, Paginated } from '../../common/pagination.dto';
 import { LoyaltyRepository, RewardRow } from './loyalty.repository';
@@ -108,6 +109,33 @@ export class LoyaltyService {
     const expiresAt = new Date(Date.now() + expiryDays * 86400000);
 
     await this.repo.addPoints(null, {
+      customerId,
+      type: 'earn',
+      points,
+      orderId,
+      description: `Earned from order (${points} pts)`,
+      expiresAt,
+    });
+  }
+
+  /**
+   * Earn order points using the caller's transaction so delivery and reward
+   * points either commit together or roll back together.
+   */
+  async earnFromOrderInTransaction(
+    client: PoolClient,
+    customerId: string,
+    orderId: string,
+    total: number,
+    currency: string,
+  ): Promise<void> {
+    const points = Math.floor(total * 0.01);
+    if (points <= 0) return;
+
+    const expiryDays = 365;
+    const expiresAt = new Date(Date.now() + expiryDays * 86400000);
+
+    await this.repo.addPoints(client, {
       customerId,
       type: 'earn',
       points,
