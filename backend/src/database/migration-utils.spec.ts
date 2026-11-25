@@ -81,6 +81,16 @@ describe('real migration files', () => {
       .toEqual(forward.map((migration) => migration.name));
   });
 
+  it('preflights duplicate order-based loyalty earns without mutating historical ledger rows', () => {
+    const sql = readFileSync(join(dir, '047_loyalty_order_earn_idempotency.sql'), 'utf8');
+    expect(sql).toContain('GROUP BY order_id');
+    expect(sql).toContain('HAVING COUNT(*) > 1');
+    expect(sql).toContain('RAISE EXCEPTION');
+    expect(sql).toContain('CREATE UNIQUE INDEX IF NOT EXISTS loyalty_transactions_order_earn_unique');
+    expect(sql).not.toMatch(/DELETE\\s+FROM\\s+loyalty_transactions/i);
+    expect(sql).not.toMatch(/UPDATE\\s+loyalty_transactions/i);
+  });
+
   it('normalizes the legacy 031 wrapper for execution without changing its source checksum', () => {
     const sql = readFileSync(join(dir, '031_store_applications.sql'), 'utf8');
     const normalized = stripOuterTransactionStatements(sql);
