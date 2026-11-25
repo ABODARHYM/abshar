@@ -19,8 +19,8 @@ describe('StoreOwnerRepository dashboard revenue', () => {
         })
         .mockResolvedValueOnce({
           rows: [
-            { currency: 'SAR', total_revenue: '8.00' },
-            { currency: 'YER', total_revenue: '2500.00' },
+            { currency: 'SAR', total_revenue: '8.00', delivered_orders: '1' },
+            { currency: 'YER', total_revenue: '2500.00', delivered_orders: '1' },
           ],
         }),
     };
@@ -31,9 +31,10 @@ describe('StoreOwnerRepository dashboard revenue', () => {
 
     expect(revenueParams).toEqual(['store-1']);
     expect(String(revenueSql)).toContain('GROUP BY');
+    expect(String(revenueSql)).toContain('COUNT(*)::text AS delivered_orders');
     expect(result.revenue_by_currency).toEqual([
-      { currency: 'SAR', total_revenue: '8.00' },
-      { currency: 'YER', total_revenue: '2500.00' },
+      { currency: 'SAR', total_revenue: '8.00', delivered_orders: '1' },
+      { currency: 'YER', total_revenue: '2500.00', delivered_orders: '1' },
     ]);
     expect(result.total_revenue).toBe(0);
     expect(result.delivered_orders).toBe(2);
