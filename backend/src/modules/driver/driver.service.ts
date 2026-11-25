@@ -354,15 +354,29 @@ export class DriverService {
   async getEarnings(userId: string): Promise<DriverEarningsResponseDto> {
     await this.requireDriver(userId);
     const e = await this.repo.getEarnings(userId);
+    const breakdown = e.currency_breakdown.map((row) => ({
+      currency: row.currency,
+      totalEarnings: Number(row.total_earnings),
+      totalDeliveries: Number(row.total_deliveries),
+      todayEarnings: Number(row.today_earnings),
+      todayDeliveries: Number(row.today_deliveries),
+      weekEarnings: Number(row.week_earnings),
+      weekDeliveries: Number(row.week_deliveries),
+      monthEarnings: Number(row.month_earnings),
+      monthDeliveries: Number(row.month_deliveries),
+    }));
+    const singleCurrency = breakdown.length === 1 ? breakdown[0] : null;
     return {
-      totalEarnings: Number(e.total_earnings),
-      totalDeliveries: Number(e.total_deliveries),
-      todayEarnings: Number(e.today_earnings),
-      todayDeliveries: Number(e.today_deliveries),
-      weekEarnings: Number(e.week_earnings),
-      weekDeliveries: Number(e.week_deliveries),
-      monthEarnings: Number(e.month_earnings),
-      monthDeliveries: Number(e.month_deliveries),
+      // Legacy scalar money fields are populated only when they represent one currency.
+      totalEarnings: singleCurrency?.totalEarnings ?? 0,
+      totalDeliveries: breakdown.reduce((sum, row) => sum + row.totalDeliveries, 0),
+      todayEarnings: singleCurrency?.todayEarnings ?? 0,
+      todayDeliveries: breakdown.reduce((sum, row) => sum + row.todayDeliveries, 0),
+      weekEarnings: singleCurrency?.weekEarnings ?? 0,
+      weekDeliveries: breakdown.reduce((sum, row) => sum + row.weekDeliveries, 0),
+      monthEarnings: singleCurrency?.monthEarnings ?? 0,
+      monthDeliveries: breakdown.reduce((sum, row) => sum + row.monthDeliveries, 0),
+      currencyBreakdown: breakdown,
     };
   }
 
