@@ -115,6 +115,15 @@ export class FinanceController {
     });
   }
 
+  // ═══ Admin: Financial review queue ═══
+
+  @Get('review/unverified-delivery-fees')
+  @RequirePermission('finance.read')
+  @ApiOperation({ summary: 'List delivered orders with unverified original delivery fees' })
+  listUnverifiedDeliveryFees(@Query() query: PaginationQueryDto) {
+    return this.service.listUnverifiedDeliveryFees({ page: query.page, limit: query.limit });
+  }
+
   // ═══ Admin: Settlements ═══
 
   @Get('settlements')
