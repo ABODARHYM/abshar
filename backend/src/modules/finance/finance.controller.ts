@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -16,7 +17,7 @@ import {
   ApiPropertyOptional,
   ApiTags,
 } from '@nestjs/swagger';
-import { IsIn, IsISO8601, IsNumber, IsOptional, IsString, IsUUID, MaxLength, Min } from 'class-validator';
+import { IsIn, IsISO8601, IsNumber, IsOptional, IsString, IsUUID, MaxLength, Min, MinLength } from 'class-validator';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../../auth/guards/permissions.guard';
 import { RequirePermission } from '../../auth/decorators/require-permission.decorator';
@@ -66,6 +67,7 @@ class VerifyOriginalDeliveryFeeDto {
 
   @ApiProperty({ minLength: 8, maxLength: 500 })
   @IsString()
+  @MinLength(8)
   @MaxLength(500)
   reason!: string;
 }
@@ -145,7 +147,7 @@ export class FinanceController {
     @Body() dto: VerifyOriginalDeliveryFeeDto,
   ) {
     if (dto.reason.trim().length < 8) {
-      throw new (require('@nestjs/common').BadRequestException)('A meaningful review reason is required');
+      throw new BadRequestException('A meaningful review reason is required');
     }
     return this.service.verifyOriginalDeliveryFee({
       orderId: id,
