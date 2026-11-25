@@ -17,6 +17,7 @@ on:
       - fix/admin-geography-city-access-20261123
       - fix/pricing-coverage-status-param-20261123
       - fix/require-complete-distance-bands-20261123
+      - fix/remove-sensitive-debug-routes-20261125
 
 permissions:
   contents: read
