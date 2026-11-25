@@ -87,6 +87,37 @@ export class OrdersRepository {
     },
   ): Promise<OrderRow> {
     return this.db.transaction(async (client: PoolClient) => {
+      // Serialize coupon consumption and re-check limits inside the order transaction.
+      if (payload.couponId) {
+        const locked = await client.query<{
+          is_active: boolean; starts_at: Date | null; expires_at: Date | null;
+          usage_limit: number | null; per_user_limit: number | null;
+          used_count: number; store_id: string | null;
+        }>(
+          `SELECT is_active, starts_at, expires_at, usage_limit, per_user_limit, used_count, store_id
+           FROM coupons WHERE id = $1 FOR UPDATE`,
+          [payload.couponId],
+        );
+        const coupon = locked.rows[0];
+        const now = new Date();
+        if (!coupon || !coupon.is_active ||
+            (coupon.starts_at && coupon.starts_at > now) ||
+            (coupon.expires_at && coupon.expires_at <= now) ||
+            (coupon.store_id && coupon.store_id !== payload.storeId) ||
+            (coupon.usage_limit !== null && coupon.used_count >= coupon.usage_limit)) {
+          throw new Error('COUPON_USAGE_LIMIT_REACHED');
+        }
+        if (coupon.per_user_limit !== null) {
+          const usage = await client.query<{ count: string }>(
+            `SELECT COUNT(*)::text AS count FROM coupon_usage WHERE coupon_id = $1 AND user_id = $2`,
+            [payload.couponId, customerId],
+          );
+          if (Number(usage.rows[0]?.count ?? 0) >= coupon.per_user_limit) {
+            throw new Error('COUPON_USAGE_LIMIT_REACHED');
+          }
+        }
+      }
+
       // 1) إنشاء الطلب
       const orderRes = await client.query<OrderRow>(
         `
@@ -169,6 +200,19 @@ export class OrdersRepository {
         `,
         [order.id, customerId],
       );
+
+      // Coupon usage is part of the same transaction as order creation.
+      if (payload.couponId) {
+        await client.query(
+          `INSERT INTO coupon_usage (coupon_id, user_id, order_id, discount_amount)
+           VALUES ($1, $2, $3, $4)`,
+          [payload.couponId, customerId, order.id, payload.discountTotal],
+        );
+        await client.query(
+          `UPDATE coupons SET used_count = used_count + 1, updated_at = now() WHERE id = $1`,
+          [payload.couponId],
+        );
+      }
 
       return order;
     });
