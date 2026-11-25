@@ -127,7 +127,7 @@ export interface StatsResponse {
   totalProducts: number;
   availableProducts: number;
   totalRevenue: number;
-  revenueByCurrency: Array<{ currency: string; totalRevenue: number }>;
+  revenueByCurrency: Array<{ currency: string; totalRevenue: number; deliveredOrders: number }>;
 }
 
 @Injectable()
@@ -573,6 +573,7 @@ export class StoreOwnerService {
       revenueByCurrency: s.revenue_by_currency.map((row) => ({
         currency: row.currency,
         totalRevenue: Number(row.total_revenue),
+        deliveredOrders: Number(row.delivered_orders),
       })),
     };
   }
