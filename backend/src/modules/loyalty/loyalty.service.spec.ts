@@ -26,4 +26,14 @@ describe('LoyaltyService.earnFromOrderInTransaction', () => {
 
     expect(repo.addPoints).not.toHaveBeenCalled();
   });
+  it('propagates reward persistence failures so the enclosing delivery transaction can roll back', async () => {
+    const client = {} as PoolClient;
+    const repo = { addPoints: jest.fn().mockRejectedValue(new Error('database unavailable')) };
+    const service = new LoyaltyService(repo as any);
+
+    await expect(service.earnFromOrderInTransaction(client, 'customer-1', 'order-3', 1000))
+      .rejects.toThrow('database unavailable');
+    expect(repo.addPoints).toHaveBeenCalledWith(client, expect.any(Object));
+  });
+
 });
