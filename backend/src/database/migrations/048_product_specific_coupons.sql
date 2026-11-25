@@ -24,7 +24,7 @@ CREATE INDEX IF NOT EXISTS coupon_products_product_idx ON coupon_products(produc
 INSERT INTO coupon_products (coupon_id, product_id)
 SELECT c.id, p.id
 FROM coupons c
-JOIN products p ON p.category_id = c.category_id AND p.store_id = c.store_id
+JOIN products p ON p.category_id = c.category_id AND (c.store_id IS NULL OR p.store_id = c.store_id)
 WHERE c.category_id IS NOT NULL
 ON CONFLICT DO NOTHING;
 
