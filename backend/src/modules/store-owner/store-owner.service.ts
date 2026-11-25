@@ -127,6 +127,7 @@ export interface StatsResponse {
   totalProducts: number;
   availableProducts: number;
   totalRevenue: number;
+  revenueByCurrency: Array<{ currency: string; totalRevenue: number }>;
 }
 
 @Injectable()
@@ -569,6 +570,10 @@ export class StoreOwnerService {
       totalProducts: s.total_products,
       availableProducts: s.available_products,
       totalRevenue: s.total_revenue,
+      revenueByCurrency: s.revenue_by_currency.map((row) => ({
+        currency: row.currency,
+        totalRevenue: Number(row.total_revenue),
+      })),
     };
   }
 
