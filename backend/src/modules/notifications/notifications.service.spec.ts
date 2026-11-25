@@ -113,4 +113,28 @@ describe('NotificationsService durable push delivery', () => {
     expect(JSON.stringify(repo.markPushOutboxFailed.mock.calls)).not.toContain('secret');
   });
 
+  it('formats driver earnings notifications using the order currency', async () => {
+    const { service, repo } = makeService();
+
+    await service.notifyEarningsAdded('driver-1', 'AB-YER', 2500, 'YER');
+    expect(repo.createWithPushOutbox).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        userId: 'driver-1',
+        body: '+2500 ر.ي من الطلب AB-YER',
+        metadata: expect.objectContaining({ currency: 'YER' }),
+      }),
+      expect.any(Object),
+    );
+
+    await service.notifyEarningsAdded('driver-1', 'AB-SAR', 8, 'SAR');
+    expect(repo.createWithPushOutbox).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        userId: 'driver-1',
+        body: '+8 ر.س من الطلب AB-SAR',
+        metadata: expect.objectContaining({ currency: 'SAR' }),
+      }),
+      expect.any(Object),
+    );
+  });
+
 });
