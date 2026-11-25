@@ -64,10 +64,10 @@ describe('real migration files', () => {
   const dir = join(__dirname, 'migrations');
   const names = orderMigrationNames(readdirSync(dir));
 
-  it('preserves applied migration 031 and appends forward-only finance, notification, delivery-fee, distance-tier, verified geography, route snapshot, delivery coverage, and coupon targeting migrations', () => {
+  it('preserves applied migration 031 and appends forward-only finance, notification, delivery-fee, distance-tier, verified geography, route snapshot, delivery coverage, loyalty, and coupon targeting migrations', () => {
     const numbers = names.map((name) => Number(name.slice(0, 3)));
     expect(numbers.slice(0, 26)).toEqual(Array.from({ length: 26 }, (_, i) => i + 1));
-    expect(numbers.slice(26)).toEqual([31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 48]);
+    expect(numbers.slice(26)).toEqual([31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48]);
   });
 
   it('plans finance migrations after an already-applied 031 without out-of-order work', () => {
@@ -84,8 +84,8 @@ describe('real migration files', () => {
   it('normalizes the legacy 031 wrapper for execution without changing its source checksum', () => {
     const sql = readFileSync(join(dir, '031_store_applications.sql'), 'utf8');
     const normalized = stripOuterTransactionStatements(sql);
-    expect(normalized).not.toMatch(/^\s*BEGIN\s*;\s*$/m);
-    expect(normalized).not.toMatch(/^\s*COMMIT\s*;\s*$/m);
+    expect(normalized).not.toMatch(/^\\s*BEGIN\\s*;\\s*$/m);
+    expect(normalized).not.toMatch(/^\\s*COMMIT\\s*;\\s*$/m);
     expect(checksumOf(sql)).not.toBe(checksumOf(normalized));
   });
 
@@ -123,7 +123,7 @@ describe('real migration files', () => {
       'delivery_zones', 'banners', 'promotions', 'favorites', 'settings', 'audit_logs',
     ];
     for (const table of required) {
-      expect(all).toMatch(new RegExp(`CREATE TABLE ${table}\\s*\\(`));
+      expect(all).toMatch(new RegExp(`CREATE TABLE ${table}\\\\s*\\\\(`));
     }
   });
 
