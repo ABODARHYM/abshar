@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS coupon_products (
 
 CREATE INDEX IF NOT EXISTS coupon_products_product_idx ON coupon_products(product_id);
 
--- Preserve the original intent of legacy category-bound coupons.
+-- Preserve the original intent of every legacy category-bound coupon.
 INSERT INTO coupon_products (coupon_id, product_id)
 SELECT c.id, p.id
 FROM coupons c
@@ -28,7 +28,7 @@ JOIN products p ON p.category_id = c.category_id AND (c.store_id IS NULL OR p.st
 WHERE c.category_id IS NOT NULL
 ON CONFLICT DO NOTHING;
 
+-- Even when a category currently has no matching products, never broaden
+-- its coupon into a general coupon. An empty product scope safely matches none.
 UPDATE coupons SET scope = 'products'
-WHERE category_id IS NOT NULL AND EXISTS (
-  SELECT 1 FROM coupon_products cp WHERE cp.coupon_id = coupons.id
-);
+WHERE category_id IS NOT NULL;
