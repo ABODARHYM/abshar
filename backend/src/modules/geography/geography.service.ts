@@ -25,6 +25,14 @@ export class GeographyService {
       .map((d) => this.toAdministrativeDistrict(d));
   }
 
+  async listCitiesByGovernorate(governorateId: string): Promise<CityResponseDto[]> {
+    const governorates = await this.repo.listGovernorates();
+    if (!governorates.some((g) => g.id === governorateId)) {
+      throw new NotFoundException({ code: ErrorCode.NotFound, message: 'Governorate not found or not verified' });
+    }
+    return (await this.repo.listCitiesByGovernorate(governorateId)).map((c) => this.toCity(c));
+  }
+
   async listCities(): Promise<CityResponseDto[]> {
     return (await this.repo.listCities()).map((c) => this.toCity(c));
   }

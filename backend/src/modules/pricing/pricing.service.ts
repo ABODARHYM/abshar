@@ -405,7 +405,9 @@ export class PricingService {
   }
 
   async getZone(id: string): Promise<ZoneResponseDto> {
-    const z = await this.repo.getZoneById(id);
+    // This route is customer-readable. Keep full legacy records on the
+    // permission-protected admin list only; never reveal unverified fee fields.
+    const z = await this.repo.getActiveVerifiedZoneById(id);
     if (!z) {
       throw new NotFoundException({
         code: ErrorCode.NotFound,

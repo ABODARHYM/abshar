@@ -23,6 +23,7 @@ describe('PricingService distance-tier pricing', () => {
   }], zoneOverride: any = zone) {
     const repo = {
       getZoneById: jest.fn().mockResolvedValue(zoneOverride),
+      getActiveVerifiedZoneById: jest.fn().mockResolvedValue(zoneOverride),
       isZoneVerifiedForDelivery: jest.fn().mockResolvedValue(true),
       getZoneCoverage: jest.fn().mockResolvedValue({"type":"Polygon","coordinates":[[[45.3,15.4],[45.32,15.4],[45.32,15.42],[45.3,15.42],[45.3,15.4]]]}),
       calculateRouteDistanceKm: jest.fn().mockResolvedValue(3.2),
@@ -57,6 +58,14 @@ describe('PricingService distance-tier pricing', () => {
     repo.findAddressForUser.mockResolvedValue({ zone_id: null, latitude: 15.41, longitude: 45.31 });
     await expect(service.getAddressForQuote('address-1', 'customer-1')).rejects.toBeInstanceOf(BadRequestException);
   });
+  it('does not expose unverified legacy zones through the customer detail route', async () => {
+    const { service, repo } = makeService();
+    repo.getActiveVerifiedZoneById.mockResolvedValue(null);
+    await expect(service.getZone('legacy-zone')).rejects.toBeInstanceOf(NotFoundException);
+    expect(repo.getActiveVerifiedZoneById).toHaveBeenCalledWith('legacy-zone');
+    expect(repo.getZoneById).not.toHaveBeenCalled();
+  });
+
   it('uses the configured fee for the matching distance band', async () => {
     const { service } = makeService();
     const result = await service.calculate(context);

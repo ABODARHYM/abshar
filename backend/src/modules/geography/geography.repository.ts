@@ -27,10 +27,19 @@ export interface AreaRow {
 export class GeographyRepository {
   constructor(private readonly db: DatabaseService) {}
 
+  /**
+   * Public administrative geography is exposed only when an active record has
+   * complete source provenance. Empty/unverified staging tables stay empty;
+   * no names are inferred or seeded by the API.
+   */
   async listGovernorates(): Promise<GovernorateRow[]> {
     const r = await this.db.query<GovernorateRow>(
       `SELECT id, country_code, name_ar, name_en, slug
-       FROM governorates WHERE is_active = true
+       FROM governorates
+       WHERE is_active = true
+         AND NULLIF(BTRIM(source_name), '') IS NOT NULL
+         AND NULLIF(BTRIM(source_url), '') IS NOT NULL
+         AND source_updated_at IS NOT NULL
        ORDER BY sort_order ASC, name_ar ASC`,
     );
     return r.rows;
@@ -38,66 +47,143 @@ export class GeographyRepository {
 
   async listAdministrativeDistricts(governorateId: string): Promise<AdministrativeDistrictRow[]> {
     const r = await this.db.query<AdministrativeDistrictRow>(
-      `SELECT id, governorate_id, name_ar, name_en, slug
-       FROM administrative_districts
-       WHERE governorate_id = $1 AND is_active = true
-       ORDER BY sort_order ASC, name_ar ASC`,
+      `SELECT ad.id, ad.governorate_id, ad.name_ar, ad.name_en, ad.slug
+       FROM administrative_districts ad
+       JOIN governorates g ON g.id = ad.governorate_id
+       WHERE ad.governorate_id = $1 AND ad.is_active = true
+         AND NULLIF(BTRIM(ad.source_name), '') IS NOT NULL
+         AND NULLIF(BTRIM(ad.source_url), '') IS NOT NULL
+         AND ad.source_updated_at IS NOT NULL
+         AND g.is_active = true
+         AND NULLIF(BTRIM(g.source_name), '') IS NOT NULL
+         AND NULLIF(BTRIM(g.source_url), '') IS NOT NULL
+         AND g.source_updated_at IS NOT NULL
+       ORDER BY ad.sort_order ASC, ad.name_ar ASC`,
       [governorateId],
     );
     return r.rows;
   }
 
+  /**
+   * A selectable city must be explicitly attached to an active, sourced
+   * governorate. Legacy operational cities without that link remain in the
+   * database for historical/address and delivery-zone references.
+   */
   async listCities(): Promise<CityRow[]> {
     const r = await this.db.query<CityRow>(
-      `SELECT id, country_code, name_ar, name_en, slug,
-              latitude, longitude, timezone, is_active, sort_order
-       FROM cities WHERE is_active = true
-       ORDER BY sort_order ASC, name_ar ASC`,
+      `SELECT c.id, c.country_code, c.name_ar, c.name_en, c.slug,
+              c.latitude, c.longitude, c.timezone, c.is_active, c.sort_order
+       FROM cities c
+       JOIN governorates g ON g.id = c.governorate_id
+       WHERE c.is_active = true AND g.is_active = true
+         AND NULLIF(BTRIM(g.source_name), '') IS NOT NULL
+         AND NULLIF(BTRIM(g.source_url), '') IS NOT NULL
+         AND g.source_updated_at IS NOT NULL
+       ORDER BY c.sort_order ASC, c.name_ar ASC`,
+    );
+    return r.rows;
+  }
+
+  async listCitiesByGovernorate(governorateId: string): Promise<CityRow[]> {
+    const r = await this.db.query<CityRow>(
+      `SELECT c.id, c.country_code, c.name_ar, c.name_en, c.slug,
+              c.latitude, c.longitude, c.timezone, c.is_active, c.sort_order
+       FROM cities c
+       JOIN governorates g ON g.id = c.governorate_id
+       WHERE c.governorate_id = $1 AND c.is_active = true AND g.is_active = true
+         AND NULLIF(BTRIM(g.source_name), '') IS NOT NULL
+         AND NULLIF(BTRIM(g.source_url), '') IS NOT NULL
+         AND g.source_updated_at IS NOT NULL
+       ORDER BY c.sort_order ASC, c.name_ar ASC`,
+      [governorateId],
     );
     return r.rows;
   }
 
   async findCity(id: string): Promise<CityRow | null> {
     const r = await this.db.query<CityRow>(
-      `SELECT id, country_code, name_ar, name_en, slug,
-              latitude, longitude, timezone, is_active, sort_order
-       FROM cities WHERE id = $1 LIMIT 1`, [id],
+      `SELECT c.id, c.country_code, c.name_ar, c.name_en, c.slug,
+              c.latitude, c.longitude, c.timezone, c.is_active, c.sort_order
+       FROM cities c
+       JOIN governorates g ON g.id = c.governorate_id
+       WHERE c.id = $1 AND c.is_active = true AND g.is_active = true
+         AND NULLIF(BTRIM(g.source_name), '') IS NOT NULL
+         AND NULLIF(BTRIM(g.source_url), '') IS NOT NULL
+         AND g.source_updated_at IS NOT NULL
+       LIMIT 1`,
+      [id],
     );
     return r.rows[0] ?? null;
   }
 
   async listDistricts(cityId: string): Promise<DistrictRow[]> {
     const r = await this.db.query<DistrictRow>(
-      `SELECT id, city_id, name_ar, name_en, slug, latitude, longitude, is_active, sort_order
-       FROM districts d WHERE city_id = $1 AND is_active = true
+      `SELECT d.id, d.city_id, d.name_ar, d.name_en, d.slug, d.latitude, d.longitude, d.is_active, d.sort_order
+       FROM districts d
+       JOIN cities c ON c.id = d.city_id AND c.is_active = true
+       JOIN governorates g ON g.id = c.governorate_id AND g.is_active = true
+       WHERE d.city_id = $1 AND d.is_active = true
          AND COALESCE(to_jsonb(d)->>'source_status', 'legacy_unverified') IN ('verified', 'community_verified')
-       ORDER BY sort_order ASC, name_ar ASC`, [cityId],
+         AND NULLIF(BTRIM(g.source_name), '') IS NOT NULL
+         AND NULLIF(BTRIM(g.source_url), '') IS NOT NULL
+         AND g.source_updated_at IS NOT NULL
+       ORDER BY d.sort_order ASC, d.name_ar ASC`,
+      [cityId],
     );
     return r.rows;
   }
 
   async findDistrict(id: string): Promise<DistrictRow | null> {
     const r = await this.db.query<DistrictRow>(
-      `SELECT id, city_id, name_ar, name_en, slug, latitude, longitude, is_active, sort_order
-       FROM districts WHERE id = $1 LIMIT 1`, [id],
+      `SELECT d.id, d.city_id, d.name_ar, d.name_en, d.slug, d.latitude, d.longitude, d.is_active, d.sort_order
+       FROM districts d
+       JOIN cities c ON c.id = d.city_id AND c.is_active = true
+       JOIN governorates g ON g.id = c.governorate_id AND g.is_active = true
+       WHERE d.id = $1 AND d.is_active = true
+         AND COALESCE(to_jsonb(d)->>'source_status', 'legacy_unverified') IN ('verified', 'community_verified')
+         AND NULLIF(BTRIM(g.source_name), '') IS NOT NULL
+         AND NULLIF(BTRIM(g.source_url), '') IS NOT NULL
+         AND g.source_updated_at IS NOT NULL
+       LIMIT 1`,
+      [id],
     );
     return r.rows[0] ?? null;
   }
 
   async listAreas(districtId: string): Promise<AreaRow[]> {
     const r = await this.db.query<AreaRow>(
-      `SELECT id, district_id, name_ar, name_en, slug, latitude, longitude, is_active, sort_order
-       FROM areas ar WHERE district_id = $1 AND is_active = true
+      `SELECT ar.id, ar.district_id, ar.name_ar, ar.name_en, ar.slug, ar.latitude, ar.longitude, ar.is_active, ar.sort_order
+       FROM areas ar
+       JOIN districts d ON d.id = ar.district_id AND d.is_active = true
+       JOIN cities c ON c.id = d.city_id AND c.is_active = true
+       JOIN governorates g ON g.id = c.governorate_id AND g.is_active = true
+       WHERE ar.district_id = $1 AND ar.is_active = true
          AND COALESCE(to_jsonb(ar)->>'source_status', 'legacy_unverified') IN ('verified', 'community_verified')
-       ORDER BY sort_order ASC, name_ar ASC`, [districtId],
+         AND COALESCE(to_jsonb(d)->>'source_status', 'legacy_unverified') IN ('verified', 'community_verified')
+         AND NULLIF(BTRIM(g.source_name), '') IS NOT NULL
+         AND NULLIF(BTRIM(g.source_url), '') IS NOT NULL
+         AND g.source_updated_at IS NOT NULL
+       ORDER BY ar.sort_order ASC, ar.name_ar ASC`,
+      [districtId],
     );
     return r.rows;
   }
 
   async findArea(id: string): Promise<AreaRow | null> {
     const r = await this.db.query<AreaRow>(
-      `SELECT id, district_id, name_ar, name_en, slug, latitude, longitude, is_active, sort_order
-       FROM areas WHERE id = $1 LIMIT 1`, [id],
+      `SELECT ar.id, ar.district_id, ar.name_ar, ar.name_en, ar.slug, ar.latitude, ar.longitude, ar.is_active, ar.sort_order
+       FROM areas ar
+       JOIN districts d ON d.id = ar.district_id AND d.is_active = true
+       JOIN cities c ON c.id = d.city_id AND c.is_active = true
+       JOIN governorates g ON g.id = c.governorate_id AND g.is_active = true
+       WHERE ar.id = $1 AND ar.is_active = true
+         AND COALESCE(to_jsonb(ar)->>'source_status', 'legacy_unverified') IN ('verified', 'community_verified')
+         AND COALESCE(to_jsonb(d)->>'source_status', 'legacy_unverified') IN ('verified', 'community_verified')
+         AND NULLIF(BTRIM(g.source_name), '') IS NOT NULL
+         AND NULLIF(BTRIM(g.source_url), '') IS NOT NULL
+         AND g.source_updated_at IS NOT NULL
+       LIMIT 1`,
+      [id],
     );
     return r.rows[0] ?? null;
   }
@@ -108,20 +194,47 @@ export class GeographyRepository {
     const q = `%${query}%`;
     const [cities, districts, areas] = await Promise.all([
       this.db.query<CityRow>(
-        `SELECT id, country_code, name_ar, name_en, slug, latitude, longitude, timezone, is_active, sort_order
-         FROM cities WHERE is_active = true AND (name_ar ILIKE $1 OR name_en ILIKE $1) LIMIT $2`, [q, limit],
+        `SELECT c.id, c.country_code, c.name_ar, c.name_en, c.slug,
+                c.latitude, c.longitude, c.timezone, c.is_active, c.sort_order
+         FROM cities c
+         JOIN governorates g ON g.id = c.governorate_id AND g.is_active = true
+         WHERE c.is_active = true
+           AND NULLIF(BTRIM(g.source_name), '') IS NOT NULL
+           AND NULLIF(BTRIM(g.source_url), '') IS NOT NULL
+           AND g.source_updated_at IS NOT NULL
+           AND (c.name_ar ILIKE $1 OR c.name_en ILIKE $1)
+         ORDER BY c.sort_order ASC, c.name_ar ASC LIMIT $2`,
+        [q, limit],
       ),
       this.db.query<DistrictRow>(
-        `SELECT id, city_id, name_ar, name_en, slug, latitude, longitude, is_active, sort_order
-         FROM districts d WHERE is_active = true
+        `SELECT d.id, d.city_id, d.name_ar, d.name_en, d.slug, d.latitude, d.longitude, d.is_active, d.sort_order
+         FROM districts d
+         JOIN cities c ON c.id = d.city_id AND c.is_active = true
+         JOIN governorates g ON g.id = c.governorate_id AND g.is_active = true
+         WHERE d.is_active = true
            AND COALESCE(to_jsonb(d)->>'source_status', 'legacy_unverified') IN ('verified', 'community_verified')
-           AND (name_ar ILIKE $1 OR name_en ILIKE $1) LIMIT $2`, [q, limit],
+           AND NULLIF(BTRIM(g.source_name), '') IS NOT NULL
+           AND NULLIF(BTRIM(g.source_url), '') IS NOT NULL
+           AND g.source_updated_at IS NOT NULL
+           AND (d.name_ar ILIKE $1 OR d.name_en ILIKE $1)
+         ORDER BY d.sort_order ASC, d.name_ar ASC LIMIT $2`,
+        [q, limit],
       ),
       this.db.query<AreaRow>(
-        `SELECT id, district_id, name_ar, name_en, slug, latitude, longitude, is_active, sort_order
-         FROM areas ar WHERE is_active = true
+        `SELECT ar.id, ar.district_id, ar.name_ar, ar.name_en, ar.slug, ar.latitude, ar.longitude, ar.is_active, ar.sort_order
+         FROM areas ar
+         JOIN districts d ON d.id = ar.district_id AND d.is_active = true
+         JOIN cities c ON c.id = d.city_id AND c.is_active = true
+         JOIN governorates g ON g.id = c.governorate_id AND g.is_active = true
+         WHERE ar.is_active = true
            AND COALESCE(to_jsonb(ar)->>'source_status', 'legacy_unverified') IN ('verified', 'community_verified')
-           AND (name_ar ILIKE $1 OR name_en ILIKE $1) LIMIT $2`, [q, limit],
+           AND COALESCE(to_jsonb(d)->>'source_status', 'legacy_unverified') IN ('verified', 'community_verified')
+           AND NULLIF(BTRIM(g.source_name), '') IS NOT NULL
+           AND NULLIF(BTRIM(g.source_url), '') IS NOT NULL
+           AND g.source_updated_at IS NOT NULL
+           AND (ar.name_ar ILIKE $1 OR ar.name_en ILIKE $1)
+         ORDER BY ar.sort_order ASC, ar.name_ar ASC LIMIT $2`,
+        [q, limit],
       ),
     ]);
     return { cities: cities.rows, districts: districts.rows, areas: areas.rows };

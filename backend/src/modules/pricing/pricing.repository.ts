@@ -275,6 +275,28 @@ export class PricingRepository {
     return r.rows[0] ?? null;
   }
 
+  /**
+   * Public single-zone lookup mirrors listActiveZones: inactive and legacy
+   * unverified rows must never expose old base/per-km values as customer fees.
+   * Admin workflows continue to use getZoneById for the full legacy record.
+   */
+  async getActiveVerifiedZoneById(id: string): Promise<ZoneRow | null> {
+    const r = await this.db.query<ZoneRow>(
+      `SELECT z.id, z.city, z.name_ar, z.name_en, z.city_id, z.district_id,
+              z.base_delivery_fee, z.fee_per_km, z.min_order_amount,
+              z.free_delivery_threshold, z.surge_multiplier, z.fuel_surcharge,
+              z.is_active, z.coverage_status, z.coverage_verified_at
+       FROM delivery_zones z
+       WHERE z.id = $1 AND z.is_active = true AND z.coverage_status = 'verified'
+         AND z.coverage_geojson IS NOT NULL
+         AND z.coverage_verified_at IS NOT NULL AND z.coverage_verified_by IS NOT NULL
+         AND length(trim(coalesce(z.coverage_verification_note, ''))) >= 8
+       LIMIT 1`,
+      [id],
+    );
+    return r.rows[0] ?? null;
+  }
+
   async listActiveZones(): Promise<ZoneRow[]> {
     const r = await this.db.query<ZoneRow>(
       `

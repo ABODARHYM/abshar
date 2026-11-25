@@ -19,6 +19,7 @@ const MapPicker = dynamic(() => import('@/components/MapPicker'), {
 
 const API = '/api/v1';
 
+interface Governorate { id: string; nameAr: string; }
 interface City { id: string; nameAr: string; }
 interface District { id: string; nameAr: string; }
 interface Area { id: string; nameAr: string; }
@@ -32,6 +33,7 @@ function NewAddressContent() {
   const [floor, setFloor] = useState('');
   const [apartment, setApartment] = useState('');
   const [landmark, setLandmark] = useState('');
+  const [governorateId, setGovernorateId] = useState('');
   const [cityId, setCityId] = useState('');
   const [districtId, setDistrictId] = useState('');
   const [areaId, setAreaId] = useState('');
@@ -41,7 +43,9 @@ function NewAddressContent() {
   const [lat, setLat] = useState(15.4633);
   const [lng, setLng] = useState(45.3256);
 
+  const [governorates, setGovernorates] = useState<Governorate[]>([]);
   const [cities, setCities] = useState<City[]>([]);
+  const [citiesLoading, setCitiesLoading] = useState(false);
   const [districts, setDistricts] = useState<District[]>([]);
   const [areas, setAreas] = useState<Area[]>([]);
 
@@ -50,16 +54,53 @@ function NewAddressContent() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   useEffect(() => {
-    fetch(`${API}/geography/cities`)
+    let cancelled = false;
+    fetch(`${API}/geography/governorates`)
       .then((r) => (r.ok ? r.json() : []))
       .then((d) => {
+        if (cancelled) return;
+        const list = Array.isArray(d) ? d : [];
+        setGovernorates(list);
+        if (list.length === 1) setGovernorateId(list[0].id);
+      })
+      .catch(() => {
+        if (!cancelled) setGovernorates([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    setCities([]);
+    setCityId('');
+    setDistricts([]);
+    setDistrictId('');
+    setAreas([]);
+    setAreaId('');
+    if (!governorateId) {
+      setCitiesLoading(false);
+      return;
+    }
+    setCitiesLoading(true);
+    fetch(`${API}/geography/governorates/${governorateId}/cities`)
+      .then((r) => (r.ok ? r.json() : []))
+      .then((d) => {
+        if (cancelled) return;
         const list = Array.isArray(d) ? d : [];
         setCities(list);
         if (list.length === 1) setCityId(list[0].id);
       })
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, []);
+      .catch(() => {
+        if (!cancelled) setCities([]);
+      })
+      .finally(() => {
+        if (!cancelled) setCitiesLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [governorateId]);
 
   useEffect(() => {
     setDistricts([]); setDistrictId(''); setAreas([]); setAreaId('');
@@ -268,11 +309,36 @@ function NewAddressContent() {
         </div>
 
         <div className="card">
+          <label className="block text-sm font-bold mb-2">المحافظة</label>
+          <select
+            value={governorateId}
+            onChange={(e) => setGovernorateId(e.target.value)}
+            className="input"
+          >
+            <option value="">— اختر المحافظة —</option>
+            {governorates.map((g) => <option key={g.id} value={g.id}>{g.nameAr}</option>)}
+          </select>
+          {governorates.length === 0 && (
+            <p className="mt-2 text-xs text-amber-600">
+              لا توجد محافظات موثقة للاختيار حالياً. يمكنك حفظ وصف العنوان وموقع الخريطة دون اختيار بيانات إدارية.
+            </p>
+          )}
+        </div>
+
+        <div className="card">
           <label className="block text-sm font-bold mb-2">المدينة</label>
-          <select value={cityId} onChange={(e) => setCityId(e.target.value)} className="input">
-            <option value="">— اختر —</option>
+          <select
+            value={cityId}
+            onChange={(e) => setCityId(e.target.value)}
+            className="input"
+            disabled={!governorateId || citiesLoading || cities.length === 0}
+          >
+            <option value="">— اختر المدينة —</option>
             {cities.map((c) => <option key={c.id} value={c.id}>{c.nameAr}</option>)}
           </select>
+          {governorateId && !citiesLoading && cities.length === 0 && (
+            <p className="mt-2 text-xs text-[var(--text-muted)]">لا توجد مدن موثقة تابعة لهذه المحافظة حتى الآن.</p>
+          )}
         </div>
 
         {cityId && districts.length > 0 && (
