@@ -39,12 +39,12 @@ export class CouponsRepository {
   const r=await this.db.query<{count:string}>('SELECT COUNT(*)::text count FROM products WHERE id=ANY($1::uuid[]) AND deleted_at IS NULL'+clause,p);
   return Number(r.rows[0]?.count??0)===new Set(ids).size;
  }
- async insertUsageInTransaction(u:string,c:string,o:string,d:number){await this.db.query('INSERT INTO coupon_usage(coupon_id,user_id,order_id,discount_amount) VALUES($1,$2,$3,$4)',[c,u,o,d]);await this.db.query('UPDATE coupons SET used_count=used_count+1,updated_at=now() WHERE id=$1',[c]);}
+ private async validateProductIdsWithClient(client:PoolClient,ids:string[],storeId?:string):Promise<boolean>{if(!ids.length)return false;const p:unknown[]=[ids];const clause=storeId?' AND store_id=$2':'';if(storeId)p.push(storeId);const r=await client.query<{count:string}>('SELECT COUNT(*)::text count FROM products WHERE id=ANY($1::uuid[]) AND deleted_at IS NULL'+clause,p);return Number(r.rows[0]?.count??0)===new Set(ids).size;}\n async insertUsageInTransaction(u:string,c:string,o:string,d:number){await this.db.query('INSERT INTO coupon_usage(coupon_id,user_id,order_id,discount_amount) VALUES($1,$2,$3,$4)',[c,u,o,d]);await this.db.query('UPDATE coupons SET used_count=used_count+1,updated_at=now() WHERE id=$1',[c]);}
  async insertUsage(client:PoolClient,x:{couponId:string;userId:string;orderId:string;discountAmount:number}){await client.query('INSERT INTO coupon_usage(coupon_id,user_id,order_id,discount_amount) VALUES($1,$2,$3,$4)',[x.couponId,x.userId,x.orderId,x.discountAmount]);await client.query('UPDATE coupons SET used_count=used_count+1,updated_at=now() WHERE id=$1',[x.couponId]);}
  async create(d:any,actor:string):Promise<CouponRow>{
   return this.db.transaction(async client=>{
    const scope=d.scope??'general',ids:string[]=d.product_ids??[];
-   if(scope==='products'&&(!ids.length||!await this.validateProductIds(ids,d.store_id)))throw new Error('اختر منتجات صحيحة تابعة للمتجر المحدد');
+   if(scope==='products'&&(!ids.length||!await this.validateProductIdsWithClient(client,ids,d.store_id)))throw new Error('اختر منتجات صحيحة تابعة للمتجر المحدد');
    if(scope==='general'&&ids.length)throw new Error('الكوبون العام لا يقبل قائمة منتجات');
    const r=await client.query('INSERT INTO coupons(code,type,value,min_order_amount,max_discount_amount,starts_at,expires_at,usage_limit,per_user_limit,store_id,category_id,scope,is_active,created_by) VALUES($1::citext,$2::discount_type,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING id',[d.code,d.type,d.value,d.min_order_amount??0,d.max_discount_amount??null,d.starts_at??null,d.expires_at??null,d.usage_limit??null,d.per_user_limit??null,d.store_id??null,d.category_id??null,scope,d.is_active??true,actor]);
    const id=r.rows[0].id as string;
@@ -57,7 +57,7 @@ export class CouponsRepository {
    const cr=await client.query<{scope:string;store_id:string|null}>('SELECT scope,store_id FROM coupons WHERE id=$1 FOR UPDATE',[id]);if(!cr.rows[0])return null;
    const ids=f.productIds as string[]|undefined,scope=(f.scope as string|undefined)??cr.rows[0].scope,store=(f.storeId as string|undefined)??cr.rows[0].store_id??undefined;
    const oldIds=ids??(await client.query<{product_id:string}>('SELECT product_id FROM coupon_products WHERE coupon_id=$1',[id])).rows.map(x=>x.product_id);
-   if(scope==='products'&&(!oldIds.length||!await this.validateProductIds(oldIds,store)))throw new Error('الكوبون المحدد يتطلب منتجات صحيحة');
+   if(scope==='products'&&(!oldIds.length||!await this.validateProductIdsWithClient(client,oldIds,store)))throw new Error('الكوبون المحدد يتطلب منتجات صحيحة');
    if(scope==='general'&&ids?.length)throw new Error('الكوبون العام لا يقبل قائمة منتجات');
    const map:Record<string,string>={code:'code',type:'type',value:'value',minOrderAmount:'min_order_amount',maxDiscountAmount:'max_discount_amount',startsAt:'starts_at',expiresAt:'expires_at',usageLimit:'usage_limit',perUserLimit:'per_user_limit',storeId:'store_id',categoryId:'category_id',isActive:'is_active'};
    const sets:string[]=[],params:unknown[]=[];let i=1;
