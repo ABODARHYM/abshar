@@ -63,15 +63,16 @@ export class LoyaltyService {
 
     try {
       const result = await this.repo.redeem(customerId, reward, await this.repo.getCurrency());
+      const updatedReward = await this.repo.findRewardById(rewardId);
       return {
         success: true,
-        pointsSpent: reward.points_cost,
+        pointsSpent: result.pointsSpent,
         remainingPoints: result.newBalance,
-        reward: this.toReward(reward),
+        reward: this.toReward(updatedReward ?? reward),
       };
     } catch (e) {
-      if ((e as Error).message === 'INSUFFICIENT_POINTS') {
-        throw new BadRequestException({ code: ErrorCode.ValidationFailed, message: 'رصيدك غير كافٍ' });
+      if (['INSUFFICIENT_POINTS', 'REWARD_OUT_OF_STOCK', 'REWARD_UNAVAILABLE'].includes((e as Error).message)) {
+        throw new BadRequestException({ code: ErrorCode.ValidationFailed, message: (e as Error).message === 'INSUFFICIENT_POINTS' ? 'رصيدك غير كافٍ' : 'المكافأة لم تعد متاحة أو نفدت كميتها' });
       }
       throw e;
     }
