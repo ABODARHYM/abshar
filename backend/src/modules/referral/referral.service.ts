@@ -162,7 +162,19 @@ export class ReferralService {
         message: 'الإحالة ملغاة مسبقاً',
       });
     }
-    await this.repo.cancel(null, referralId);
+    if (ref.status === 'rewarded') {
+      throw new ConflictException({
+        code: ErrorCode.ValidationFailed,
+        message: 'لا يمكن إلغاء إحالة صُرفت مكافأتها',
+      });
+    }
+    const cancelled = await this.repo.cancel(null, referralId);
+    if (!cancelled) {
+      throw new ConflictException({
+        code: ErrorCode.ValidationFailed,
+        message: 'تغيّرت حالة الإحالة؛ حدّث البيانات وحاول مجدداً',
+      });
+    }
     return { success: true };
   }
 
