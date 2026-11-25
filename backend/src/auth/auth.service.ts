@@ -280,6 +280,36 @@ export class AuthService {
         throw new UnauthorizedException('Refresh token expired');
       }
 
+      // A refresh token must not create a new session for a disabled or deleted
+      // account. Revoke the whole family and return a sentinel so that revocation
+      // commits before the request is rejected outside the transaction.
+      const accountResult = await client.query<{
+        status: string;
+        deleted_at: Date | null;
+      }>(
+        `
+        SELECT status, deleted_at
+        FROM users
+        WHERE id = $1
+        LIMIT 1
+        `,
+        [stored.user_id],
+      );
+
+      const account = accountResult.rows[0];
+      if (!account || account.status !== 'active' || account.deleted_at) {
+        await client.query(
+          `
+          UPDATE refresh_tokens
+          SET revoked_at = COALESCE(revoked_at, now())
+          WHERE family_id = $1
+            AND revoked_at IS NULL
+          `,
+          [stored.family_id],
+        );
+        return { inactiveAccount: true as const };
+      }
+
       const newRawRefresh = this.generateRefreshToken();
       const newHash = this.hashToken(newRawRefresh);
       const newId = randomUUID();
@@ -337,6 +367,10 @@ export class AuthService {
 
     if (rotated.reuseDetected) {
       throw new UnauthorizedException('Refresh token reuse detected');
+    }
+
+    if ('inactiveAccount' in rotated && rotated.inactiveAccount) {
+      throw new UnauthorizedException('Account is not active');
     }
 
     const user = await this.loadAuthUser(rotated.userId);
