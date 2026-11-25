@@ -1,0 +1,29 @@
+import { LoyaltyService } from './loyalty.service';
+import { PoolClient } from 'pg';
+
+describe('LoyaltyService.earnFromOrderInTransaction', () => {
+  it('writes earned points using the caller transaction and preserves order idempotency key', async () => {
+    const client = {} as PoolClient;
+    const repo = { addPoints: jest.fn().mockResolvedValue(undefined) };
+    const service = new LoyaltyService(repo as any);
+
+    await service.earnFromOrderInTransaction(client, 'customer-1', 'order-1', 12500, 'YER');
+
+    expect(repo.addPoints).toHaveBeenCalledTimes(1);
+    expect(repo.addPoints).toHaveBeenCalledWith(client, expect.objectContaining({
+      customerId: 'customer-1',
+      type: 'earn',
+      points: 125,
+      orderId: 'order-1',
+    }));
+  });
+
+  it('does not write a transaction when the calculated reward is zero', async () => {
+    const repo = { addPoints: jest.fn() };
+    const service = new LoyaltyService(repo as any);
+
+    await service.earnFromOrderInTransaction({} as PoolClient, 'customer-1', 'order-2', 99, 'YER');
+
+    expect(repo.addPoints).not.toHaveBeenCalled();
+  });
+});
