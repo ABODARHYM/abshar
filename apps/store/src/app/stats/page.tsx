@@ -16,6 +16,7 @@ interface StatsData {
   totalProducts?: number;
   availableProducts?: number;
   totalRevenue?: number;
+  revenueByCurrency?: Array<{ currency: string; totalRevenue: number }>;
 }
 
 export default function StatsPage() {
@@ -65,7 +66,19 @@ export default function StatsPage() {
               <h3 className="font-black text-base mb-3">📊 نظرة عامة</h3>
               <div className="grid grid-cols-2 gap-3">
                 <StatBox icon="📦" label="إجمالي الطلبات" value={fmt(stats.totalOrders)} color="blue" />
-                <StatBox icon="💰" label="إجمالي الإيرادات" value={`${fmt(stats.totalRevenue)} ر.ي`} color="emerald" />
+                {stats.revenueByCurrency?.length ? (
+                  stats.revenueByCurrency.map((item) => (
+                    <StatBox
+                      key={item.currency}
+                      icon="💰"
+                      label={`الإيرادات — ${item.currency}`}
+                      value={fmt(item.totalRevenue)}
+                      color="emerald"
+                    />
+                  ))
+                ) : (
+                  <StatBox icon="💰" label="الإيرادات" value="0" color="emerald" />
+                )}
               </div>
             </section>
 
