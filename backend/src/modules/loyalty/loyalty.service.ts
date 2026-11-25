@@ -127,7 +127,6 @@ export class LoyaltyService {
     customerId: string,
     orderId: string,
     total: number,
-    currency: string,
   ): Promise<void> {
     const points = Math.floor(total * 0.01);
     if (points <= 0) return;
