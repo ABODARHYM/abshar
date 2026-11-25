@@ -151,7 +151,7 @@ export class LoyaltyRepository {
     customerId: string,
     reward: RewardRow,
     currency: string,
-  ): Promise<{ transactionId: string; newBalance: number }> {
+  ): Promise<{ transactionId: string; newBalance: number; pointsSpent: number }> {
     return this.db.transaction(async (client) => {
       // Lock the reward first so concurrent redemptions cannot exceed finite stock.
       const lockedReward = await client.query<{
@@ -202,7 +202,7 @@ export class LoyaltyRepository {
       );
 
       const newBalance = current - currentReward.points_cost;
-      return { transactionId: tx.rows[0].id, newBalance };
+      return { transactionId: tx.rows[0].id, newBalance, pointsSpent: currentReward.points_cost };
     });
   }
 
