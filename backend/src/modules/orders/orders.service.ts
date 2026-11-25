@@ -282,10 +282,10 @@ export class OrdersService {
       items,
       });
     } catch (err) {
-      if ((err as Error).message === 'COUPON_USAGE_LIMIT_REACHED') {
+      if (['COUPON_USAGE_LIMIT_REACHED', 'COUPON_TERMS_CHANGED'].includes((err as Error).message)) {
         throw new BadRequestException({
           code: ErrorCode.ValidationFailed,
-          message: 'انتهى حد استخدام الكوبون أو لم يعد صالحاً',
+          message: 'تغيّرت شروط الكوبون أو انتهى حد استخدامه؛ يرجى إعادة المحاولة بكوبون صالح',
         });
       }
       throw err;
