@@ -482,6 +482,7 @@ export class DriverService {
                 full.driver_id!,
                 full.order_number,
                 Number(full.original_delivery_fee ?? full.delivery_fee ?? 0),
+                full.currency || 'UNKNOWN',
               );
             } catch {}
 
