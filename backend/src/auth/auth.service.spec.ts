@@ -129,7 +129,7 @@ describe('AuthService login lockout concurrency', () => {
   });
 
   it('does not clear a lock applied while a correct password was being checked', async () => {
-    const compare = jest.mocked(bcrypt.compare);
+    const compare = bcrypt.compare as jest.Mock;
     compare.mockResolvedValue(true);
     db.query
       .mockResolvedValueOnce({
