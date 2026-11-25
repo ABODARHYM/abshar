@@ -166,6 +166,18 @@ export class FinanceRepository {
       if (params.amount < Number(order.delivery_fee)) {
         throw new ConflictException('Verified original delivery fee cannot be lower than customer delivery fee');
       }
+      // Do not change fee provenance while historical commission or settlement records exist.
+      // Such cases require a separate balanced, append-only reconciliation workflow.
+      const financialHistory = await client.query(
+        `SELECT EXISTS (SELECT 1 FROM commissions c WHERE c.order_id = $1) AS has_commission,
+                EXISTS (SELECT 1 FROM settlement_commission_items sci
+                        JOIN commissions c ON c.id = sci.commission_id
+                        WHERE c.order_id = $1) AS has_settlement_item`,
+        [params.orderId],
+      );
+      if (financialHistory.rows[0]?.has_commission || financialHistory.rows[0]?.has_settlement_item) {
+        throw new ConflictException('Order has historical commission or settlement records; manual balanced reconciliation is required before fee verification');
+      }
       await client.query(
         `UPDATE orders SET original_delivery_fee = $1, original_delivery_fee_verified = TRUE WHERE id = $2`,
         [params.amount, params.orderId],
