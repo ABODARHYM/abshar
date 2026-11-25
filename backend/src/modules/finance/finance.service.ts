@@ -22,17 +22,37 @@ export class FinanceService {
 
   async getStoreEarnings(storeId: string): Promise<StoreEarningsDto> {
     const e = await this.repo.getStoreEarnings(storeId);
+    const breakdown = e.currency_breakdown.map((row) => ({
+      currency: row.currency,
+      todayEarnings: Number(row.today_earnings),
+      weekEarnings: Number(row.week_earnings),
+      monthEarnings: Number(row.month_earnings),
+      totalEarnings: Number(row.total_earnings),
+      todayOrders: Number(row.today_orders),
+      weekOrders: Number(row.week_orders),
+      monthOrders: Number(row.month_orders),
+      totalOrders: Number(row.total_orders),
+      pendingSettlement: Number(row.pending_settlement),
+      lastSettlementAt: row.last_settlement_at ? row.last_settlement_at.toISOString() : null,
+    }));
+    const singleCurrency = breakdown.length === 1 ? breakdown[0] : null;
     return {
-      todayEarnings: Number(e.today_earnings),
-      weekEarnings: Number(e.week_earnings),
-      monthEarnings: Number(e.month_earnings),
-      totalEarnings: Number(e.total_earnings),
-      todayOrders: Number(e.today_orders),
-      weekOrders: Number(e.week_orders),
-      monthOrders: Number(e.month_orders),
-      totalOrders: Number(e.total_orders),
-      pendingSettlement: Number(e.pending_settlement),
-      lastSettlementAt: e.last_settlement_at ? e.last_settlement_at.toISOString() : null,
+      // Legacy scalar money fields are populated only when a single currency exists.
+      todayEarnings: singleCurrency?.todayEarnings ?? 0,
+      weekEarnings: singleCurrency?.weekEarnings ?? 0,
+      monthEarnings: singleCurrency?.monthEarnings ?? 0,
+      totalEarnings: singleCurrency?.totalEarnings ?? 0,
+      todayOrders: breakdown.reduce((sum, row) => sum + row.todayOrders, 0),
+      weekOrders: breakdown.reduce((sum, row) => sum + row.weekOrders, 0),
+      monthOrders: breakdown.reduce((sum, row) => sum + row.monthOrders, 0),
+      totalOrders: breakdown.reduce((sum, row) => sum + row.totalOrders, 0),
+      pendingSettlement: singleCurrency?.pendingSettlement ?? 0,
+      lastSettlementAt: breakdown
+        .map((row) => row.lastSettlementAt)
+        .filter((value): value is string => value !== null)
+        .sort()
+        .at(-1) ?? null,
+      currencyBreakdown: breakdown,
     };
   }
 
