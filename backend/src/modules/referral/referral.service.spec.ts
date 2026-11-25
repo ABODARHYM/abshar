@@ -11,6 +11,13 @@ describe('ReferralService adminCancel', () => {
     expect(repo.cancel).not.toHaveBeenCalled();
   });
 
+  it('does not allow cancellation after signup rewards were paid while awaiting first delivery', async () => {
+    const repo = { findById: jest.fn().mockResolvedValue(referral('completed')), cancel: jest.fn() };
+    const service = new ReferralService(repo as any, {} as any, {} as any);
+    await expect(service.adminCancel('referral-1')).rejects.toBeInstanceOf(ConflictException);
+    expect(repo.cancel).not.toHaveBeenCalled();
+  });
+
   it('reports a conflict when the referral state changes before cancellation', async () => {
     const repo = { findById: jest.fn().mockResolvedValue(referral('pending')), cancel: jest.fn().mockResolvedValue(false) };
     const service = new ReferralService(repo as any, {} as any, {} as any);
