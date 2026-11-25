@@ -66,7 +66,8 @@ describe('real migration files', () => {
   it('preserves applied migration 031 and appends forward-only finance, notification, delivery-fee, distance-tier, verified geography, route snapshot, delivery coverage, and coupon targeting migrations', () => {
     const numbers = names.map((name) => Number(name.slice(0, 3)));
     expect(numbers.slice(0, 26)).toEqual(Array.from({ length: 26 }, (_, i) => i + 1));
-    // Migration 047 belongs to the separate loyalty PR; 048 is independently forward-only.\n    expect(numbers.slice(26)).toEqual([31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 48]);
+    // Both new forward-only migrations are included: 047 loyalty and 048 product coupons.
+    expect(numbers.slice(26)).toEqual([31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48]);
   });
 
   it('plans finance migrations after an already-applied 031 without out-of-order work', () => {
@@ -80,11 +81,21 @@ describe('real migration files', () => {
       .toEqual(forward.map((migration) => migration.name));
   });
 
+  it('preflights duplicate order-based loyalty earns without mutating historical ledger rows', () => {
+    const sql = readFileSync(join(dir, '047_loyalty_order_earn_idempotency.sql'), 'utf8');
+    expect(sql).toContain('GROUP BY order_id');
+    expect(sql).toContain('HAVING COUNT(*) > 1');
+    expect(sql).toContain('RAISE EXCEPTION');
+    expect(sql).toContain('CREATE UNIQUE INDEX IF NOT EXISTS loyalty_transactions_order_earn_unique');
+    expect(sql).not.toMatch(/DELETE\s+FROM\s+loyalty_transactions/i);
+    expect(sql).not.toMatch(/UPDATE\s+loyalty_transactions/i);
+  });
+
   it('normalizes the legacy 031 wrapper for execution without changing its source checksum', () => {
     const sql = readFileSync(join(dir, '031_store_applications.sql'), 'utf8');
     const normalized = stripOuterTransactionStatements(sql);
-    expect(normalized).not.toMatch(/^\\s*BEGIN\\s*;\\s*$/m);
-    expect(normalized).not.toMatch(/^\\s*COMMIT\\s*;\\s*$/m);
+    expect(normalized).not.toMatch(/^\s*BEGIN\s*;\s*$/m);
+    expect(normalized).not.toMatch(/^\s*COMMIT\s*;\s*$/m);
     expect(checksumOf(sql)).not.toBe(checksumOf(normalized));
   });
 
@@ -121,7 +132,7 @@ describe('real migration files', () => {
       'delivery_zones', 'banners', 'promotions', 'favorites', 'settings', 'audit_logs',
     ];
     for (const table of required) {
-      expect(all).toMatch(new RegExp(`CREATE TABLE ${table}\\s*\\(`));
+      expect(all).toMatch(new RegExp(`CREATE TABLE ${table}\s*\\(`));
     }
   });
 
