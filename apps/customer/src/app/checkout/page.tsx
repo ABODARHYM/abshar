@@ -149,6 +149,7 @@ export default function CheckoutPage() {
           code: couponCode.trim().toUpperCase(),
           storeId: store?.id,
           subtotal,
+          items: items.map((item) => ({ productId: item.productId, quantity: item.quantity })),
         }),
       });
 
