@@ -21,7 +21,7 @@ export class CouponsService {
   if(coupon.store_id&&coupon.store_id!==dto.storeId)return this.invalid('الكوبون لا ينطبق على هذا المتجر');
   if(coupon.usage_limit!==null&&coupon.used_count>=coupon.usage_limit)return this.invalid('استُنفد الكوبون');
   if(coupon.per_user_limit!==null&&await this.repo.countUserUsage(coupon.id,userId)>=coupon.per_user_limit)return this.invalid('استخدمت هذا الكوبون من قبل');
-  let eligibleSubtotal=dto.subtotal;
+  let eligibleSubtotal=dto.subtotal;\n  let verifiedCartSubtotal=dto.subtotal;
   if(coupon.scope==='products'){
    if(!dto.items?.length)return this.invalid('هذا الكوبون مخصص لمنتجات محددة؛ أرسل منتجات السلة للتحقق');
    try{
@@ -39,7 +39,7 @@ export class CouponsService {
   const min=Number(coupon.min_order_amount);
   if(eligibleSubtotal<min)return this.invalid('الحد الأدنى للمنتجات المشمولة بالكوبون '+min);
   const discount=this.computeDiscount(coupon,eligibleSubtotal);
-  return {valid:true,couponId:coupon.id,code:coupon.code,type:coupon.type,discountAmount:discount,finalSubtotal:Math.max(0,dto.subtotal-discount),message:null};
+  return {valid:true,couponId:coupon.id,code:coupon.code,type:coupon.type,discountAmount:discount,finalSubtotal:Math.max(0,verifiedCartSubtotal-discount),message:null};
  }
  computeDiscount(coupon:CouponRow,subtotal:number):number{
   const value=Number(coupon.value);
