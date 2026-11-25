@@ -116,7 +116,7 @@ export class ReferralRepository {
     const sql = `
       UPDATE referrals
       SET status = 'cancelled', updated_at = now()
-      WHERE id = $1 AND status IN ('pending','completed')
+      WHERE id = $1 AND status = 'pending'
     `;
     const exec = client
       ? (s: string, p: any[]) => client.query(s, p)
