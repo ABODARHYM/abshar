@@ -96,6 +96,30 @@ describe('FinanceRepository shared delivery transaction', () => {
   });
 
 
+  it('excludes unverified original delivery fees from driver settlements only', async () => {
+    const client = {
+      query: jest.fn()
+        .mockResolvedValueOnce({ rows: [], rowCount: 0 }),
+    };
+    const db = { transaction: jest.fn(async (work: (tx: any) => Promise<any>) => work(client)) };
+    const repo = new FinanceRepository(db as any);
+
+    const result = await repo.createSettlement({
+      partyType: 'driver',
+      partyId: 'driver-1',
+      periodStart: '2026-11-01',
+      periodEnd: '2026-11-07',
+      createdBy: 'admin-1',
+      actorRole: 'admin',
+    });
+
+    expect(result).toBeNull();
+    const sql = String(client.query.mock.calls[0][0]);
+    expect(sql).toContain("to_jsonb(o)->>'original_delivery_fee_verified'");
+    expect(sql).toContain("$4 <> 'driver'");
+    expect(client.query.mock.calls[0][1]).toEqual(['driver-1', '2026-11-01', '2026-11-07', 'driver']);
+  });
+
   it('uses Yemen business dates when calculating unsettled commission totals', async () => {
     const db = { query: jest.fn().mockResolvedValue({
       rows: [{ gross: '90.00', commission: '10.00', net: '90.00', count: '1' }],
