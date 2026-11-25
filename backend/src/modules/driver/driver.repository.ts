@@ -769,16 +769,16 @@ export class DriverRepository {
       )
       SELECT
         COALESCE(NULLIF(BTRIM(o.currency), ''), 'UNKNOWN') AS currency,
-        COALESCE(SUM(COALESCE(o.original_delivery_fee, o.delivery_fee)), 0)::text AS total_earnings,
+        COALESCE(SUM(CASE WHEN COALESCE((to_jsonb(o)->>'original_delivery_fee_verified')::boolean, FALSE) THEN o.original_delivery_fee ELSE 0 END), 0)::text AS total_earnings,
         COUNT(*)::text AS total_deliveries,
         COALESCE(SUM(CASE WHEN o.delivered_at >= (d.today::timestamp AT TIME ZONE 'Asia/Aden')
-          THEN COALESCE(o.original_delivery_fee, o.delivery_fee) ELSE 0 END), 0)::text AS today_earnings,
+          THEN CASE WHEN COALESCE((to_jsonb(o)->>'original_delivery_fee_verified')::boolean, FALSE) THEN o.original_delivery_fee ELSE 0 END ELSE 0 END), 0)::text AS today_earnings,
         COUNT(*) FILTER (WHERE o.delivered_at >= (d.today::timestamp AT TIME ZONE 'Asia/Aden'))::text AS today_deliveries,
         COALESCE(SUM(CASE WHEN o.delivered_at >= ((d.today - 6)::timestamp AT TIME ZONE 'Asia/Aden')
-          THEN COALESCE(o.original_delivery_fee, o.delivery_fee) ELSE 0 END), 0)::text AS week_earnings,
+          THEN CASE WHEN COALESCE((to_jsonb(o)->>'original_delivery_fee_verified')::boolean, FALSE) THEN o.original_delivery_fee ELSE 0 END ELSE 0 END), 0)::text AS week_earnings,
         COUNT(*) FILTER (WHERE o.delivered_at >= ((d.today - 6)::timestamp AT TIME ZONE 'Asia/Aden'))::text AS week_deliveries,
         COALESCE(SUM(CASE WHEN o.delivered_at >= ((d.today - 29)::timestamp AT TIME ZONE 'Asia/Aden')
-          THEN COALESCE(o.original_delivery_fee, o.delivery_fee) ELSE 0 END), 0)::text AS month_earnings,
+          THEN CASE WHEN COALESCE((to_jsonb(o)->>'original_delivery_fee_verified')::boolean, FALSE) THEN o.original_delivery_fee ELSE 0 END ELSE 0 END), 0)::text AS month_earnings,
         COUNT(*) FILTER (WHERE o.delivered_at >= ((d.today - 29)::timestamp AT TIME ZONE 'Asia/Aden'))::text AS month_deliveries
       FROM orders o
       CROSS JOIN local_day d
