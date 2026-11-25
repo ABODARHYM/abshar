@@ -87,8 +87,8 @@ describe('real migration files', () => {
     expect(sql).toContain('HAVING COUNT(*) > 1');
     expect(sql).toContain('RAISE EXCEPTION');
     expect(sql).toContain('CREATE UNIQUE INDEX IF NOT EXISTS loyalty_transactions_order_earn_unique');
-    expect(sql).not.toMatch(/DELETE\\s+FROM\\s+loyalty_transactions/i);
-    expect(sql).not.toMatch(/UPDATE\\s+loyalty_transactions/i);
+    expect(sql).not.toMatch(/DELETE\s+FROM\s+loyalty_transactions/i);
+    expect(sql).not.toMatch(/UPDATE\s+loyalty_transactions/i);
   });
 
   it('normalizes the legacy 031 wrapper for execution without changing its source checksum', () => {
@@ -133,7 +133,7 @@ describe('real migration files', () => {
       'delivery_zones', 'banners', 'promotions', 'favorites', 'settings', 'audit_logs',
     ];
     for (const table of required) {
-      expect(all).toMatch(new RegExp(`CREATE TABLE ${table}\\s*\\(`));
+      expect(all).toMatch(new RegExp(`CREATE TABLE ${table}\s*\\(`));
     }
   });
 
