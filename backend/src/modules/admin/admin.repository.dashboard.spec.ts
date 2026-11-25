@@ -34,6 +34,7 @@ describe('AdminRepository dashboard revenue', () => {
 
     expect(String(ordersSql)).toContain("AT TIME ZONE 'Asia/Aden'");
     expect(String(revenueSql)).toContain('GROUP BY');
+    expect(String(revenueSql)).toContain('delivered_at');
     expect(result.total_revenue).toBe('0');
     expect(result.today_revenue).toBe('0');
     expect(result.revenue_by_currency).toEqual([
