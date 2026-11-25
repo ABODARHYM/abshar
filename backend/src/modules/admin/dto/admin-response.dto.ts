@@ -4,7 +4,6 @@ export class AdminCurrencyRevenueDto {
   @ApiProperty() currency!: string;
   @ApiProperty() totalRevenue!: number;
   @ApiProperty() todayRevenue!: number;
-  @ApiProperty({ type: [AdminCurrencyRevenueDto] }) revenueByCurrency!: AdminCurrencyRevenueDto[];
 }
 
 export class AdminDashboardDto {
@@ -21,6 +20,7 @@ export class AdminDashboardDto {
   @ApiProperty() totalRevenue!: number;
   @ApiProperty() todayOrders!: number;
   @ApiProperty() todayRevenue!: number;
+  @ApiProperty({ type: [AdminCurrencyRevenueDto] }) revenueByCurrency!: AdminCurrencyRevenueDto[];
 }
 
 export class AdminUserListItemDto {
