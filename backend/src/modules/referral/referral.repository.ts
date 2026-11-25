@@ -90,16 +90,26 @@ export class ReferralRepository {
     await exec(sql, [referralId]);
   }
 
-  async markRewarded(client: PoolClient | null, referralId: string): Promise<void> {
-    const sql = `
+  async rewardOnFirstDeliveredOrder(
+    client: PoolClient,
+    referredId: string,
+    bonusPoints: number,
+  ): Promise<ReferralRow | null> {
+    // The conditional update is the idempotency guard: concurrent deliveries
+    // can reward a completed referral only once.
+    const result = await client.query<ReferralRow>(
+      `
       UPDATE referrals
-      SET status = 'rewarded', rewarded_at = now(), updated_at = now()
-      WHERE id = $1 AND status = 'completed'
-    `;
-    const exec = client
-      ? (s: string, p: any[]) => client.query(s, p)
-      : (s: string, p: any[]) => this.db.query(s, p);
-    await exec(sql, [referralId]);
+      SET status = 'rewarded',
+          reward_points = reward_points + $2,
+          rewarded_at = now(),
+          updated_at = now()
+      WHERE referred_id = $1 AND status = 'completed'
+      RETURNING *
+      `,
+      [referredId, bonusPoints],
+    );
+    return result.rows[0] ?? null;
   }
 
   async cancel(client: PoolClient | null, referralId: string): Promise<boolean> {
@@ -124,7 +134,7 @@ export class ReferralRepository {
         COUNT(*) FILTER (WHERE status = 'pending')::text   AS pending,
         COUNT(*) FILTER (WHERE status = 'completed')::text AS completed,
         COUNT(*) FILTER (WHERE status = 'rewarded')::text  AS rewarded,
-        COALESCE(SUM(reward_points) FILTER (WHERE status = 'rewarded'), 0)::text AS total_points_earned
+        COALESCE(SUM(reward_points), 0)::text AS total_points_earned
       FROM referrals
       WHERE referrer_id = $1
       `,
