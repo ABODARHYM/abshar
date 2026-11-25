@@ -207,6 +207,7 @@ export class OrdersService {
           dto.couponCode,
           subtotal,
           store.id,
+          items.map((item) => ({ productId: item.productId, lineTotal: item.lineTotal })),
         );
 
         discountTotal = couponResult.discountAmount;
