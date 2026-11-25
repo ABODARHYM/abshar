@@ -873,6 +873,7 @@ export class FinanceRepository {
         AND o.status = 'delivered'
         AND o.delivered_at >= ($2::date::timestamp AT TIME ZONE 'Asia/Aden')
         AND o.delivered_at < (($3::date + 1)::timestamp AT TIME ZONE 'Asia/Aden')
+        AND ($4 <> 'driver' OR COALESCE((to_jsonb(o)->>'original_delivery_fee_verified')::boolean, FALSE) = TRUE)
         AND NOT EXISTS (
           SELECT 1 FROM settlement_commission_items sci
           WHERE sci.commission_id = c.id
