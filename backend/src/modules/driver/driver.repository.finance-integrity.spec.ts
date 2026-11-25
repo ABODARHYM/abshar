@@ -84,7 +84,8 @@ describe('DriverRepository delivery transaction', () => {
     const repo = new DriverRepository(db as any);
     const result = await repo.getEarnings('driver-1');
     const [sql, params] = db.query.mock.calls[0];
-    expect(String(sql)).toContain('COALESCE(o.original_delivery_fee, o.delivery_fee)');
+    expect(String(sql)).toContain("to_jsonb(o)->>'original_delivery_fee_verified'");
+    expect(String(sql)).not.toContain('COALESCE(o.original_delivery_fee, o.delivery_fee)');
     expect(String(sql)).toContain("AT TIME ZONE 'Asia/Aden'");
     expect(String(sql)).toContain('GROUP BY');
     expect(params).toEqual(['driver-1']);
