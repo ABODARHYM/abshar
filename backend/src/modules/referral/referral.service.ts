@@ -7,6 +7,7 @@ import {
 import { ReferralRepository } from './referral.repository';
 import { LoyaltyRepository } from '../loyalty/loyalty.repository';
 import { DatabaseService } from '../../database/database.service';
+import { PoolClient } from 'pg';
 import { ErrorCode } from '../../common/error-codes';
 import { PaginationQueryDto, buildPage } from '../../common/pagination.dto';
 import {
@@ -109,9 +110,9 @@ export class ReferralService {
         description: `مكافأة ترحيبية — سجّلت بكود إحالة (${codeUpper})`,
       });
 
-      // علّم الإحالة كمكتملة ومصروفة
+      // Registration reward is paid now; keep the referral completed until
+      // the referred customer successfully receives their first order.
       await this.repo.markCompleted(client, ref.id);
-      await this.repo.markRewarded(client, ref.id);
 
       return ref;
     });
@@ -120,8 +121,43 @@ export class ReferralService {
       success: true,
       referralId: referral.id,
       rewardPoints: REWARD_ON_SIGNUP,
-      message: `تم تطبيق الكود! حصلت على ${REWARD_ON_SIGNUP} نقطة`,
+      message: `تم تطبيق الكود! حصل الطرفان على ${REWARD_ON_SIGNUP} نقطة، وسيحصل كل طرف على ${REWARD_ON_FIRST_ORDER} نقطة إضافية بعد تسليم أول طلب للصديق بنجاح`,
     };
+  }
+
+  /**
+   * Pay the first-delivery referral bonus inside the order-delivery transaction.
+   * The repository's conditional status update makes this safe under retries
+   * and concurrent deliveries.
+   */
+  async rewardOnFirstDeliveredOrder(
+    client: PoolClient,
+    referredId: string,
+    orderId: string,
+    actorId: string,
+  ): Promise<boolean> {
+    const referral = await this.repo.rewardOnFirstDeliveredOrder(
+      client,
+      referredId,
+      REWARD_ON_FIRST_ORDER,
+    );
+    if (!referral) return false;
+
+    await this.loyaltyRepo.addPoints(client, {
+      customerId: referral.referrer_id,
+      type: 'earn',
+      points: REWARD_ON_FIRST_ORDER,
+      description: `مكافأة إحالة — تم تسليم أول طلب لصديقك (${orderId})`,
+      createdBy: actorId,
+    });
+    await this.loyaltyRepo.addPoints(client, {
+      customerId: referral.referred_id,
+      type: 'earn',
+      points: REWARD_ON_FIRST_ORDER,
+      description: `مكافأة ترحيبية — تم تسليم أول طلب لك (${orderId})`,
+      createdBy: actorId,
+    });
+    return true;
   }
 
   // ═══ My Stats ═══
