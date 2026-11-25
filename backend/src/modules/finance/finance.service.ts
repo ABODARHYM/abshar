@@ -217,6 +217,7 @@ export class FinanceService {
       id: c.id,
       orderId: c.order_id,
       orderNumber: c.order_number,
+      currency: c.currency,
       storeId: c.store_id,
       storeName: c.store_name,
       ratePercent: Number(c.rate_percent),
