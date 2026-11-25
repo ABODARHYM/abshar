@@ -24,10 +24,22 @@ export default function CouponsPage(){
  const load=async()=>{
   setLoading(true);setError('');
   try{
-   const [cr,pr]=await Promise.all([authFetch('/api/v1/coupons?limit=100'),authFetch('/api/v1/products?limit=100')]);
+   const cr=await authFetch('/api/v1/coupons?limit=100');
    if(!cr.ok)throw new Error('تعذر تحميل الكوبونات');
    const cd=await cr.json();setCoupons(Array.isArray(cd.items)?cd.items:[]);
-   if(pr.ok){const pd=await pr.json();setProducts(Array.isArray(pd.items)?pd.items:[]);}
+   const firstProductsResponse=await authFetch('/api/v1/products?page=1&limit=100');
+   if(!firstProductsResponse.ok)throw new Error('تعذر تحميل قائمة المنتجات');
+   const firstProductsPage=await firstProductsResponse.json();
+   const totalPages=Math.max(1,Number(firstProductsPage.meta?.totalPages)||1);
+   const remainingPages=await Promise.all(
+    Array.from({length:totalPages-1},(_,index)=>authFetch('/api/v1/products?page='+(index+2)+'&limit=100'))
+   );
+   if(remainingPages.some(response=>!response.ok))throw new Error('تعذر تحميل جميع صفحات المنتجات');
+   const remainingProducts=await Promise.all(remainingPages.map(response=>response.json()));
+   setProducts([
+    ...(Array.isArray(firstProductsPage.items)?firstProductsPage.items:[]),
+    ...remainingProducts.flatMap(page=>Array.isArray(page.items)?page.items:[]),
+   ]);
   }catch(e){setError((e as Error).message||'تعذر تحميل البيانات');}
   finally{setLoading(false);}
  };
