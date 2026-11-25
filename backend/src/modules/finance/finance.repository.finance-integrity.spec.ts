@@ -248,6 +248,45 @@ describe('FinanceRepository shared delivery transaction', () => {
     expect(client.query).toHaveBeenCalledTimes(1);
   });
 
+  it('verifies an original delivery fee atomically and writes an audit record', async () => {
+    const client = {
+      query: jest.fn()
+        .mockResolvedValueOnce({ rows: [{
+          id: 'order-review', status: 'delivered', driver_id: 'driver-1',
+          delivery_fee: '5.00', original_delivery_fee: null, verified: false,
+        }], rowCount: 1 })
+        .mockResolvedValueOnce({ rows: [{ id: 'order-review' }], rowCount: 1 })
+        .mockResolvedValueOnce({ rows: [], rowCount: 1 }),
+    };
+    const db = { transaction: jest.fn(async (work: (tx: any) => Promise<any>) => work(client)) };
+    const repo = new FinanceRepository(db as any);
+    const result = await repo.verifyOriginalDeliveryFee({
+      orderId: 'order-review', amount: 12.5, reason: 'مطابقة سجل التعرفة والفاتورة',
+      actorId: 'admin-1', actorRole: 'admin',
+    });
+    expect(result).toEqual({ orderId: 'order-review', originalDeliveryFee: 12.5, verified: true });
+    expect(String(client.query.mock.calls[1][0])).toContain('original_delivery_fee_verified = TRUE');
+    expect(String(client.query.mock.calls[2][0])).toContain('INSERT INTO audit_logs');
+    expect(client.query.mock.calls[2][1][0]).toBe('admin-1');
+    expect(db.transaction).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects a verified original fee lower than the customer delivery fee without writing', async () => {
+    const client = {
+      query: jest.fn().mockResolvedValueOnce({ rows: [{
+        id: 'order-review', status: 'delivered', driver_id: 'driver-1',
+        delivery_fee: '10.00', original_delivery_fee: null, verified: false,
+      }], rowCount: 1 }),
+    };
+    const db = { transaction: jest.fn(async (work: (tx: any) => Promise<any>) => work(client)) };
+    const repo = new FinanceRepository(db as any);
+    await expect(repo.verifyOriginalDeliveryFee({
+      orderId: 'order-review', amount: 8, reason: 'Verified by invoice',
+      actorId: 'admin-1', actorRole: 'admin',
+    })).rejects.toThrow('cannot be lower');
+    expect(client.query).toHaveBeenCalledTimes(1);
+  });
+
   it('refuses to invent a driver fee for historical free-delivery orders with unknown originals', async () => {
     const client = {
       query: jest.fn()
