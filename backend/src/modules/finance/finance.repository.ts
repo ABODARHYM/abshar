@@ -20,18 +20,22 @@ export class FinanceRepository {
   // ═══════════════ Store Earnings ═══════════════
 
   async getStoreEarnings(storeId: string): Promise<{
-    today_earnings: string;
-    week_earnings: string;
-    month_earnings: string;
-    total_earnings: string;
-    today_orders: string;
-    week_orders: string;
-    month_orders: string;
-    total_orders: string;
-    pending_settlement: string;
-    last_settlement_at: Date | null;
+    currency_breakdown: Array<{
+      currency: string;
+      today_earnings: string;
+      week_earnings: string;
+      month_earnings: string;
+      total_earnings: string;
+      today_orders: string;
+      week_orders: string;
+      month_orders: string;
+      total_orders: string;
+      pending_settlement: string;
+      last_settlement_at: Date | null;
+    }>;
   }> {
     const r = await this.db.query<{
+      currency: string;
       today_earnings: string;
       week_earnings: string;
       month_earnings: string;
@@ -44,42 +48,57 @@ export class FinanceRepository {
       last_settlement_at: Date | null;
     }>(
       `
+      WITH local_day AS (
+        SELECT (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Aden')::date AS today
+      )
       SELECT
-        COALESCE(SUM(CASE WHEN o.delivered_at >= CURRENT_DATE THEN c.store_amount ELSE 0 END), 0)::text AS today_earnings,
-        COALESCE(SUM(CASE WHEN o.delivered_at >= CURRENT_DATE - INTERVAL '7 days' THEN c.store_amount ELSE 0 END), 0)::text AS week_earnings,
-        COALESCE(SUM(CASE WHEN o.delivered_at >= CURRENT_DATE - INTERVAL '30 days' THEN c.store_amount ELSE 0 END), 0)::text AS month_earnings,
+        COALESCE(NULLIF(BTRIM(o.currency), ''), 'UNKNOWN') AS currency,
+        COALESCE(SUM(c.store_amount) FILTER (
+          WHERE o.delivered_at >= (d.today::timestamp AT TIME ZONE 'Asia/Aden')
+        ), 0)::text AS today_earnings,
+        COALESCE(SUM(c.store_amount) FILTER (
+          WHERE o.delivered_at >= ((d.today - 6)::timestamp AT TIME ZONE 'Asia/Aden')
+        ), 0)::text AS week_earnings,
+        COALESCE(SUM(c.store_amount) FILTER (
+          WHERE o.delivered_at >= ((d.today - 29)::timestamp AT TIME ZONE 'Asia/Aden')
+        ), 0)::text AS month_earnings,
         COALESCE(SUM(c.store_amount), 0)::text AS total_earnings,
-        COUNT(CASE WHEN o.delivered_at >= CURRENT_DATE THEN 1 END)::text AS today_orders,
-        COUNT(CASE WHEN o.delivered_at >= CURRENT_DATE - INTERVAL '7 days' THEN 1 END)::text AS week_orders,
-        COUNT(CASE WHEN o.delivered_at >= CURRENT_DATE - INTERVAL '30 days' THEN 1 END)::text AS month_orders,
+        COUNT(*) FILTER (
+          WHERE o.delivered_at >= (d.today::timestamp AT TIME ZONE 'Asia/Aden')
+        )::text AS today_orders,
+        COUNT(*) FILTER (
+          WHERE o.delivered_at >= ((d.today - 6)::timestamp AT TIME ZONE 'Asia/Aden')
+        )::text AS week_orders,
+        COUNT(*) FILTER (
+          WHERE o.delivered_at >= ((d.today - 29)::timestamp AT TIME ZONE 'Asia/Aden')
+        )::text AS month_orders,
         COUNT(*)::text AS total_orders,
-        COALESCE(
-          (SELECT SUM(net_amount) FROM settlements 
-           WHERE party_type = 'store' AND party_id = $1 AND status IN ('pending','approved')),
-          0
-        )::text AS pending_settlement,
-        (SELECT MAX(settled_at) FROM settlements 
-         WHERE party_type = 'store' AND party_id = $1 AND status = 'paid') AS last_settlement_at
+        COALESCE((
+          SELECT SUM(s.net_amount)
+          FROM settlements s
+          WHERE s.party_type = 'store' AND s.party_id = $1
+            AND s.status IN ('pending', 'approved')
+            AND COALESCE(NULLIF(BTRIM(s.currency), ''), 'UNKNOWN') =
+                COALESCE(NULLIF(BTRIM(o.currency), ''), 'UNKNOWN')
+        ), 0)::text AS pending_settlement,
+        (
+          SELECT MAX(s.settled_at)
+          FROM settlements s
+          WHERE s.party_type = 'store' AND s.party_id = $1
+            AND s.status = 'paid'
+            AND COALESCE(NULLIF(BTRIM(s.currency), ''), 'UNKNOWN') =
+                COALESCE(NULLIF(BTRIM(o.currency), ''), 'UNKNOWN')
+        ) AS last_settlement_at
       FROM commissions c
       JOIN orders o ON o.id = c.order_id
+      CROSS JOIN local_day d
       WHERE c.store_id = $1 AND o.status = 'delivered'
+      GROUP BY COALESCE(NULLIF(BTRIM(o.currency), ''), 'UNKNOWN')
+      ORDER BY currency
       `,
       [storeId],
     );
-
-    const row = r.rows[0];
-    return {
-      today_earnings: row.today_earnings,
-      week_earnings: row.week_earnings,
-      month_earnings: row.month_earnings,
-      total_earnings: row.total_earnings,
-      today_orders: row.today_orders,
-      week_orders: row.week_orders,
-      month_orders: row.month_orders,
-      total_orders: row.total_orders,
-      pending_settlement: row.pending_settlement,
-      last_settlement_at: row.last_settlement_at,
-    };
+    return { currency_breakdown: r.rows };
   }
 
   // ═══════════════ Settlements ═══════════════
