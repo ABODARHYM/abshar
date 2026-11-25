@@ -304,4 +304,12 @@ describe('FinanceRepository shared delivery transaction', () => {
     expect(client.query).toHaveBeenCalledTimes(2);
   });
 
+  it('blocks fee verification when historical commission records exist', async () => {
+    const client = { query: jest.fn().mockResolvedValueOnce({ rows: [{ id: 'order-review', status: 'delivered', driver_id: 'driver-1', delivery_fee: '5.00', original_delivery_fee: null, verified: false }] }).mockResolvedValueOnce({ rows: [{ has_commission: true, has_settlement_item: false }] }) };
+    const db = { transaction: jest.fn(async (work: (tx: any) => Promise<any>) => work(client)) };
+    const repo = new FinanceRepository(db as any);
+    await expect(repo.verifyOriginalDeliveryFee({ orderId: 'order-review', amount: 12.5, reason: 'مطابقة سجل التعرفة والفاتورة', actorId: 'admin-1', actorRole: 'admin' })).rejects.toThrow('manual balanced reconciliation');
+    expect(client.query).toHaveBeenCalledTimes(2);
+  });
+
 });
