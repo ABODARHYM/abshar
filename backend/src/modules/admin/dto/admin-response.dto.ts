@@ -1,5 +1,12 @@
 import { ApiProperty } from '@nestjs/swagger';
 
+export class AdminCurrencyRevenueDto {
+  @ApiProperty() currency!: string;
+  @ApiProperty() totalRevenue!: number;
+  @ApiProperty() todayRevenue!: number;
+  @ApiProperty({ type: [AdminCurrencyRevenueDto] }) revenueByCurrency!: AdminCurrencyRevenueDto[];
+}
+
 export class AdminDashboardDto {
   @ApiProperty() totalUsers!: number;
   @ApiProperty() activeUsers!: number;
