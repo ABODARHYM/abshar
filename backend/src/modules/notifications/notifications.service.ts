@@ -308,15 +308,22 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
     driverId: string,
     orderNumber: string,
     amount: number,
+    currency: string,
   ): Promise<void> {
+    const currencyLabel: Record<string, string> = {
+      YER: 'ر.ي',
+      SAR: 'ر.س',
+      USD: 'دولار أمريكي',
+    };
+    const label = currencyLabel[currency] || currency || 'عملة غير معروفة';
     await this.send({
       userId: driverId,
       type: 'EARNINGS_ADDED',
       title: '💰 ربح جديد',
-      body: `+${amount} ر.س من الطلب ${orderNumber}`,
+      body: `+${amount} ${label} من الطلب ${orderNumber}`,
       category: 'delivery',
       priority: 'normal',
-      metadata: { orderNumber, amount },
+      metadata: { orderNumber, amount, currency },
     });
   }
 
