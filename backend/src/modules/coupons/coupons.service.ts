@@ -21,7 +21,8 @@ export class CouponsService {
   if(coupon.store_id&&coupon.store_id!==dto.storeId)return this.invalid('الكوبون لا ينطبق على هذا المتجر');
   if(coupon.usage_limit!==null&&coupon.used_count>=coupon.usage_limit)return this.invalid('استُنفد الكوبون');
   if(coupon.per_user_limit!==null&&await this.repo.countUserUsage(coupon.id,userId)>=coupon.per_user_limit)return this.invalid('استخدمت هذا الكوبون من قبل');
-  let eligibleSubtotal=dto.subtotal;\n  let verifiedCartSubtotal=dto.subtotal;
+  let eligibleSubtotal=dto.subtotal;
+  let verifiedCartSubtotal=dto.subtotal;
   if(coupon.scope==='products'){
    if(!dto.items?.length)return this.invalid('هذا الكوبون مخصص لمنتجات محددة؛ أرسل منتجات السلة للتحقق');
    try{
