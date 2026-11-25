@@ -403,6 +403,15 @@ export class DriverService {
           // with the delivered status and its history record.
           await this.finance.computeCommissionForOrder(orderId, client);
 
+          // Loyalty points are part of the same transaction as delivery and finance.
+          // The repository's order-earn unique index makes retries idempotent.
+          await this.loyalty.earnFromOrderInTransaction(
+            client,
+            deliveredOrder.customer_id,
+            orderId,
+            Number(deliveredOrder.total),
+          );
+
           if (deliveredOrder.payment_method === 'cash_on_delivery' && Number(deliveredOrder.total) > 0) {
             await this.driverCashRepo.recordCashCollection(client, {
               driverId: userId,
@@ -450,21 +459,7 @@ export class DriverService {
         }
       }
       if (toStatus === 'delivered') {
-        // Commission and delivery ledger entries were committed with the order transition.
-        if (full) {
-          // Loyalty is a separate non-ledger side effect and remains retry-safe.
-          try {
-            await this.loyalty.earnFromOrder(
-              full.customer_id,
-              orderId,
-              Number(full.total),
-              full.currency || 'YER',
-            );
-            console.log(`[driver] loyalty points earned for customer ${full.customer_id}`);
-          } catch (err) {
-            console.warn('[driver] loyalty earn failed:', (err as Error).message);
-          }
-        }
+        // Delivery, finance ledger, cash collection and loyalty points committed atomically.
 
         // إشعار العميل
         if (full) {
