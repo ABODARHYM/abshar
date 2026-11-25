@@ -4,7 +4,10 @@ describe('OrdersRepository original delivery fee', () => {
   it('persists the original pre-coupon fee separately from the customer delivery fee', async () => {
     const client = {
       query: jest.fn()
+        .mockResolvedValueOnce({ rows: [{ is_active: true, starts_at: null, expires_at: null, usage_limit: null, per_user_limit: null, used_count: 0, store_id: null }], rowCount: 1 })
         .mockResolvedValueOnce({ rows: [{ id: 'order-1' }], rowCount: 1 })
+        .mockResolvedValueOnce({ rows: [], rowCount: 1 })
+        .mockResolvedValueOnce({ rows: [], rowCount: 1 })
         .mockResolvedValueOnce({ rows: [], rowCount: 1 })
         .mockResolvedValueOnce({ rows: [], rowCount: 1 }),
     };
@@ -46,7 +49,7 @@ describe('OrdersRepository original delivery fee', () => {
       }],
     });
 
-    const [sql, params] = client.query.mock.calls[0];
+    const [sql, params] = client.query.mock.calls[1];
     expect(String(sql)).toContain('original_delivery_fee');
     expect(params[4]).toBe(0);
     expect(params[5]).toBe(120);
