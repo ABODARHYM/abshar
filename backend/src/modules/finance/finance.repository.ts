@@ -498,7 +498,7 @@ export class FinanceRepository {
       const order = orderRes.rows[0];
       if (!order) return null;
       if (!order.original_delivery_fee_verified || order.original_delivery_fee === null) {
-        throw new ConflictException('Original delivery fee is unverified for this order; commission requires manual financial review');
+        throw new ConflictException('Original delivery fee is unknown or unverified for this order; commission requires manual financial review');
       }
 
       // Read the existing commission first. Do not recalculate historical rates on retries.
