@@ -11,6 +11,7 @@ import { DispatchService } from '../dispatch/dispatch.service';
 import { DriverCashService } from '../driver-cash/driver-cash.service';
 import { DriverCashRepository } from '../driver-cash/driver-cash.repository';
 import { LoyaltyService } from '../loyalty/loyalty.service';
+import { ReferralService } from '../referral/referral.service';
 import {
   OrderStatus,
   CancellationReason,
@@ -44,6 +45,7 @@ export class DriverService {
     private readonly driverCash: DriverCashService,
     private readonly driverCashRepo: DriverCashRepository,
     private readonly loyalty: LoyaltyService,
+    private readonly referrals: ReferralService,
   ) {}
 
   // ───── Profile ─────
@@ -402,6 +404,15 @@ export class DriverService {
           // Commission and delivery-time ledger effects commit atomically
           // with the delivered status and its history record.
           await this.finance.computeCommissionForOrder(orderId, client);
+
+          // Pay both referral bonuses only on the referred customer's first
+          // successful delivery, atomically with the delivered order.
+          await this.referrals.rewardOnFirstDeliveredOrder(
+            client,
+            deliveredOrder.customer_id,
+            orderId,
+            userId,
+          );
 
           if (deliveredOrder.payment_method === 'cash_on_delivery' && Number(deliveredOrder.total) > 0) {
             await this.driverCashRepo.recordCashCollection(client, {
