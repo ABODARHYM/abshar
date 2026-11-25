@@ -157,13 +157,17 @@ export class LoyaltyRepository {
       const lockedReward = await client.query<{
         id: string; name_ar: string; points_cost: number;
         stock: number | null; used_count: number; is_active: boolean;
+        starts_at: Date | null; expires_at: Date | null;
       }>(
-        `SELECT id, name_ar, points_cost, stock, used_count, is_active
+        `SELECT id, name_ar, points_cost, stock, used_count, is_active, starts_at, expires_at
          FROM rewards WHERE id = $1 FOR UPDATE`,
         [reward.id],
       );
       const currentReward = lockedReward.rows[0];
-      if (!currentReward || !currentReward.is_active) {
+      const now = new Date();
+      if (!currentReward || !currentReward.is_active ||
+          (currentReward.starts_at && currentReward.starts_at > now) ||
+          (currentReward.expires_at && currentReward.expires_at <= now)) {
         throw new Error('REWARD_UNAVAILABLE');
       }
       if (currentReward.stock !== null && currentReward.used_count >= currentReward.stock) {
