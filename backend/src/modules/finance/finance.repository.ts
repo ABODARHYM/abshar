@@ -152,6 +152,36 @@ export class FinanceRepository {
     return { rows: rowsRes.rows, total };
   }
 
+  async verifyOriginalDeliveryFee(params: { orderId: string; amount: number; reason: string; actorId: string; actorRole: string | null }): Promise<any | null> {
+    return this.db.transaction(async (client: PoolClient) => {
+      const current = await client.query(
+        `SELECT id, status, driver_id, delivery_fee, original_delivery_fee,
+                COALESCE((to_jsonb(orders)->>'original_delivery_fee_verified')::boolean, FALSE) AS verified
+         FROM orders WHERE id = $1 FOR UPDATE`,
+        [params.orderId],
+      );
+      const order = current.rows[0];
+      if (!order || order.status !== 'delivered' || !order.driver_id) return null;
+      if (order.verified) throw new ConflictException('Original delivery fee is already verified');
+      if (params.amount < Number(order.delivery_fee)) {
+        throw new ConflictException('Verified original delivery fee cannot be lower than customer delivery fee');
+      }
+      await client.query(
+        `UPDATE orders SET original_delivery_fee = $1, original_delivery_fee_verified = TRUE WHERE id = $2`,
+        [params.amount, params.orderId],
+      );
+      await client.query(
+        `INSERT INTO audit_logs
+          (actor_user_id, actor_role, action, entity_type, entity_id, old_value, new_value)
+         VALUES ($1, $2, 'finance.delivery_fee.verified', 'order', $3, $4::jsonb, $5::jsonb)`,
+        [params.actorId, params.actorRole, params.orderId,
+          JSON.stringify({ originalDeliveryFee: order.original_delivery_fee, verified: false }),
+          JSON.stringify({ originalDeliveryFee: params.amount, verified: true, reason: params.reason })],
+      );
+      return { orderId: params.orderId, originalDeliveryFee: params.amount, verified: true };
+    });
+  }
+
   async listUnverifiedDeliveryFees(query: { page: number; limit: number }): Promise<{ rows: any[]; total: number }> {
     const count = await this.db.query<{ count: string }>(
       `SELECT COUNT(*)::text AS count
