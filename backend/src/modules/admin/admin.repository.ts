@@ -63,7 +63,7 @@ export class AdminRepository {
         COALESCE(NULLIF(BTRIM(currency), ''), 'UNKNOWN') AS currency,
         COALESCE(SUM(total), 0)::text AS total_revenue,
         COALESCE(SUM(total) FILTER (
-          WHERE created_at >= ((CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Aden')::date::timestamp AT TIME ZONE 'Asia/Aden')
+          WHERE delivered_at >= ((CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Aden')::date::timestamp AT TIME ZONE 'Asia/Aden')
         ), 0)::text AS today_revenue
       FROM orders
       WHERE status = 'delivered'
