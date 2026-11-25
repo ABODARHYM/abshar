@@ -486,6 +486,7 @@ export class AuthService {
       LEFT JOIN role_permissions rp ON rp.role_id = r.id
       LEFT JOIN permissions p ON p.id = rp.permission_id
       WHERE u.id = $1
+        AND u.status = 'active'
         AND u.deleted_at IS NULL
       GROUP BY
         u.id,
