@@ -192,20 +192,29 @@ export class AuthService {
     );
 
     if (!validPassword) {
-      await this.recordFailedLogin(user.id, user.failed_login_attempts);
+      await this.recordFailedLogin(user.id);
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    await this.db.query(
+    const unlocked = await this.db.query<{ id: string }>(
       `
       UPDATE users
       SET failed_login_attempts = 0,
           locked_until = NULL,
           last_login_at = now()
       WHERE id = $1
+        AND status = 'active'
+        AND (locked_until IS NULL OR locked_until <= now())
+      RETURNING id
       `,
       [user.id],
     );
+
+    // A concurrent failed-login request may have locked the account while
+    // bcrypt was checking this password. Never clear that newly applied lock.
+    if (unlocked.rows.length === 0) {
+      throw new UnauthorizedException('Account is temporarily locked');
+    }
 
     const authUser = await this.loadAuthUser(user.id);
     const tokens = await this.issueTokens(authUser, meta, randomUUID());
@@ -501,32 +510,25 @@ export class AuthService {
     return [...candidates];
   }
 
-  private async recordFailedLogin(
-    userId: string,
-    currentAttempts: number,
-  ): Promise<void> {
-    const nextAttempts = currentAttempts + 1;
-
-    if (nextAttempts >= 5) {
-      await this.db.query(
-        `
-        UPDATE users
-        SET failed_login_attempts = 0,
-            locked_until = now() + interval '15 minutes'
-        WHERE id = $1
-        `,
-        [userId],
-      );
-      return;
-    }
-
+  private async recordFailedLogin(userId: string): Promise<void> {
+    // Increment from the current database value so concurrent failures cannot
+    // overwrite one another with the same stale count read during login.
     await this.db.query(
       `
       UPDATE users
-      SET failed_login_attempts = $1
-      WHERE id = $2
+      SET failed_login_attempts = CASE
+            WHEN failed_login_attempts + 1 >= 5 THEN 0
+            ELSE failed_login_attempts + 1
+          END,
+          locked_until = CASE
+            WHEN failed_login_attempts + 1 >= 5
+              THEN now() + interval '15 minutes'
+            ELSE locked_until
+          END
+      WHERE id = $1
+        AND deleted_at IS NULL
       `,
-      [nextAttempts, userId],
+      [userId],
     );
   }
 
