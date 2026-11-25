@@ -2,6 +2,10 @@ jest.mock('@nestjs/jwt', () => ({
   JwtService: class JwtService {},
 }));
 
+jest.mock('bcryptjs', () => ({
+  compare: jest.fn(),
+}));
+
 import { UnauthorizedException } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
 import { AuthService } from './auth.service';
@@ -125,7 +129,8 @@ describe('AuthService login lockout concurrency', () => {
   });
 
   it('does not clear a lock applied while a correct password was being checked', async () => {
-    const compare = jest.spyOn(bcrypt, 'compare').mockImplementation(async () => true as any);
+    const compare = jest.mocked(bcrypt.compare);
+    compare.mockResolvedValue(true);
     db.query
       .mockResolvedValueOnce({
         rows: [{
@@ -153,7 +158,7 @@ describe('AuthService login lockout concurrency', () => {
       expect(updateSql).toContain('RETURNING id');
       expect(db.query).toHaveBeenCalledTimes(2);
     } finally {
-      compare.mockRestore();
+      compare.mockReset();
     }
   });
 });
