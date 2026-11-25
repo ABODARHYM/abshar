@@ -634,6 +634,7 @@ export class StoreOwnerRepository {
     total_products: number;
     available_products: number;
     total_revenue: number;
+    revenue_by_currency: Array<{ currency: string; total_revenue: string }>;
   }> {
     const r = await this.db.query<{
       total_orders: string;
@@ -645,7 +646,6 @@ export class StoreOwnerRepository {
       cancelled_orders: string;
       total_products: string;
       available_products: string;
-      total_revenue: string;
     }>(
       `
       SELECT
@@ -657,8 +657,22 @@ export class StoreOwnerRepository {
         (SELECT COUNT(*)::text FROM orders WHERE store_id = $1 AND status = 'delivered') AS delivered_orders,
         (SELECT COUNT(*)::text FROM orders WHERE store_id = $1 AND status = 'cancelled') AS cancelled_orders,
         (SELECT COUNT(*)::text FROM products WHERE store_id = $1 AND deleted_at IS NULL) AS total_products,
-        (SELECT COUNT(*)::text FROM products WHERE store_id = $1 AND deleted_at IS NULL AND is_available = true) AS available_products,
-        (SELECT COALESCE(SUM(total), 0)::text FROM orders WHERE store_id = $1 AND status = 'delivered') AS total_revenue
+        (SELECT COUNT(*)::text FROM products WHERE store_id = $1 AND deleted_at IS NULL AND is_available = true) AS available_products
+      `,
+      [storeId],
+    );
+    const revenue = await this.db.query<{
+      currency: string;
+      total_revenue: string;
+    }>(
+      `
+      SELECT
+        COALESCE(NULLIF(BTRIM(currency), ''), 'UNKNOWN') AS currency,
+        COALESCE(SUM(total), 0)::text AS total_revenue
+      FROM orders
+      WHERE store_id = $1 AND status = 'delivered'
+      GROUP BY COALESCE(NULLIF(BTRIM(currency), ''), 'UNKNOWN')
+      ORDER BY currency
       `,
       [storeId],
     );
@@ -673,7 +687,9 @@ export class StoreOwnerRepository {
       cancelled_orders: parseInt(row.cancelled_orders, 10),
       total_products: parseInt(row.total_products, 10),
       available_products: parseInt(row.available_products, 10),
-      total_revenue: parseFloat(row.total_revenue),
+      // Preserve the legacy field only for a single currency; never add unlike currencies.
+      total_revenue: revenue.rows.length === 1 ? Number(revenue.rows[0].total_revenue) : 0,
+      revenue_by_currency: revenue.rows,
     };
   }
 
