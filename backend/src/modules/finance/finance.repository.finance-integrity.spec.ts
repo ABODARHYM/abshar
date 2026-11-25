@@ -136,6 +136,20 @@ describe('FinanceRepository shared delivery transaction', () => {
     expect(db.query.mock.calls[0][1]).toEqual(['store-1', '2026-11-01', '2026-11-07', 'store']);
   });
 
+  it('excludes unverified original fees from driver unsettled commission totals', async () => {
+    const db = { query: jest.fn().mockResolvedValue({
+      rows: [{ gross: '0.00', commission: '0.00', net: '0.00', count: '0' }],
+    }) };
+    const repo = new FinanceRepository(db as any);
+
+    await repo.getUnsettledCommissions('driver', 'driver-1', '2026-11-01', '2026-11-07');
+
+    const sql = String(db.query.mock.calls[0][0]);
+    expect(sql).toContain("to_jsonb(o)->>'original_delivery_fee_verified'");
+    expect(sql).toContain("$4 <> 'driver'");
+    expect(db.query.mock.calls[0][1]).toEqual(['driver-1', '2026-11-01', '2026-11-07', 'driver']);
+  });
+
   it('marks a settlement cancelled before releasing its commission reservations', async () => {
     const client = {
       query: jest.fn()
