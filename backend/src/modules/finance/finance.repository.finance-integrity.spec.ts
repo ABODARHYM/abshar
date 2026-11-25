@@ -23,6 +23,7 @@ describe('FinanceRepository shared delivery transaction', () => {
             subtotal: '100.00',
             delivery_fee: '20.00',
             original_delivery_fee: '20.00',
+            original_delivery_fee_verified: true,
             discount_total: '0.00',
             total: '120.00',
             currency: 'YER',
@@ -186,6 +187,7 @@ describe('FinanceRepository shared delivery transaction', () => {
         .mockResolvedValueOnce({ rows: [{
           id: 'order-2', store_id: 'store-1', driver_id: 'driver-1',
           subtotal: '100.00', delivery_fee: '0.00', original_delivery_fee: '20.00',
+          original_delivery_fee_verified: true,
           discount_total: '10.00', total: '90.00', currency: 'YER',
         }], rowCount: 1 })
         .mockResolvedValueOnce({ rows: [], rowCount: 0 })
