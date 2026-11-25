@@ -66,8 +66,8 @@ describe('real migration files', () => {
   it('preserves applied migration 031 and appends forward-only finance, notification, delivery-fee, distance-tier, verified geography, route snapshot, delivery coverage, and coupon targeting migrations', () => {
     const numbers = names.map((name) => Number(name.slice(0, 3)));
     expect(numbers.slice(0, 26)).toEqual(Array.from({ length: 26 }, (_, i) => i + 1));
-    // Both new forward-only migrations are included: 047 loyalty and 048 product coupons.
-    expect(numbers.slice(26)).toEqual([31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48]);
+    // Forward-only migrations include loyalty, product coupons, and fee provenance.
+    expect(numbers.slice(26)).toEqual([31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49]);
   });
 
   it('plans finance migrations after an already-applied 031 without out-of-order work', () => {
@@ -79,6 +79,13 @@ describe('real migration files', () => {
 
     expect(planMigrations([base, ...forward], [{ name: base.name, checksum: base.checksum }]).pending)
       .toEqual(forward.map((migration) => migration.name));
+  });
+
+  it('keeps historical original delivery fees explicitly unverified', () => {
+    const sql = readFileSync(join(dir, '049_original_delivery_fee_provenance.sql'), 'utf8');
+    expect(sql).toContain('original_delivery_fee_verified boolean NOT NULL DEFAULT FALSE');
+    expect(sql).toContain('ADD COLUMN IF NOT EXISTS');
+    expect(sql).not.toMatch(/UPDATE\\s+orders/i);
   });
 
   it('preflights duplicate order-based loyalty earns without mutating historical ledger rows', () => {
