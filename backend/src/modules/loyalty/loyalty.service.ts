@@ -63,11 +63,12 @@ export class LoyaltyService {
 
     try {
       const result = await this.repo.redeem(customerId, reward, await this.repo.getCurrency());
+      const updatedReward = await this.repo.findRewardById(rewardId);
       return {
         success: true,
-        pointsSpent: reward.points_cost,
+        pointsSpent: result.pointsSpent,
         remainingPoints: result.newBalance,
-        reward: this.toReward(reward),
+        reward: this.toReward(updatedReward ?? reward),
       };
     } catch (e) {
       if (['INSUFFICIENT_POINTS', 'REWARD_OUT_OF_STOCK', 'REWARD_UNAVAILABLE'].includes((e as Error).message)) {
