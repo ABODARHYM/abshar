@@ -149,6 +149,7 @@ describe('AuthService login lockout concurrency', () => {
 
       const updateSql = String(db.query.mock.calls[1][0]);
       expect(updateSql).toContain("locked_until <= now()");
+      expect(updateSql).toContain("status = 'active'");
       expect(updateSql).toContain('RETURNING id');
       expect(db.query).toHaveBeenCalledTimes(2);
     } finally {
