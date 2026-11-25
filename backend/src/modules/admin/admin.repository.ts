@@ -24,6 +24,7 @@ export class AdminRepository {
     total_revenue: string;
     today_orders: string;
     today_revenue: string;
+    revenue_by_currency: Array<{ currency: string; total_revenue: string; today_revenue: string }>;
   }> {
     const r = await this.db.query<{
       total_users: string;
@@ -36,9 +37,7 @@ export class AdminRepository {
       pending_orders: string;
       delivered_orders: string;
       cancelled_orders: string;
-      total_revenue: string;
       today_orders: string;
-      today_revenue: string;
     }>(`
       SELECT
         (SELECT COUNT(*)::text FROM users WHERE deleted_at IS NULL) AS total_users,
@@ -51,11 +50,32 @@ export class AdminRepository {
         (SELECT COUNT(*)::text FROM orders WHERE status = 'pending') AS pending_orders,
         (SELECT COUNT(*)::text FROM orders WHERE status = 'delivered') AS delivered_orders,
         (SELECT COUNT(*)::text FROM orders WHERE status = 'cancelled') AS cancelled_orders,
-        (SELECT COALESCE(SUM(total), 0)::text FROM orders WHERE status = 'delivered') AS total_revenue,
-        (SELECT COUNT(*)::text FROM orders WHERE created_at >= CURRENT_DATE) AS today_orders,
-        (SELECT COALESCE(SUM(total), 0)::text FROM orders WHERE created_at >= CURRENT_DATE AND status = 'delivered') AS today_revenue
+        (SELECT COUNT(*)::text FROM orders
+          WHERE created_at >= ((CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Aden')::date::timestamp AT TIME ZONE 'Asia/Aden')
+        ) AS today_orders
     `);
-    return r.rows[0];
+    const revenue = await this.db.query<{
+      currency: string;
+      total_revenue: string;
+      today_revenue: string;
+    }>(`
+      SELECT
+        COALESCE(NULLIF(BTRIM(currency), ''), 'UNKNOWN') AS currency,
+        COALESCE(SUM(total), 0)::text AS total_revenue,
+        COALESCE(SUM(total) FILTER (
+          WHERE created_at >= ((CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Aden')::date::timestamp AT TIME ZONE 'Asia/Aden')
+        ), 0)::text AS today_revenue
+      FROM orders
+      WHERE status = 'delivered'
+      GROUP BY COALESCE(NULLIF(BTRIM(currency), ''), 'UNKNOWN')
+      ORDER BY currency
+    `);
+    return {
+      ...r.rows[0],
+      total_revenue: revenue.rows.length === 1 ? revenue.rows[0].total_revenue : '0',
+      today_revenue: revenue.rows.length === 1 ? revenue.rows[0].today_revenue : '0',
+      revenue_by_currency: revenue.rows,
+    };
   }
 
   // ───── Users ─────
