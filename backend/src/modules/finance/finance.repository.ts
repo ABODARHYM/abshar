@@ -424,7 +424,7 @@ export class FinanceRepository {
         c.store_id, s.name_ar AS store_name,
         c.rate_percent, c.order_amount, c.delivery_fee, c.original_delivery_fee, c.discount_amount,
         c.commission_amount, c.store_amount, c.driver_amount, c.platform_amount,
-        c.created_at
+        o.currency, c.created_at
       FROM commissions c
       JOIN orders o ON o.id = c.order_id
       JOIN stores s ON s.id = c.store_id
