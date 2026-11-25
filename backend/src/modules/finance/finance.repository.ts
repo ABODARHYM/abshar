@@ -501,16 +501,12 @@ export class FinanceRepository {
         throw new ConflictException('Original delivery fee is unknown or unverified for this order; commission requires manual financial review');
       }
 
-      // Read the existing commission first. Do not recalculate historical rates on retries.
+      // Read the existing commission only after the authoritative fee is verified.
       const existingRes = await client.query(
         `SELECT * FROM commissions WHERE order_id = $1 LIMIT 1`,
         [orderId],
       );
       let commissionRow = existingRes.rows[0];
-
-      if (!commissionRow && (!order.original_delivery_fee_verified || order.original_delivery_fee === null)) {
-        throw new ConflictException('Original delivery fee is unknown for this historical order; commission requires manual reconciliation');
-      }
 
       if (!commissionRow) {
         const storeRes = await client.query<{ commission_rate: string | null }>(
