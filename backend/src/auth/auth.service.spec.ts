@@ -94,7 +94,7 @@ describe('AuthService refresh-token lifecycle', () => {
     expect(client.query).toHaveBeenCalledTimes(3);
     expect(String(client.query.mock.calls[1][0])).toContain('FROM users');
     expect(String(client.query.mock.calls[2][0])).toContain('WHERE family_id = $1');
-    expect(client.query.mock.calls.some(([sql]) => String(sql).includes('INSERT INTO refresh_tokens'))).toBe(false);
+    expect(client.query.mock.calls.some((call: any[]) => String(call[0]).includes('INSERT INTO refresh_tokens'))).toBe(false);
     expect(db.query).not.toHaveBeenCalled();
   });
 
