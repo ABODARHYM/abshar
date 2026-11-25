@@ -4,7 +4,7 @@ describe('OrdersRepository original delivery fee', () => {
   it('persists the original pre-coupon fee separately from the customer delivery fee', async () => {
     const client = {
       query: jest.fn()
-        .mockResolvedValueOnce({ rows: [{ is_active: true, starts_at: null, expires_at: null, usage_limit: null, per_user_limit: null, used_count: 0, store_id: null }], rowCount: 1 })
+        .mockResolvedValueOnce({ rows: [{ is_active: true, starts_at: null, expires_at: null, usage_limit: null, per_user_limit: null, used_count: 0, store_id: null, min_order_amount: 0, type: 'free_delivery', value: 0, max_discount_amount: null }], rowCount: 1 })
         .mockResolvedValueOnce({ rows: [{ id: 'order-1' }], rowCount: 1 })
         .mockResolvedValueOnce({ rows: [], rowCount: 1 })
         .mockResolvedValueOnce({ rows: [], rowCount: 1 })
@@ -64,5 +64,48 @@ describe('OrdersRepository original delivery fee', () => {
       distanceTierMinKm: 4, distanceTierMaxKm: 6, distanceTierFee: 120,
       distanceSource: 'routing_api', pricingVersion: 1,
     });
+  });
+
+  it('rejects an order when the locked coupon minimum exceeds the order subtotal', async () => {
+    const client = {
+      query: jest.fn().mockResolvedValueOnce({
+        rows: [{
+          is_active: true, starts_at: null, expires_at: null,
+          usage_limit: null, per_user_limit: null, used_count: 0,
+          store_id: null, min_order_amount: 1500, type: 'fixed',
+          value: 100, max_discount_amount: null,
+        }],
+        rowCount: 1,
+      }),
+    };
+    const db = {
+      transaction: jest.fn(async (work: (tx: any) => Promise<any>) => work(client)),
+    };
+    const repo = new OrdersRepository(db as any);
+
+    await expect(repo.create('customer-1', {
+      storeId: 'store-1',
+      currency: 'YER',
+      deliveryFee: 120,
+      originalDeliveryFee: 120,
+      deliveryPricingSnapshot: {
+        distanceKm: 4.2, zoneId: 'zone-1', zoneName: 'Zone 1', distanceTierId: 'tier-1',
+        distanceTierMinKm: 4, distanceTierMaxKm: 6, distanceTierFee: 120,
+        distanceSource: 'routing_api', pricingVersion: 1, currency: 'YER',
+        originalDeliveryFee: 120, customerDeliveryFee: 120,
+      },
+      subtotal: 1000,
+      discountTotal: 100,
+      total: 1020,
+      addressSnapshot: {
+        addressId: 'address-1', addressText: 'Marib', latitude: 15.4, longitude: 45.3,
+        recipientName: 'Customer', recipientPhone: '777000000',
+      },
+      idempotencyKey: 'order-key-2',
+      couponId: 'coupon-1',
+      items: [{ productId: 'product-1', productName: 'Product', unitPrice: 1000, quantity: 1, lineTotal: 1000 }],
+    })).rejects.toThrow('COUPON_USAGE_LIMIT_REACHED');
+
+    expect(client.query).toHaveBeenCalledTimes(1);
   });
 });
