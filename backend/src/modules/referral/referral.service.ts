@@ -198,10 +198,10 @@ export class ReferralService {
         message: 'الإحالة ملغاة مسبقاً',
       });
     }
-    if (ref.status === 'rewarded') {
+    if (ref.status === 'completed' || ref.status === 'rewarded') {
       throw new ConflictException({
         code: ErrorCode.ValidationFailed,
-        message: 'لا يمكن إلغاء إحالة صُرفت مكافأتها',
+        message: 'لا يمكن إلغاء إحالة صُرفت مكافأتها عند التسجيل أو بعد أول توصيل',
       });
     }
     const cancelled = await this.repo.cancel(null, referralId);
