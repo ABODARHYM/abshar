@@ -102,7 +102,7 @@ export class ReferralRepository {
     await exec(sql, [referralId]);
   }
 
-  async cancel(client: PoolClient | null, referralId: string): Promise<void> {
+  async cancel(client: PoolClient | null, referralId: string): Promise<boolean> {
     const sql = `
       UPDATE referrals
       SET status = 'cancelled', updated_at = now()
@@ -111,7 +111,8 @@ export class ReferralRepository {
     const exec = client
       ? (s: string, p: any[]) => client.query(s, p)
       : (s: string, p: any[]) => this.db.query(s, p);
-    await exec(sql, [referralId]);
+    const result = await exec(sql, [referralId]);
+    return (result.rowCount ?? 0) > 0;
   }
 
   // ═══ Stats ═══
