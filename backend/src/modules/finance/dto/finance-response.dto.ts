@@ -49,6 +49,7 @@ export class CommissionDto {
   @ApiProperty() id!: string;
   @ApiProperty() orderId!: string;
   @ApiProperty() orderNumber!: string;
+  @ApiProperty() currency!: string;
   @ApiProperty() storeId!: string;
   @ApiProperty() storeName!: string;
   @ApiProperty() ratePercent!: number;
