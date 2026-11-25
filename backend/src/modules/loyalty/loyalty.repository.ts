@@ -114,34 +114,33 @@ export class LoyaltyRepository {
     expiresAt?: Date;
     createdBy?: string;
   }): Promise<void> {
-    const insertSql = `
-      INSERT INTO loyalty_transactions (customer_id, type, points, order_id, description, expires_at, created_by)
-      VALUES ($1, $2, $3, $4, $5, $6, $7)`;
-    // Upsert: أنشئ سجل customers إذا غير موجود
-    const updateSql = `
-      INSERT INTO customers (user_id, loyalty_points)
-      VALUES ($2, $1)
-      ON CONFLICT (user_id) DO UPDATE
-      SET loyalty_points = customers.loyalty_points + EXCLUDED.loyalty_points,
-          updated_at = now()`;
-
-    const insertParams = [
-      params.customerId,
-      params.type,
-      params.points,
-      params.orderId ?? null,
-      params.description ?? null,
-      params.expiresAt ?? null,
-      params.createdBy ?? null,
-    ];
-    const updateParams = [params.points, params.customerId];
+    const run = async (tx: PoolClient) => {
+      const idempotentOrderEarn = params.type === 'earn' && !!params.orderId;
+      const insertSql = `
+        INSERT INTO loyalty_transactions (customer_id, type, points, order_id, description, expires_at, created_by)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        ${idempotentOrderEarn ? "ON CONFLICT (order_id) WHERE type = 'earn' AND order_id IS NOT NULL DO NOTHING" : ''}
+        RETURNING id
+      `;
+      const inserted = await tx.query(insertSql, [
+        params.customerId, params.type, params.points, params.orderId ?? null,
+        params.description ?? null, params.expiresAt ?? null, params.createdBy ?? null,
+      ]);
+      // لا تحدّث الرصيد إذا كان ربح الطلب قد سُجّل مسبقاً.
+      if (idempotentOrderEarn && inserted.rowCount === 0) return;
+      await tx.query(`
+        INSERT INTO customers (user_id, loyalty_points)
+        VALUES ($2, $1)
+        ON CONFLICT (user_id) DO UPDATE
+        SET loyalty_points = customers.loyalty_points + EXCLUDED.loyalty_points,
+            updated_at = now()
+      `, [params.points, params.customerId]);
+    };
 
     if (client) {
-      await client.query(insertSql, insertParams);
-      await client.query(updateSql, updateParams);
+      await run(client);
     } else {
-      await this.db.query(insertSql, insertParams);
-      await this.db.query(updateSql, updateParams);
+      await this.db.transaction(run);
     }
   }
 
