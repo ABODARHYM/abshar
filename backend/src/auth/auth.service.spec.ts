@@ -77,15 +77,39 @@ describe('AuthService refresh-token lifecycle', () => {
     expect(db.query).not.toHaveBeenCalled();
   });
 
+  it('revokes the refresh-token family and rejects refresh for an inactive account', async () => {
+    let transactionCommitted = false;
+    db.transaction.mockImplementation(async (work: (tx: any) => Promise<unknown>) => {
+      const result = await work(client);
+      transactionCommitted = true;
+      return result;
+    });
+    client.query
+      .mockResolvedValueOnce({ rows: [activeToken()] })
+      .mockResolvedValueOnce({ rows: [{ status: 'suspended', deleted_at: null }] });
+
+    await expect(service.refresh('valid-refresh-token')).rejects.toThrow('Account is not active');
+
+    expect(transactionCommitted).toBe(true);
+    expect(client.query).toHaveBeenCalledTimes(3);
+    expect(String(client.query.mock.calls[1][0])).toContain('FROM users');
+    expect(String(client.query.mock.calls[2][0])).toContain('WHERE family_id = $1');
+    expect(client.query.mock.calls.some(([sql]) => String(sql).includes('INSERT INTO refresh_tokens'))).toBe(false);
+    expect(db.query).not.toHaveBeenCalled();
+  });
+
   it('rotates an active token, stores its replacement, and returns a fresh access token', async () => {
-    client.query.mockResolvedValueOnce({ rows: [activeToken()] });
+    client.query
+      .mockResolvedValueOnce({ rows: [activeToken()] })
+      .mockResolvedValueOnce({ rows: [{ status: 'active', deleted_at: null }] });
 
     const result = await service.refresh('valid-refresh-token', { userAgent: 'jest', ipAddress: '127.0.0.1' });
 
-    expect(client.query).toHaveBeenCalledTimes(3);
+    expect(client.query).toHaveBeenCalledTimes(4);
     expect(String(client.query.mock.calls[0][0])).toContain('FOR UPDATE');
-    expect(String(client.query.mock.calls[1][0])).toContain('INSERT INTO refresh_tokens');
-    expect(String(client.query.mock.calls[2][0])).toContain('replaced_by = $1');
+    expect(String(client.query.mock.calls[1][0])).toContain('FROM users');
+    expect(String(client.query.mock.calls[2][0])).toContain('INSERT INTO refresh_tokens');
+    expect(String(client.query.mock.calls[3][0])).toContain('replaced_by = $1');
     expect(result.user.id).toBe('user-1');
     expect(result.tokens.accessToken).toBe('new-access-token');
     expect(result.tokens.refreshToken).not.toBe('valid-refresh-token');
