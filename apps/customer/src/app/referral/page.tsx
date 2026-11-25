@@ -87,7 +87,7 @@ export default function ReferralPage() {
     if (!codeData) return;
     const text = `انضم إلى ABSHER BI — منصة التوصيل اليمنية!
 استخدم كود الإحالة: ${codeData.referralCode}
-واحصل على ${codeData.rewardOnSignup} نقطة هدية 🎁
+واحصل أنت وصديقك على ${codeData.rewardOnSignup} نقطة عند التسجيل، و${codeData.rewardOnFirstOrder} نقطة إضافية لكل منكما بعد تسليم أول طلب بنجاح 🎁
 ${codeData.shareUrl}`;
 
     if (navigator.share) {
