@@ -9,6 +9,7 @@ on:
     branches:
       - main
       - fix/staging-integrity-completion-20261120
+      - fix/store-push-loading-finally-20261125
 
 permissions:
   contents: read
