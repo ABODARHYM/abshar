@@ -65,6 +65,11 @@ export class AdminService {
       totalRevenue: Number(d.total_revenue),
       todayOrders: parseInt(d.today_orders, 10),
       todayRevenue: Number(d.today_revenue),
+      revenueByCurrency: d.revenue_by_currency.map((row) => ({
+        currency: row.currency,
+        totalRevenue: Number(row.total_revenue),
+        todayRevenue: Number(row.today_revenue),
+      })),
     };
   }
 
