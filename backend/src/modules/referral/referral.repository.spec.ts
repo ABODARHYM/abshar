@@ -5,7 +5,7 @@ describe('ReferralRepository cancel', () => {
     const db = { query: jest.fn().mockResolvedValue({ rowCount: 1, rows: [] }) };
     const repo = new ReferralRepository(db as any);
     await expect(repo.cancel(null, 'referral-1')).resolves.toBe(true);
-    expect(String(db.query.mock.calls[0][0])).toContain("status IN ('pending','completed')");
+    expect(String(db.query.mock.calls[0][0])).toContain("status = 'pending'");
   });
 
   it('returns false when the referral is no longer cancellable', async () => {
