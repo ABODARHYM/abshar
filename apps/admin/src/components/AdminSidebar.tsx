@@ -15,6 +15,7 @@ const MENU = [
   { href: '/pricing', label: 'تعرفة التوصيل', icon: '🚚' },
   { href: '/delivery-coverage', label: 'مناطق التغطية', icon: '🗺️' },
   { href: '/settlements', label: 'التسويات المالية', icon: '💰' },
+  { href: '/delivery-fee-review', label: 'مراجعة رسوم التوصيل', icon: '🧾' },
   { href: '/reports', label: 'التقارير', icon: '📈' },
   { href: '/audit', label: 'Audit Logs', icon: '📝' },
 ];
