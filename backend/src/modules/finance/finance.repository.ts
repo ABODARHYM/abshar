@@ -172,10 +172,11 @@ export class FinanceRepository {
         `SELECT EXISTS (SELECT 1 FROM commissions c WHERE c.order_id = $1) AS has_commission,
                 EXISTS (SELECT 1 FROM settlement_commission_items sci
                         JOIN commissions c ON c.id = sci.commission_id
-                        WHERE c.order_id = $1) AS has_settlement_item`,
+                        WHERE c.order_id = $1) AS has_settlement_item,
+                EXISTS (SELECT 1 FROM transactions t WHERE t.order_id = $1) AS has_ledger_transaction`,
         [params.orderId],
       );
-      if (financialHistory.rows[0]?.has_commission || financialHistory.rows[0]?.has_settlement_item) {
+      if (financialHistory.rows[0]?.has_commission || financialHistory.rows[0]?.has_settlement_item || financialHistory.rows[0]?.has_ledger_transaction) {
         throw new ConflictException('Order has historical commission or settlement records; manual balanced reconciliation is required before fee verification');
       }
       await client.query(
