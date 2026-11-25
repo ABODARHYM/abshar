@@ -52,9 +52,9 @@ describe('OrdersRepository product coupon atomicity', () => {
 
     expect(String(client.query.mock.calls[0][0])).toContain('FOR UPDATE');
     expect(String(client.query.mock.calls[1][0])).toContain('coupon_products');
-    expect(client.query.mock.calls[6][1]).toEqual(['coupon-1', 'customer-1', 'order-1', 50]);
-    expect(String(client.query.mock.calls[7][0])).toContain('used_count = used_count + 1');
-    expect(client.query).toHaveBeenCalledTimes(8);
+    expect(client.query.mock.calls[7][1]).toEqual(['coupon-1', 'customer-1', 'order-1', 50]);
+    expect(String(client.query.mock.calls[8][0])).toContain('used_count = used_count + 1');
+    expect(client.query).toHaveBeenCalledTimes(9);
   });
 
   it('rejects stale whole-cart discount when only selected products are eligible', async () => {
