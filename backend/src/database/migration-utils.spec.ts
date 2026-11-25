@@ -47,7 +47,6 @@ describe('planMigrations', () => {
   });
 });
 
-
 describe('stripOuterTransactionStatements', () => {
   it('removes a legacy outer wrapper so the runner owns the atomic transaction', () => {
     const sql = '-- legacy migration\n\nBEGIN;\nCREATE TABLE example (id integer);\nCOMMIT;\n';
@@ -64,10 +63,10 @@ describe('real migration files', () => {
   const dir = join(__dirname, 'migrations');
   const names = orderMigrationNames(readdirSync(dir));
 
-  it('preserves applied migration 031 and appends forward-only finance, notification, delivery-fee, distance-tier, verified geography, route snapshot, delivery coverage, loyalty, and coupon targeting migrations', () => {
+  it('preserves applied migration 031 and appends forward-only finance, notification, delivery-fee, distance-tier, verified geography, route snapshot, delivery coverage, and coupon targeting migrations', () => {
     const numbers = names.map((name) => Number(name.slice(0, 3)));
     expect(numbers.slice(0, 26)).toEqual(Array.from({ length: 26 }, (_, i) => i + 1));
-    expect(numbers.slice(26)).toEqual([31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48]);
+    expect(numbers.slice(26)).toEqual([31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 48]);
   });
 
   it('plans finance migrations after an already-applied 031 without out-of-order work', () => {
@@ -88,7 +87,6 @@ describe('real migration files', () => {
     expect(normalized).not.toMatch(/^\\s*COMMIT\\s*;\\s*$/m);
     expect(checksumOf(sql)).not.toBe(checksumOf(normalized));
   });
-
 
   it('reconciles only active commission links for non-cancelled settlements', () => {
     const sql = readFileSync(join(dir, '040_settlement_yemen_business_timezone.sql'), 'utf8');
@@ -112,7 +110,7 @@ describe('real migration files', () => {
     expect(reconciliation).not.toContain("s.status = 'paid'");
   });
 
-  it('contain every table required by the spec', () => {
+  it('contains every table required by the spec', () => {
     const all = names.map((n) => readFileSync(join(dir, n), 'utf8')).join('\n');
     const required = [
       'users', 'roles', 'permissions', 'user_roles', 'customers', 'drivers', 'stores', 'store_staff',
@@ -127,7 +125,7 @@ describe('real migration files', () => {
     }
   });
 
-  it('define all 13 order states', () => {
+  it('defines all 13 order states', () => {
     const sql = readFileSync(join(dir, '001_extensions_and_types.sql'), 'utf8');
     const states = [
       'pending', 'accepted', 'rejected', 'preparing', 'ready', 'driverAssigned', 'driverGoingToStore',
