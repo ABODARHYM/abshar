@@ -52,28 +52,46 @@ describe('DriverRepository delivery transaction', () => {
       'assignment-complete',
     ]);
   });
-  it('calculates driver earnings from the original fee when customer delivery is free', async () => {
+  it('keeps driver earnings separated by currency and uses Asia/Aden calendar boundaries', async () => {
     const db = {
       query: jest.fn().mockResolvedValue({
-        rows: [{
-          total_earnings: '25.00',
-          total_deliveries: '1',
-          today_earnings: '25.00',
-          today_deliveries: '1',
-          week_earnings: '25.00',
-          week_deliveries: '1',
-          month_earnings: '25.00',
-          month_deliveries: '1',
-        }],
+        rows: [
+          {
+            currency: 'SAR',
+            total_earnings: '8.00',
+            total_deliveries: '1',
+            today_earnings: '8.00',
+            today_deliveries: '1',
+            week_earnings: '8.00',
+            week_deliveries: '1',
+            month_earnings: '8.00',
+            month_deliveries: '1',
+          },
+          {
+            currency: 'YER',
+            total_earnings: '2500.00',
+            total_deliveries: '1',
+            today_earnings: '2500.00',
+            today_deliveries: '1',
+            week_earnings: '2500.00',
+            week_deliveries: '1',
+            month_earnings: '2500.00',
+            month_deliveries: '1',
+          },
+        ],
       }),
     };
     const repo = new DriverRepository(db as any);
     const result = await repo.getEarnings('driver-1');
     const [sql, params] = db.query.mock.calls[0];
-    expect(String(sql)).toContain('COALESCE(original_delivery_fee, delivery_fee)');
+    expect(String(sql)).toContain('COALESCE(o.original_delivery_fee, o.delivery_fee)');
+    expect(String(sql)).toContain("AT TIME ZONE 'Asia/Aden'");
+    expect(String(sql)).toContain('GROUP BY');
     expect(params).toEqual(['driver-1']);
-    expect(result.total_earnings).toBe('25.00');
-    expect(result.total_deliveries).toBe('1');
+    expect(result.currency_breakdown).toHaveLength(2);
+    expect(result.currency_breakdown.map((row) => row.currency)).toEqual(['SAR', 'YER']);
+    expect(result.currency_breakdown[0].total_earnings).toBe('8.00');
+    expect(result.currency_breakdown[1].total_earnings).toBe('2500.00');
   });
 
 });
