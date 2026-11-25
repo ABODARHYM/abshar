@@ -150,6 +150,7 @@ export default function PushSetup() {
     } catch (e) {
       setError('خطأ: ' + (e as Error).message);
     } finally {
+      // Always release the UI lock, including early returns and exceptions.
       setLoading(false);
     }
   };
