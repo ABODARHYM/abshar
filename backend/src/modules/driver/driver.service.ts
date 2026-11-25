@@ -410,7 +410,6 @@ export class DriverService {
             deliveredOrder.customer_id,
             orderId,
             Number(deliveredOrder.total),
-            deliveredOrder.currency || 'YER',
           );
 
           if (deliveredOrder.payment_method === 'cash_on_delivery' && Number(deliveredOrder.total) > 0) {
