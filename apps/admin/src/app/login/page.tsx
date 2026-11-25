@@ -34,13 +34,14 @@ export default function AdminLogin() {
       } catch {
         const contentType = res.headers.get('content-type') || 'غير محدد';
         const requestId = res.headers.get('x-request-id');
-        const isHtml = /^\\s*<(?:!doctype\\s+html|html|head|body)\\b/i.test(rawResponse);
+        const isHtml = /^\s*<(?:!doctype\s+html|html|head|body)\b/i.test(rawResponse);
         const reason = isHtml
           ? 'وصلت صفحة HTML بدلاً من استجابة API بصيغة JSON'
           : 'وصل رد من الخادم بتنسيق غير صالح';
         setError(
           `${reason} (HTTP ${res.status}). Content-Type: ${contentType}.${requestId ? ` Request ID: ${requestId}.` : ''} تحقق من اتصال لوحة الإدارة بخادم API ثم أعد المحاولة.`,
         );
+        setLoading(false);
         return;
       }
 
