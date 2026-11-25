@@ -49,4 +49,38 @@ describe('FinanceRepository currency-separated store earnings', () => {
     expect(result.currency_breakdown[1].total_earnings).toBe('2500.00');
     expect(result.currency_breakdown[1].pending_settlement).toBe('500.00');
   });
+  it('includes the source order currency in commission list records', async () => {
+    const db = {
+      query: jest.fn()
+        .mockResolvedValueOnce({ rows: [{ count: '1' }] })
+        .mockResolvedValueOnce({
+          rows: [{
+            id: 'commission-1',
+            order_id: 'order-1',
+            order_number: 'AB-1',
+            store_id: 'store-1',
+            store_name: 'Test Store',
+            rate_percent: '10',
+            order_amount: '100',
+            delivery_fee: '0',
+            original_delivery_fee: '20',
+            discount_amount: '20',
+            commission_amount: '10',
+            store_amount: '90',
+            driver_amount: '20',
+            platform_amount: '10',
+            currency: 'SAR',
+            created_at: new Date('2026-11-25T00:00:00.000Z'),
+          }],
+        }),
+    };
+    const repo = new FinanceRepository(db as any);
+    const result = await repo.listCommissions({ page: 1, limit: 10 });
+    const [sql] = db.query.mock.calls[1];
+
+    expect(String(sql)).toContain('o.currency');
+    expect(result.rows[0].currency).toBe('SAR');
+    expect(result.total).toBe(1);
+  });
+
 });
