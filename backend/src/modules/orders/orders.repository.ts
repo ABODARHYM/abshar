@@ -93,8 +93,11 @@ export class OrdersRepository {
           is_active: boolean; starts_at: Date | null; expires_at: Date | null;
           usage_limit: number | null; per_user_limit: number | null;
           used_count: number; store_id: string | null;
+          min_order_amount: number | string; type: string;
+          value: number | string; max_discount_amount: number | string | null;
         }>(
-          `SELECT is_active, starts_at, expires_at, usage_limit, per_user_limit, used_count, store_id
+          `SELECT is_active, starts_at, expires_at, usage_limit, per_user_limit, used_count, store_id,
+                  min_order_amount, type, value, max_discount_amount
            FROM coupons WHERE id = $1 FOR UPDATE`,
           [payload.couponId],
         );
@@ -104,8 +107,33 @@ export class OrdersRepository {
             (coupon.starts_at && coupon.starts_at > now) ||
             (coupon.expires_at && coupon.expires_at <= now) ||
             (coupon.store_id && coupon.store_id !== payload.storeId) ||
+            Number(coupon.min_order_amount) > payload.subtotal ||
             (coupon.usage_limit !== null && coupon.used_count >= coupon.usage_limit)) {
           throw new Error('COUPON_USAGE_LIMIT_REACHED');
+        }
+        // Reconcile the locked coupon terms with the discount computed before the transaction.
+        if (coupon.type === 'free_delivery') {
+          if (payload.discountTotal !== 0 || payload.deliveryFee !== 0) {
+            throw new Error('COUPON_TERMS_CHANGED');
+          }
+        } else {
+          const value = Number(coupon.value);
+          let expectedDiscount = 0;
+          if (coupon.type === 'percentage') {
+            expectedDiscount = payload.subtotal * value / 100;
+            if (coupon.max_discount_amount !== null) {
+              expectedDiscount = Math.min(expectedDiscount, Number(coupon.max_discount_amount));
+            }
+          } else if (coupon.type === 'fixed') {
+            expectedDiscount = Math.min(value, payload.subtotal);
+          } else {
+            throw new Error('COUPON_TERMS_CHANGED');
+          }
+          expectedDiscount = Math.min(expectedDiscount, payload.subtotal);
+          if (Math.abs(expectedDiscount - payload.discountTotal) > 0.01 ||
+              payload.deliveryFee !== payload.originalDeliveryFee) {
+            throw new Error('COUPON_TERMS_CHANGED');
+          }
         }
         if (coupon.per_user_limit !== null) {
           const usage = await client.query<{ count: string }>(
