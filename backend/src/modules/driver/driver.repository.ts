@@ -739,17 +739,21 @@ export class DriverRepository {
   // ───── Earnings ─────
 
   async getEarnings(driverId: string): Promise<{
-    total_earnings: string;
-    total_deliveries: string;
-    today_earnings: string;
-    today_deliveries: string;
-    week_earnings: string;
-    week_deliveries: string;
-    month_earnings: string;
-    month_deliveries: string;
+    currency_breakdown: Array<{
+      currency: string;
+      total_earnings: string;
+      total_deliveries: string;
+      today_earnings: string;
+      today_deliveries: string;
+      week_earnings: string;
+      week_deliveries: string;
+      month_earnings: string;
+      month_deliveries: string;
+    }>;
   }> {
-    // Driver earnings use the original fee; free-delivery discounts do not reduce driver pay.
+    // Driver earnings remain separated by currency and use Yemen-local calendar boundaries.
     const r = await this.db.query<{
+      currency: string;
       total_earnings: string;
       total_deliveries: string;
       today_earnings: string;
@@ -760,20 +764,30 @@ export class DriverRepository {
       month_deliveries: string;
     }>(
       `
+      WITH local_day AS (
+        SELECT (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Aden')::date AS today
+      )
       SELECT
-        COALESCE(SUM(COALESCE(original_delivery_fee, delivery_fee)), 0)::text AS total_earnings,
+        COALESCE(NULLIF(BTRIM(o.currency), ''), 'UNKNOWN') AS currency,
+        COALESCE(SUM(COALESCE(o.original_delivery_fee, o.delivery_fee)), 0)::text AS total_earnings,
         COUNT(*)::text AS total_deliveries,
-        COALESCE(SUM(CASE WHEN delivered_at >= CURRENT_DATE THEN COALESCE(original_delivery_fee, delivery_fee) ELSE 0 END), 0)::text AS today_earnings,
-        COUNT(CASE WHEN delivered_at >= CURRENT_DATE THEN 1 END)::text AS today_deliveries,
-        COALESCE(SUM(CASE WHEN delivered_at >= CURRENT_DATE - INTERVAL '7 days' THEN COALESCE(original_delivery_fee, delivery_fee) ELSE 0 END), 0)::text AS week_earnings,
-        COUNT(CASE WHEN delivered_at >= CURRENT_DATE - INTERVAL '7 days' THEN 1 END)::text AS week_deliveries,
-        COALESCE(SUM(CASE WHEN delivered_at >= CURRENT_DATE - INTERVAL '30 days' THEN COALESCE(original_delivery_fee, delivery_fee) ELSE 0 END), 0)::text AS month_earnings,
-        COUNT(CASE WHEN delivered_at >= CURRENT_DATE - INTERVAL '30 days' THEN 1 END)::text AS month_deliveries
-      FROM orders
-      WHERE driver_id = $1 AND status = 'delivered'
+        COALESCE(SUM(CASE WHEN o.delivered_at >= (d.today::timestamp AT TIME ZONE 'Asia/Aden')
+          THEN COALESCE(o.original_delivery_fee, o.delivery_fee) ELSE 0 END), 0)::text AS today_earnings,
+        COUNT(*) FILTER (WHERE o.delivered_at >= (d.today::timestamp AT TIME ZONE 'Asia/Aden'))::text AS today_deliveries,
+        COALESCE(SUM(CASE WHEN o.delivered_at >= ((d.today - 6)::timestamp AT TIME ZONE 'Asia/Aden')
+          THEN COALESCE(o.original_delivery_fee, o.delivery_fee) ELSE 0 END), 0)::text AS week_earnings,
+        COUNT(*) FILTER (WHERE o.delivered_at >= ((d.today - 6)::timestamp AT TIME ZONE 'Asia/Aden'))::text AS week_deliveries,
+        COALESCE(SUM(CASE WHEN o.delivered_at >= ((d.today - 29)::timestamp AT TIME ZONE 'Asia/Aden')
+          THEN COALESCE(o.original_delivery_fee, o.delivery_fee) ELSE 0 END), 0)::text AS month_earnings,
+        COUNT(*) FILTER (WHERE o.delivered_at >= ((d.today - 29)::timestamp AT TIME ZONE 'Asia/Aden'))::text AS month_deliveries
+      FROM orders o
+      CROSS JOIN local_day d
+      WHERE o.driver_id = $1 AND o.status = 'delivered'
+      GROUP BY COALESCE(NULLIF(BTRIM(o.currency), ''), 'UNKNOWN')
+      ORDER BY currency
       `,
       [driverId],
     );
-    return r.rows[0];
+    return { currency_breakdown: r.rows };
   }
 }
