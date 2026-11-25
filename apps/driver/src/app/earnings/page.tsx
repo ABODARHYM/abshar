@@ -56,10 +56,13 @@ export default function EarningsPage() {
 
 
   const fmt = (v?: number) => Number(v || 0).toLocaleString('en-US');
-  const currencyLabel = (currency?: string) => ({
+  const currencyNames: Record<string, string> = {
     YER: 'ر.ي',
     SAR: 'ر.س',
-    USD: '
+    USD: 'دولار أمريكي',
+  };
+  const currencyLabel = (currency?: string) =>
+    currencyNames[currency || ''] || currency || 'عملة غير معروفة';
 
   if (loading) {
     return (
