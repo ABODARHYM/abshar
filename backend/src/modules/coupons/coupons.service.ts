@@ -26,7 +26,7 @@ export class CouponsService {
    if(!dto.items?.length)return this.invalid('هذا الكوبون مخصص لمنتجات محددة؛ أرسل منتجات السلة للتحقق');
    try{
     const cartSubtotal=await this.repo.getCartProductSubtotal(dto.items,dto.storeId);
-    if(Math.abs(cartSubtotal-dto.subtotal)>0.01)return this.invalid('قيمة السلة لا تطابق أسعار المنتجات الحالية');
+    verifiedCartSubtotal=cartSubtotal;
     const selected=new Set(coupon.product_ids);
     eligibleSubtotal=0;
     for(const item of dto.items)if(selected.has(item.productId)){
