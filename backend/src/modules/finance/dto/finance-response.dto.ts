@@ -1,6 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 
-export class StoreEarningsDto {
+export class StoreCurrencyEarningsDto {
+  @ApiProperty() currency!: string;
   @ApiProperty() todayEarnings!: number;
   @ApiProperty() weekEarnings!: number;
   @ApiProperty() monthEarnings!: number;
@@ -11,6 +12,20 @@ export class StoreEarningsDto {
   @ApiProperty() totalOrders!: number;
   @ApiProperty() pendingSettlement!: number;
   @ApiProperty() lastSettlementAt!: string | null;
+}
+
+export class StoreEarningsDto {
+  @ApiProperty({ description: 'Legacy scalar money fields are zero when multiple currencies are present.' }) todayEarnings!: number;
+  @ApiProperty() weekEarnings!: number;
+  @ApiProperty() monthEarnings!: number;
+  @ApiProperty() totalEarnings!: number;
+  @ApiProperty() todayOrders!: number;
+  @ApiProperty() weekOrders!: number;
+  @ApiProperty() monthOrders!: number;
+  @ApiProperty() totalOrders!: number;
+  @ApiProperty() pendingSettlement!: number;
+  @ApiProperty() lastSettlementAt!: string | null;
+  @ApiProperty({ type: [StoreCurrencyEarningsDto] }) currencyBreakdown!: StoreCurrencyEarningsDto[];
 }
 
 export class SettlementDto {
