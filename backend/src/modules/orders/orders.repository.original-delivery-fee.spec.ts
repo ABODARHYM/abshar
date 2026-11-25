@@ -55,6 +55,8 @@ describe('OrdersRepository original delivery fee', () => {
 
     const [sql, params] = client.query.mock.calls[1];
     expect(String(sql)).toContain('original_delivery_fee');
+    expect(String(sql)).toContain('original_delivery_fee_verified');
+    expect(String(sql)).toMatch(/TRUE/i);
     expect(params[4]).toBe(0);
     expect(params[5]).toBe(120);
     expect(params[6]).toBe(0);
