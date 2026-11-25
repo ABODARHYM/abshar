@@ -70,3 +70,34 @@ describe('ReferralService first delivered order reward', () => {
     }));
   });
 });
+
+
+describe('ReferralService apply rewards', () => {
+  it('pays 100 points to both users and leaves the referral awaiting first delivery', async () => {
+    const client = {} as any;
+    const repo = {
+      findByCode: jest.fn().mockResolvedValue({ user_id: 'referrer-1' }),
+      findExistingReferral: jest.fn().mockResolvedValue(null),
+      hasUserOrdered: jest.fn().mockResolvedValue(false),
+      createReferral: jest.fn().mockResolvedValue({ id: 'referral-1' }),
+      markCompleted: jest.fn().mockResolvedValue(undefined),
+      markRewarded: jest.fn(),
+    };
+    const loyaltyRepo = { addPoints: jest.fn().mockResolvedValue(undefined) };
+    const db = { transaction: jest.fn(async (work: (tx: any) => Promise<any>) => work(client)) };
+    const service = new ReferralService(repo as any, loyaltyRepo as any, db as any);
+
+    const result = await service.apply('customer-1', 'invite1');
+
+    expect(loyaltyRepo.addPoints).toHaveBeenCalledTimes(2);
+    expect(loyaltyRepo.addPoints).toHaveBeenNthCalledWith(1, client, expect.objectContaining({
+      customerId: 'referrer-1', points: 100, type: 'earn',
+    }));
+    expect(loyaltyRepo.addPoints).toHaveBeenNthCalledWith(2, client, expect.objectContaining({
+      customerId: 'customer-1', points: 100, type: 'earn',
+    }));
+    expect(repo.markCompleted).toHaveBeenCalledWith(client, 'referral-1');
+    expect(repo.markRewarded).not.toHaveBeenCalled();
+    expect(result.rewardPoints).toBe(100);
+  });
+});
