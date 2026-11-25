@@ -68,6 +68,14 @@ export class FinanceService {
     return buildPage(rows.map(this.toSettlement), total, query);
   }
 
+  async verifyOriginalDeliveryFee(params: { orderId: string; amount: number; reason: string; actorId: string; actorRole: string | null }) {
+    const result = await this.repo.verifyOriginalDeliveryFee(params);
+    if (!result) {
+      throw new NotFoundException({ code: ErrorCode.NotFound, message: 'Delivered order for financial review was not found' });
+    }
+    return result;
+  }
+
   async listUnverifiedDeliveryFees(query: { page: number; limit: number }) {
     const { rows, total } = await this.repo.listUnverifiedDeliveryFees(query);
     return buildPage(rows.map((row) => ({
