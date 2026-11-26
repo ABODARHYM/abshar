@@ -253,13 +253,53 @@ describe('FinanceRepository shared delivery transaction', () => {
           subtotal: '100.00', delivery_fee: '0.00', original_delivery_fee: '25.00',
           original_delivery_fee_verified: false,
           discount_total: '0.00', total: '100.00', currency: 'YER',
-        }], rowCount: 1 }),
+        }], rowCount: 1 })
+        .mockResolvedValueOnce({ rows: [], rowCount: 0 }),
     };
     const repo = new FinanceRepository({} as any);
 
     await expect(repo.computeCommissionForOrder('legacy-unverified-order', client as any))
       .rejects.toThrow('unknown or unverified');
-    expect(client.query).toHaveBeenCalledTimes(1);
+    expect(client.query).toHaveBeenCalledTimes(2);
+  });
+
+  it('allows validation of an existing unverified historical commission without creating a driver earning', async () => {
+    const historicalCommission = {
+      id: 'legacy-commission', store_id: 'store-1',
+      order_amount: '100.00', delivery_fee: '0.00',
+      original_delivery_fee: null, discount_amount: '0.00',
+      store_amount: '90.00', platform_amount: '10.00',
+      driver_amount: '25.00',
+    };
+    const client = {
+      query: jest.fn()
+        .mockResolvedValueOnce({ rows: [{
+          id: 'legacy-order', store_id: 'store-1', driver_id: 'driver-1',
+          subtotal: '100.00', delivery_fee: '0.00', original_delivery_fee: null,
+          original_delivery_fee_verified: false,
+          discount_total: '0.00', total: '100.00', currency: 'YER',
+        }], rowCount: 1 })
+        .mockResolvedValueOnce({ rows: [historicalCommission], rowCount: 1 })
+        .mockResolvedValueOnce({ rows: [{
+          account_type: 'store', account_id: 'store-1', direction: 'credit',
+          amount: '90.00', currency: 'YER',
+        }], rowCount: 1 })
+        .mockResolvedValueOnce({ rows: [{
+          account_type: 'platform', account_id: null, direction: 'credit',
+          amount: '10.00', currency: 'YER',
+        }], rowCount: 1 })
+        .mockResolvedValueOnce({ rows: [{
+          account_type: 'driver', account_id: 'driver-1', direction: 'credit',
+          amount: '25.00', currency: 'YER',
+        }], rowCount: 1 }),
+    };
+    const repo = new FinanceRepository({} as any);
+
+    const result = await repo.computeCommissionForOrder('legacy-order', client as any);
+
+    expect(result).toEqual(historicalCommission);
+    expect(client.query).toHaveBeenCalledTimes(5);
+    expect(client.query.mock.calls.some(([sql]) => String(sql).includes('INSERT INTO transactions'))).toBe(false);
   });
 
   it('verifies an original delivery fee atomically and writes an audit record', async () => {
