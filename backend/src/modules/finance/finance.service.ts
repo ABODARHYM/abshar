@@ -68,6 +68,32 @@ export class FinanceService {
     return buildPage(rows.map(this.toSettlement), total, query);
   }
 
+  async verifyOriginalDeliveryFee(params: { orderId: string; amount: number; reason: string; actorId: string; actorRole: string | null }) {
+    const result = await this.repo.verifyOriginalDeliveryFee(params);
+    if (!result) {
+      throw new NotFoundException({ code: ErrorCode.NotFound, message: 'Delivered order for financial review was not found' });
+    }
+    return result;
+  }
+
+  async listUnverifiedDeliveryFees(query: { page: number; limit: number }) {
+    const { rows, total } = await this.repo.listUnverifiedDeliveryFees(query);
+    return buildPage(rows.map((row) => ({
+      orderId: row.order_id,
+      orderNumber: row.order_number,
+      driverId: row.driver_id,
+      driverName: row.driver_name,
+      storeId: row.store_id,
+      storeName: row.store_name,
+      customerDeliveryFee: row.delivery_fee === null ? null : Number(row.delivery_fee),
+      originalDeliveryFee: row.original_delivery_fee === null ? null : Number(row.original_delivery_fee),
+      currency: row.currency,
+      deliveredAt: row.delivered_at ? row.delivered_at.toISOString() : null,
+      hasFinancialHistory: Boolean(row.has_financial_history),
+      reviewStatus: row.has_financial_history ? 'manual_reconciliation_required' : 'pending_review',
+    })), total, query);
+  }
+
   async getSettlement(id: string): Promise<SettlementDto> {
     const s = await this.repo.findSettlementById(id);
     if (!s) {
