@@ -8,6 +8,7 @@ type ReviewOrder = {
   orderId: string; orderNumber?: string; driverName?: string; storeName?: string;
   customerDeliveryFee: number | null; originalDeliveryFee: number | null;
   currency?: string; deliveredAt?: string | null;
+  hasFinancialHistory?: boolean; reviewStatus?: string;
 };
 
 export default function DeliveryFeeReviewPage() {
@@ -73,20 +74,25 @@ export default function DeliveryFeeReviewPage() {
             <section key={item.orderId} className="card p-4 space-y-3">
               <div className="flex flex-wrap justify-between gap-2">
                 <div><div className="font-black">طلب {item.orderNumber || item.orderId.slice(0, 8)}</div><div className="text-sm text-[var(--text-muted)]">{item.storeName || 'متجر غير محدد'} · المندوب: {item.driverName || '—'}</div></div>
-                <span className="badge badge-warning">معلق للمراجعة</span>
+                <span className={item.hasFinancialHistory ? "badge badge-danger" : "badge badge-warning"}>
+                {item.hasFinancialHistory ? "يتطلب تسوية محاسبية" : "معلق للمراجعة"}
+              </span>
               </div>
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div>رسم العميل: <strong>{item.customerDeliveryFee ?? 'غير متوفر'} {item.currency || ''}</strong></div>
                 <div>الرسم الأصلي المسجل: <strong>{item.originalDeliveryFee ?? 'غير معروف'} {item.currency || ''}</strong></div>
               </div>
+              {item.hasFinancialHistory && <div role="status" className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-sm">
+                توجد عمولة أو حركات مالية سابقة لهذا الطلب. لا يمكن اعتماد الرسم من هذه الشاشة؛ يلزم مسار تسوية محاسبية مستقل يحافظ على القيود التاريخية.
+              </div>}
               <label className="block text-sm font-bold">الرسم الأصلي المؤكد ({item.currency || 'عملة الطلب'})
                 <input className="input w-full mt-1" inputMode="decimal" type="number" min="0" step="0.01" value={amounts[item.orderId] ?? ''} onChange={e => setAmounts(v => ({...v, [item.orderId]: e.target.value}))} placeholder="أدخل القيمة من المصدر المعتمد" />
               </label>
               <label className="block text-sm font-bold">مصدر التحقق وسبب الاعتماد
                 <textarea className="input w-full mt-1 min-h-20" value={reasons[item.orderId] ?? ''} onChange={e => setReasons(v => ({...v, [item.orderId]: e.target.value}))} placeholder="مثال: مطابقة فاتورة الطلب وسجل عرض التوصيل…" />
               </label>
-              <button className="btn btn-primary w-full" disabled={busy === item.orderId} onClick={() => void verify(item)}>
-                {busy === item.orderId ? 'جارٍ حفظ المراجعة…' : 'اعتماد الرسم وتوثيق المراجعة'}
+              <button className="btn btn-primary w-full" disabled={busy === item.orderId || Boolean(item.hasFinancialHistory)} onClick={() => void verify(item)}>
+                {busy === item.orderId ? 'جارٍ حفظ المراجعة…' : item.hasFinancialHistory ? 'الاعتماد العادي غير متاح' : 'اعتماد الرسم وتوثيق المراجعة'}
               </button>
             </section>
           ))}
