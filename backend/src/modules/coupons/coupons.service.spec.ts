@@ -34,4 +34,17 @@ describe('CouponsService product targeting',()=>{
   const result=await service.validateAndCompute('user','SAVE20',1000,'store',[{productId:'p1',lineTotal:400},{productId:'p2',lineTotal:600}]);
   expect(result.discountAmount).toBe(50);
  });
+ it('rejects a coupon at the exact expiry instant in both validation paths',async()=>{
+  jest.useFakeTimers().setSystemTime(new Date('2026-11-25T12:00:00.000Z'));
+  try {
+   repo.findByCode.mockResolvedValue(coupon({expires_at:new Date('2026-11-25T12:00:00.000Z')}));
+   const preview=await service.validate('user',{code:'SAVE20',subtotal:1000,storeId:'store'} as any);
+   expect(preview.valid).toBe(false);
+   await expect(service.validateAndCompute('user','SAVE20',1000,'store',[]))
+    .rejects.toBeInstanceOf(BadRequestException);
+  } finally {
+   jest.useRealTimers();
+  }
+ });
+
 });

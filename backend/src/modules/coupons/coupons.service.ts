@@ -17,7 +17,7 @@ export class CouponsService {
   if(!coupon.is_active)return this.invalid('الكوبون غير مفعّل');
   const now=new Date();
   if(coupon.starts_at&&coupon.starts_at>now)return this.invalid('الكوبون لم يبدأ بعد');
-  if(coupon.expires_at&&coupon.expires_at<now)return this.invalid('انتهت صلاحية الكوبون');
+  if(coupon.expires_at&&coupon.expires_at<=now)return this.invalid('انتهت صلاحية الكوبون');
   if(coupon.store_id&&coupon.store_id!==dto.storeId)return this.invalid('الكوبون لا ينطبق على هذا المتجر');
   if(coupon.usage_limit!==null&&coupon.used_count>=coupon.usage_limit)return this.invalid('استُنفد الكوبون');
   if(coupon.per_user_limit!==null&&await this.repo.countUserUsage(coupon.id,userId)>=coupon.per_user_limit)return this.invalid('استخدمت هذا الكوبون من قبل');
@@ -55,7 +55,7 @@ export class CouponsService {
   if(!coupon.is_active)throw new BadRequestException({code:ErrorCode.ValidationFailed,message:'الكوبون غير مفعّل'});
   const now=new Date();
   if(coupon.starts_at&&coupon.starts_at>now)throw new BadRequestException({code:ErrorCode.ValidationFailed,message:'الكوبون لم يبدأ بعد'});
-  if(coupon.expires_at&&coupon.expires_at<now)throw new BadRequestException({code:ErrorCode.ValidationFailed,message:'انتهت صلاحية الكوبون'});
+  if(coupon.expires_at&&coupon.expires_at<=now)throw new BadRequestException({code:ErrorCode.ValidationFailed,message:'انتهت صلاحية الكوبون'});
   if(coupon.store_id&&coupon.store_id!==storeId)throw new BadRequestException({code:ErrorCode.ValidationFailed,message:'الكوبون لا ينطبق على هذا المتجر'});
   if(coupon.usage_limit!==null&&coupon.used_count>=coupon.usage_limit)throw new BadRequestException({code:ErrorCode.ValidationFailed,message:'استُنفد الكوبون'});
   if(coupon.per_user_limit!==null&&await this.repo.countUserUsage(coupon.id,userId)>=coupon.per_user_limit)throw new BadRequestException({code:ErrorCode.ValidationFailed,message:'استخدمت هذا الكوبون من قبل'});
