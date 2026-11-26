@@ -219,7 +219,7 @@ export class FinanceRepository {
        LEFT JOIN stores s ON s.id = o.store_id
        WHERE o.status = 'delivered'
          AND o.driver_id IS NOT NULL
-         AND o.original_delivery_fee IS NULL
+         AND o.original_delivery_fee_verified IS NOT TRUE
        ORDER BY o.delivered_at ASC NULLS FIRST, o.id
        LIMIT $1 OFFSET $2`,
       [query.limit, offset],
@@ -881,7 +881,7 @@ export class FinanceRepository {
         AND o.status = 'delivered'
         AND o.delivered_at >= ($2::date::timestamp AT TIME ZONE 'Asia/Aden')
         AND o.delivered_at < (($3::date + 1)::timestamp AT TIME ZONE 'Asia/Aden')
-        AND ($4 <> 'driver' OR o.original_delivery_fee IS NOT NULL)
+        AND ($4 <> 'driver' OR o.original_delivery_fee_verified IS TRUE)
         AND NOT EXISTS (
           SELECT 1 FROM settlement_commission_items sci
           WHERE sci.commission_id = c.id
