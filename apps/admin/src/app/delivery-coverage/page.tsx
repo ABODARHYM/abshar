@@ -6,7 +6,7 @@ import 'leaflet/dist/leaflet.css';
 import AdminHeader from '@/components/AdminHeader';
 import { authFetch } from '@/lib/auth';
 
-type City = { id: string; nameAr: string; nameEn: string; latitude?: number; longitude?: number };
+type City = { id: string; nameAr: string; nameEn: string; latitude?: number; longitude?: number; geographyStatus?: 'verified' | 'legacy_unverified' };
 type Zone = {
   id: string; city: string; city_id: string | null; name_ar: string; name_en: string;
   district_id: string | null; district_source_status?: string | null;
@@ -40,7 +40,7 @@ export default function DeliveryCoveragePage() {
 
   const loadData = async () => {
     const [cityResponse, zoneResponse] = await Promise.all([
-      authFetch('/api/v1/geography/cities'),
+      authFetch('/api/v1/geography/admin/cities'),
       authFetch('/api/v1/pricing/zones/admin'),
     ]);
     if (!cityResponse.ok || !zoneResponse.ok) throw new Error('تعذر تحميل المدن ومناطق التوصيل أو لا تملك صلاحية إدارة المناطق.');
@@ -177,13 +177,14 @@ export default function DeliveryCoveragePage() {
       {error && <div role="alert" className="card mb-4 border border-red-500/40 text-red-500">{error}</div>}
       {message && <div role="status" className="card mb-4 border border-emerald-500/40 text-emerald-600">{message}</div>}
 
+      {cities.some((city) => city.geographyStatus === 'legacy_unverified') && <div role="note" className="card mb-4 border border-amber-500/40 text-amber-600">تظهر هنا مدن قديمة غير موثقة لأغراض إعداد التشغيل فقط. لن تظهر للعملاء ولن تصبح قابلة للاختيار العام حتى توثيق المحافظة وربط المدينة بها.</div>}
       <section className="card p-4 mb-4">
         <h2 className="font-black mb-3">إنشاء منطقة تشغيلية جديدة</h2>
         <form onSubmit={createZone} className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
           <label className="text-sm">المدينة
             <select className="input w-full mt-1" value={cityId} onChange={(e) => setCityId(e.target.value)} required>
               <option value="">اختر المدينة</option>
-              {cities.map((city) => <option key={city.id} value={city.id}>{city.nameAr}</option>)}
+              {cities.map((city) => <option key={city.id} value={city.id}>{city.nameAr}{city.geographyStatus === 'legacy_unverified' ? ' — سجل قديم غير موثق (للإدارة فقط)' : ''}</option>)}
             </select>
           </label>
           <label className="text-sm">اسم المنطقة بالعربية
