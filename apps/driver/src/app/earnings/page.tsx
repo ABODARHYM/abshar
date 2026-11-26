@@ -4,21 +4,28 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { authFetch } from '@/lib/auth';
 
-interface Earnings {
-  today: number;
-  week: number;
-  month: number;
-  total: number;
+interface CurrencyEarnings {
+  currency: string;
+  todayEarnings: number;
+  weekEarnings: number;
+  monthEarnings: number;
+  totalEarnings: number;
   todayDeliveries: number;
   weekDeliveries: number;
   monthDeliveries: number;
   totalDeliveries: number;
 }
 
+interface Earnings {
+  currencyBreakdown: CurrencyEarnings[];
+  totalDeliveries: number;
+}
+
 interface Delivery {
   id: string;
   orderNumber: string;
-  earning: number;
+  driverEarning: number;
+  currency: string;
   deliveredAt: string;
 }
 
@@ -49,6 +56,13 @@ export default function EarningsPage() {
 
 
   const fmt = (v?: number) => Number(v || 0).toLocaleString('en-US');
+  const currencyNames: Record<string, string> = {
+    YER: 'ر.ي',
+    SAR: 'ر.س',
+    USD: 'دولار أمريكي',
+  };
+  const currencyLabel = (currency?: string) =>
+    currencyNames[currency || ''] || currency || 'عملة غير معروفة';
 
   if (loading) {
     return (
@@ -75,31 +89,38 @@ export default function EarningsPage() {
       </header>
 
       <main className="container-app py-4 space-y-4">
-        {/* Total */}
-        <div className="card bg-gradient-to-br from-emerald-500/20 to-transparent border-emerald-500/30">
-          <p className="text-xs text-muted mb-1">إجمالي الأرباح</p>
-          <p className="text-4xl font-black text-emerald-400 mb-2">{fmt(earnings?.total)} ر.ي</p>
-          <p className="text-xs text-muted">من {fmt(earnings?.totalDeliveries)} توصيل</p>
-        </div>
-
-        {/* Breakdown */}
-        <div className="grid grid-cols-3 gap-2">
-          <div className="card text-center p-3">
-            <p className="text-xs text-muted mb-1">اليوم</p>
-            <p className="text-lg font-black text-emerald-400">{fmt(earnings?.today)}</p>
-            <p className="text-[10px] text-muted">{fmt(earnings?.todayDeliveries)} توصيل</p>
+        {earnings?.currencyBreakdown?.length ? (
+          earnings.currencyBreakdown.map((item) => (
+            <section key={item.currency} className="space-y-3">
+              <div className="card bg-gradient-to-br from-emerald-500/20 to-transparent border-emerald-500/30">
+                <p className="text-xs text-muted mb-1">إجمالي الأرباح — {currencyLabel(item.currency)}</p>
+                <p className="text-4xl font-black text-emerald-400 mb-2">{fmt(item.totalEarnings)} {currencyLabel(item.currency)}</p>
+                <p className="text-xs text-muted">من {fmt(item.totalDeliveries)} توصيل</p>
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                <div className="card text-center p-3">
+                  <p className="text-xs text-muted mb-1">اليوم</p>
+                  <p className="text-lg font-black text-emerald-400">{fmt(item.todayEarnings)}</p>
+                  <p className="text-[10px] text-muted">{fmt(item.todayDeliveries)} توصيل</p>
+                </div>
+                <div className="card text-center p-3">
+                  <p className="text-xs text-muted mb-1">الأسبوع</p>
+                  <p className="text-lg font-black text-blue-400">{fmt(item.weekEarnings)}</p>
+                  <p className="text-[10px] text-muted">{fmt(item.weekDeliveries)} توصيل</p>
+                </div>
+                <div className="card text-center p-3">
+                  <p className="text-xs text-muted mb-1">الشهر</p>
+                  <p className="text-lg font-black text-amber-400">{fmt(item.monthEarnings)}</p>
+                  <p className="text-[10px] text-muted">{fmt(item.monthDeliveries)} توصيل</p>
+                </div>
+              </div>
+            </section>
+          ))
+        ) : (
+          <div className="card text-center py-6">
+            <p className="text-sm text-muted">لا توجد أرباح مسجلة بعد</p>
           </div>
-          <div className="card text-center p-3">
-            <p className="text-xs text-muted mb-1">الأسبوع</p>
-            <p className="text-lg font-black text-blue-400">{fmt(earnings?.week)}</p>
-            <p className="text-[10px] text-muted">{fmt(earnings?.weekDeliveries)} توصيل</p>
-          </div>
-          <div className="card text-center p-3">
-            <p className="text-xs text-muted mb-1">الشهر</p>
-            <p className="text-lg font-black text-amber-400">{fmt(earnings?.month)}</p>
-            <p className="text-[10px] text-muted">{fmt(earnings?.monthDeliveries)} توصيل</p>
-          </div>
-        </div>
+        )}
 
         {/* Recent */}
         <section>
@@ -117,7 +138,7 @@ export default function EarningsPage() {
                     <p className="font-bold text-sm" dir="ltr">#{d.orderNumber}</p>
                     <p className="text-[10px] text-muted">{new Date(d.deliveredAt).toLocaleDateString('ar-YE')}</p>
                   </div>
-                  <p className="font-black text-emerald-400">+{fmt(d.earning)} ر.ي</p>
+                  <p className="font-black text-emerald-400">+{fmt(d.driverEarning)} {currencyLabel(d.currency)}</p>
                 </div>
               ))}
             </div>

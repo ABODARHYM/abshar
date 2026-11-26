@@ -1,10 +1,11 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ErrorCode } from '../../common/error-codes';
-import { PricingRepository, ZoneRow } from './pricing.repository';
+import { DistanceTierRow, PricingRepository, ZoneRow } from './pricing.repository';
 import { DeliveryQuoteDto, ZoneResponseDto } from './dto/pricing-response.dto';
 
 export interface PricingContext {
   storeId: string;
+  zoneId?: string | null;
   storeLat: number;
   storeLng: number;
   storeDeliveryFee: number;
@@ -17,7 +18,10 @@ export interface PricingContext {
 }
 
 interface PricingResult {
+  /** Customer-paid fee after threshold discounts. */
   deliveryFee: number;
+  /** Full configured tier fee before free-delivery discounts; used for driver earnings. */
+  originalDeliveryFee: number;
   distanceKm: number;
   baseFee: number;
   distanceFee: number;
@@ -29,7 +33,17 @@ interface PricingResult {
   source: 'zone' | 'store' | 'global';
   zoneId: string | null;
   zoneName: string | null;
+  distanceTierId: string | null;
+  distanceTierMinKm: number;
+  distanceTierMaxKm: number | null;
+  distanceTierFee: number;
+  distanceSource: 'routing_api';
 }
+
+const APPROVED_DISTANCE_BANDS: Array<{ min: number; max: number | null }> = [
+  { min: 0, max: 2 }, { min: 2, max: 4 }, { min: 4, max: 6 },
+  { min: 6, max: 10 }, { min: 10, max: 15 }, { min: 15, max: null },
+];
 
 @Injectable()
 export class PricingService {
@@ -37,127 +51,152 @@ export class PricingService {
 
   constructor(private readonly repo: PricingRepository) {}
 
+  async getStoreQuoteDetails(storeId: string) {
+    const store = await this.repo.getStoreQuoteDetails(storeId);
+    if (!store) {
+      throw new NotFoundException({
+        code: ErrorCode.NotFound,
+        message: 'المتجر غير موجود أو غير متاح.',
+      });
+    }
+    return {
+      storeId: store.id,
+      storeLat: Number(store.latitude),
+      storeLng: Number(store.longitude),
+      storeDeliveryFee: Number(store.delivery_fee),
+      storeMinOrderAmount: Number(store.min_order_amount),
+      currency: store.currency,
+    };
+  }
+
   /**
-   * حساب تكلفة التوصيل — pipeline كامل.
-   *
-   * 1) Zone → base + distance × per_km + surge + fuel
-   * 2) Store fallback → store.delivery_fee
-   * 3) Global fallback → settings.pricing.default_delivery_fee
-   * 4) Free delivery threshold
-   * 5) Min/max caps
-   * 6) Fuel surcharge (global)
+   * Calculate delivery only from an active, administrator-approved zone,
+   * a verified coverage polygon, a configured road route, and one approved tier.
+   * There is deliberately no store/global fee fallback.
    */
   async calculate(ctx: PricingContext): Promise<PricingResult> {
-    // 1) اقرأ settings
-    const settings = await this.repo.getPricingSettings();
-
-    const globalDefaultFee = settings['default_delivery_fee'] ?? 500;
-    const minFee = settings['min_delivery_fee'] ?? 0;
-    const maxFee = settings['max_delivery_fee'] ?? 5000;
-    const globalSurge = settings['surge_multiplier'] ?? 1.0;
-    const globalFuel = settings['fuel_surcharge'] ?? 0;
-    const globalFreeThreshold = settings['free_delivery_threshold'] ?? 0;
-
-    // 2) احسب المسافة
-    let distanceKm = 0;
-    try {
-      distanceKm = await this.repo.calculateDistanceKm(
-        ctx.storeLat,
-        ctx.storeLng,
-        ctx.addressLat,
-        ctx.addressLng,
-      );
-    } catch (err) {
-      this.logger.warn(`Distance calculation failed: ${(err as Error).message}`);
-    }
-
-    // 3) جرّب zone
-    let zone: ZoneRow | null = null;
-    try {
-      zone = await this.repo.findZoneForLocation({
-        city: ctx.city,
-        latitude: ctx.addressLat,
-        longitude: ctx.addressLng,
+    if (!ctx.zoneId) {
+      throw new BadRequestException({
+        code: ErrorCode.ValidationFailed,
+        message: 'عنوان التوصيل غير مرتبط بمنطقة توصيل. يرجى تحديد المنطقة قبل الطلب.',
       });
-    } catch (err) {
-      this.logger.warn(`Zone lookup failed: ${(err as Error).message}`);
+    }
+    if (!Number.isFinite(ctx.storeLat) || ctx.storeLat < -90 || ctx.storeLat > 90
+        || !Number.isFinite(ctx.storeLng) || ctx.storeLng < -180 || ctx.storeLng > 180
+        || !Number.isFinite(ctx.addressLat) || ctx.addressLat < -90 || ctx.addressLat > 90
+        || !Number.isFinite(ctx.addressLng) || ctx.addressLng < -180 || ctx.addressLng > 180
+        || (ctx.storeLat === 0 && ctx.storeLng === 0)) {
+      throw new BadRequestException({
+        code: ErrorCode.ValidationFailed,
+        message: 'تعذر تحديد المسافة لعدم اكتمال إحداثيات المتجر أو العنوان.',
+      });
     }
 
-    let baseFee = 0;
-    let distanceFee = 0;
-    let fuelSurcharge = 0;
-    let surgeMultiplier = globalSurge;
-    let freeThreshold: number | null = null;
-    let source: 'zone' | 'store' | 'global';
-    let zoneId: string | null = null;
-    let zoneName: string | null = null;
-
-    if (zone) {
-      // ═══ 1) Zone-based ═══
-      source = 'zone';
-      zoneId = zone.id;
-      zoneName = zone.name_ar;
-
-      baseFee = Number(zone.base_delivery_fee);
-      const perKm = Number(zone.fee_per_km);
-      distanceFee = distanceKm * perKm;
-      fuelSurcharge = Number(zone.fuel_surcharge) + globalFuel;
-      surgeMultiplier = Number(zone.surge_multiplier) * globalSurge;
-      freeThreshold = zone.free_delivery_threshold !== null
-        ? Number(zone.free_delivery_threshold)
-        : (globalFreeThreshold > 0 ? globalFreeThreshold : null);
-    } else if (ctx.storeDeliveryFee > 0) {
-      // ═══ 2) Store fallback ═══
-      source = 'store';
-      baseFee = ctx.storeDeliveryFee;
-      fuelSurcharge = globalFuel;
-      freeThreshold = globalFreeThreshold > 0 ? globalFreeThreshold : null;
-    } else {
-      // ═══ 3) Global fallback ═══
-      source = 'global';
-      baseFee = globalDefaultFee;
-      fuelSurcharge = globalFuel;
-      freeThreshold = globalFreeThreshold > 0 ? globalFreeThreshold : null;
+    const zone = await this.repo.getZoneById(ctx.zoneId);
+    if (!zone || !zone.is_active) {
+      throw new BadRequestException({
+        code: ErrorCode.ValidationFailed,
+        message: 'منطقة التوصيل غير موجودة أو غير مفعّلة.',
+      });
     }
 
-    // 4) احسب قبل الطلب
-    let feeBeforeThreshold = (baseFee + distanceFee + fuelSurcharge) * surgeMultiplier;
+    if (!(await this.repo.isZoneVerifiedForDelivery(zone.id))) {
+      throw new BadRequestException({
+        code: ErrorCode.ValidationFailed,
+        message: 'منطقة التوصيل غير موثقة أو لم تعتمدها الإدارة بعد؛ لا يمكن احتساب رسوم عليها.',
+      });
+    }
 
-    // 5) Free delivery threshold
+    const coverage = await this.repo.getZoneCoverage(zone.id);
+    if (!coverage || !this.isPointInsideCoverage(coverage, ctx.addressLng, ctx.addressLat)) {
+      throw new BadRequestException({
+        code: ErrorCode.ValidationFailed,
+        message: 'موقع العنوان خارج نطاق التوصيل المعتمد لهذه المنطقة.',
+        details: [{ field: 'addressLocation', constraints: ['outside_verified_delivery_coverage'] }],
+      });
+    }
+
+    const routeDistanceKm = await this.repo.calculateRouteDistanceKm(
+      ctx.storeLat, ctx.storeLng, ctx.addressLat, ctx.addressLng,
+    );
+    if (!Number.isFinite(routeDistanceKm) || routeDistanceKm < 0) {
+      throw new BadRequestException({
+        code: ErrorCode.ValidationFailed,
+        message: 'تعذر التحقق من مسافة الطريق؛ لا يمكن احتساب رسوم التوصيل.',
+      });
+    }
+    // Use the unrounded route distance for tier selection to avoid undercharging
+    // when a route is just above a band boundary; round only the displayed snapshot.
+    const distanceKm = Math.round(routeDistanceKm * 1000) / 1000;
+
+    const tiers = await this.repo.listActiveDistanceTiers(zone.id);
+    const tier = tiers.find((item) => {
+      const min = Number(item.min_distance_km);
+      const max = item.max_distance_km === null ? null : Number(item.max_distance_km);
+      return (min === 0 ? routeDistanceKm >= 0 : routeDistanceKm > min)
+        && (max === null || routeDistanceKm <= max);
+    });
+
+    if (!tier) {
+      throw new BadRequestException({
+        code: ErrorCode.ValidationFailed,
+        message: 'لا توجد شريحة رسوم توصيل تغطي المسافة إلى هذا العنوان. يرجى التواصل مع الإدارة.',
+        details: [{ field: 'deliveryDistance', constraints: ['no active distance tier for this zone'] }],
+      });
+    }
+
+    const settings = await this.repo.getPricingSettings();
+    const freeThreshold = zone.free_delivery_threshold !== null
+      ? Number(zone.free_delivery_threshold)
+      : (settings['free_delivery_threshold'] > 0 ? settings['free_delivery_threshold'] : null);
     const isFreeDelivery = freeThreshold !== null && ctx.subtotal >= freeThreshold;
-    if (isFreeDelivery) {
-      feeBeforeThreshold = 0;
-    }
-
-    // 6) Min/Max caps
-    let finalFee = feeBeforeThreshold;
-    if (!isFreeDelivery) {
-      if (finalFee < minFee) finalFee = minFee;
-      if (finalFee > maxFee) finalFee = maxFee;
-    }
-
-    // 7) round
-    finalFee = Math.round(finalFee * 100) / 100;
-    distanceKm = Math.round(distanceKm * 100) / 100;
-
+    const tierFee = Math.round(Number(tier.delivery_fee) * 100) / 100;
+    const originalDeliveryFee = tierFee;
+    const finalFee = isFreeDelivery ? 0 : originalDeliveryFee;
     const total = Math.round((ctx.subtotal + finalFee) * 100) / 100;
 
     return {
       deliveryFee: finalFee,
+      originalDeliveryFee,
       distanceKm,
-      baseFee: Math.round(baseFee * 100) / 100,
-      distanceFee: Math.round(distanceFee * 100) / 100,
-      fuelSurcharge: Math.round(fuelSurcharge * 100) / 100,
-      surgeMultiplier,
+      baseFee: tierFee,
+      distanceFee: 0,
+      fuelSurcharge: 0,
+      surgeMultiplier: 1,
       total,
       freeDeliveryThreshold: freeThreshold,
       isFreeDelivery,
-      source,
-      zoneId,
-      zoneName,
+      source: 'zone',
+      zoneId: zone.id,
+      zoneName: zone.name_ar,
+      distanceTierId: tier.id,
+      distanceTierMinKm: Number(tier.min_distance_km),
+      distanceTierMaxKm: tier.max_distance_km === null ? null : Number(tier.max_distance_km),
+      distanceTierFee: tierFee,
+      distanceSource: 'routing_api',
     };
   }
 
+  async getAddressForQuote(addressId: string, userId: string) {
+    const address = await this.repo.findAddressForUser(addressId, userId);
+    if (!address) {
+      throw new NotFoundException({
+        code: ErrorCode.NotFound,
+        message: 'عنوان التوصيل غير موجود أو لا يتبع حسابك.',
+      });
+    }
+    if (!address.zone_id) {
+      throw new BadRequestException({
+        code: ErrorCode.ValidationFailed,
+        message: 'عنوان التوصيل غير مرتبط بمنطقة توصيل.',
+      });
+    }
+    return {
+      zoneId: address.zone_id,
+      addressLat: Number(address.latitude),
+      addressLng: Number(address.longitude),
+    };
+  }
   /**
    * حساب سعر توصيل معروض للعميل (بدون إنشاء طلب).
    */
@@ -178,8 +217,195 @@ export class PricingService {
       source: r.source,
       zoneId: r.zoneId,
       zoneName: r.zoneName,
+      distanceTierId: r.distanceTierId,
       currency: ctx.currency,
     };
+  }
+
+
+  async listZonesForAdmin(): Promise<ZoneRow[]> {
+    return this.repo.listZonesForAdmin();
+  }
+
+  async createZone(input: { cityId: string; nameAr: string; nameEn: string }): Promise<ZoneRow> {
+    const row = await this.repo.createZone(input);
+    if (!row) throw new NotFoundException({ code: ErrorCode.NotFound, message: 'المدينة غير موجودة أو غير مفعلة.' });
+    return row;
+  }
+
+  async updateZoneCoverage(input: {
+    zoneId: string; geojson: Record<string, unknown> | null;
+    status: 'unverified' | 'verified' | 'rejected'; actorId: string; note: string;
+  }): Promise<{ status: string }> {
+    const zone = await this.repo.getZoneById(input.zoneId);
+    if (!zone) throw new NotFoundException({ code: ErrorCode.NotFound, message: 'Delivery zone not found' });
+    if (input.status === 'verified') {
+      if (zone.is_active) {
+        throw new BadRequestException({ code: ErrorCode.ValidationFailed,
+          message: 'أوقف المنطقة أولاً قبل تعديل حدودها أو إعادة اعتمادها.' });
+      }
+      if (zone.district_id && zone.district_source_status !== 'verified' && zone.district_source_status !== 'community_verified') {
+        throw new BadRequestException({
+          code: ErrorCode.ValidationFailed,
+          message: 'هذه المنطقة مرتبطة بسجل حي قديم غير موثق. أنشئ منطقة تشغيلية جديدة مستقلة عن السجل القديم بدلاً من اعتمادها.',
+        });
+      }
+      if (!input.geojson || !this.isValidCoverageGeometry(input.geojson)) {
+        throw new BadRequestException({
+          code: ErrorCode.ValidationFailed,
+          message: 'حدود التغطية غير صالحة. استخدم GeoJSON من نوع Polygon أو MultiPolygon بحلقات مغلقة وإحداثيات صحيحة.',
+        });
+      }
+      if (input.note.trim().length < 8) {
+        throw new BadRequestException({ code: ErrorCode.ValidationFailed, message: 'أدخل ملاحظة توثيق لا تقل عن 8 أحرف.' });
+      }
+    }
+    if (input.status === 'rejected' && !input.note.trim()) {
+      throw new BadRequestException({ code: ErrorCode.ValidationFailed, message: 'سبب رفض نطاق التغطية مطلوب.' });
+    }
+    const updated = await this.repo.updateZoneCoverage(input);
+    if (!updated) throw new NotFoundException({ code: ErrorCode.NotFound, message: 'Delivery zone not found' });
+    return { status: 'ok' };
+  }
+
+  private isValidCoverageGeometry(value: Record<string, unknown>): boolean {
+    const geometryType = value.type;
+    const raw = value.coordinates;
+    if (geometryType !== 'Polygon' && geometryType !== 'MultiPolygon') return false;
+    const polygons: unknown[] = geometryType === 'Polygon' ? [raw] : (Array.isArray(raw) ? raw : []);
+    if (!polygons.length) return false;
+    const validPosition = (p: unknown): p is [number, number] =>
+      Array.isArray(p) && p.length >= 2 && Number.isFinite(p[0]) && Number.isFinite(p[1])
+      && p[0] >= -180 && p[0] <= 180 && p[1] >= -90 && p[1] <= 90;
+    for (const polygon of polygons) {
+      if (!Array.isArray(polygon) || polygon.length === 0) return false;
+      for (const ring of polygon) {
+        if (!Array.isArray(ring) || ring.length < 4 || !ring.every(validPosition)) return false;
+        const positions = ring as [number, number][];
+        const first = positions[0], last = positions[positions.length - 1];
+        if (first[0] !== last[0] || first[1] !== last[1]) return false;
+        let twiceArea = 0;
+        for (let i = 0; i < positions.length - 1; i++) {
+          twiceArea += positions[i][0] * positions[i + 1][1] - positions[i + 1][0] * positions[i][1];
+        }
+        if (Math.abs(twiceArea) < 1e-10) return false;
+        const orient = (a: number[], b: number[], d: number[]) =>
+          (b[0] - a[0]) * (d[1] - a[1]) - (b[1] - a[1]) * (d[0] - a[0]);
+        const intersects = (a: number[], b: number[], d: number[], e: number[]) => {
+          const o1 = orient(a, b, d), o2 = orient(a, b, e);
+          const o3 = orient(d, e, a), o4 = orient(d, e, b);
+          return ((o1 > 1e-10 && o2 < -1e-10) || (o1 < -1e-10 && o2 > 1e-10))
+            && ((o3 > 1e-10 && o4 < -1e-10) || (o3 < -1e-10 && o4 > 1e-10));
+        };
+        const segments = positions.length - 1;
+        for (let i = 0; i < segments; i++) {
+          for (let j = i + 1; j < segments; j++) {
+            if (j === i + 1 || (i === 0 && j === segments - 1)) continue;
+            if (intersects(positions[i], positions[i + 1], positions[j], positions[j + 1])) return false;
+          }
+        }
+      }
+    }
+    return true;
+  }
+
+  private isPointInsideCoverage(value: unknown, longitude: number, latitude: number): boolean {
+    if (!Number.isFinite(longitude) || !Number.isFinite(latitude)) return false;
+    const geometry = value as { type?: unknown; coordinates?: unknown };
+    if (!geometry || (geometry.type !== 'Polygon' && geometry.type !== 'MultiPolygon')) return false;
+    const polygons: any[] = geometry.type === 'Polygon'
+      ? [geometry.coordinates]
+      : (Array.isArray(geometry.coordinates) ? geometry.coordinates : []);
+    const insideRing = (ring: number[][]): boolean => {
+      let inside = false;
+      for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+        const [xi, yi] = ring[i]; const [xj, yj] = ring[j];
+        const cross = (longitude - xi) * (yj - yi) - (latitude - yi) * (xj - xi);
+        if (Math.abs(cross) < 1e-10 && longitude >= Math.min(xi, xj) - 1e-10
+          && longitude <= Math.max(xi, xj) + 1e-10 && latitude >= Math.min(yi, yj) - 1e-10
+          && latitude <= Math.max(yi, yj) + 1e-10) return true;
+        const intersects = ((yi > latitude) !== (yj > latitude))
+          && (longitude < ((xj - xi) * (latitude - yi)) / (yj - yi) + xi);
+        if (intersects) inside = !inside;
+      }
+      return inside;
+    };
+    return polygons.some((polygon) => {
+      if (!Array.isArray(polygon) || !Array.isArray(polygon[0])) return false;
+      if (!insideRing(polygon[0])) return false;
+      return !polygon.slice(1).some((hole: number[][]) => insideRing(hole));
+    });
+  }
+
+  async listDistanceTiers(zoneId: string): Promise<DistanceTierRow[]> {
+    const zone = await this.repo.getZoneById(zoneId);
+    if (!zone) {
+      throw new NotFoundException({ code: ErrorCode.NotFound, message: 'Delivery zone not found' });
+    }
+    return this.repo.listDistanceTiers(zoneId);
+  }
+
+  async createDistanceTier(input: {
+    zoneId: string; minDistanceKm: number; maxDistanceKm: number | null; deliveryFee: number;
+  }): Promise<DistanceTierRow> {
+    if (!APPROVED_DISTANCE_BANDS.some((band) => band.min === input.minDistanceKm && band.max === input.maxDistanceKm)) {
+      throw new BadRequestException({ code: ErrorCode.ValidationFailed,
+        message: 'شرائح المسافة المعتمدة هي: 0–2، أكثر من 2–4، أكثر من 4–6، أكثر من 6–10، أكثر من 10–15، وأكثر من 15 كم.' });
+    }
+    const zone = await this.repo.getZoneById(input.zoneId);
+    if (!zone) {
+      throw new NotFoundException({ code: ErrorCode.NotFound, message: 'Delivery zone not found' });
+    }
+    try {
+      return await this.repo.createDistanceTier(input);
+    } catch (error) {
+      const e = error as { code?: string; constraint?: string };
+      if (e.code === '23514' || e.code === '23505') {
+        throw new BadRequestException({
+          code: ErrorCode.ValidationFailed,
+          message: 'شريحة المسافة تتداخل مع شريحة نشطة أخرى في المنطقة نفسها.',
+        });
+      }
+      throw error;
+    }
+  }
+
+  async updateDistanceTier(id: string, fields: {
+    minDistanceKm?: number; maxDistanceKm?: number | null; deliveryFee?: number; isActive?: boolean;
+  }): Promise<DistanceTierRow> {
+    const current = await this.repo.getDistanceTierById(id);
+    if (!current) throw new NotFoundException({ code: ErrorCode.NotFound, message: 'Distance tier not found' });
+    const nextMin = fields.minDistanceKm ?? Number(current.min_distance_km);
+    const nextMax = fields.maxDistanceKm !== undefined
+      ? fields.maxDistanceKm : (current.max_distance_km === null ? null : Number(current.max_distance_km));
+    if (!APPROVED_DISTANCE_BANDS.some((band) => band.min === nextMin && band.max === nextMax)) {
+      throw new BadRequestException({ code: ErrorCode.ValidationFailed,
+        message: 'لا يمكن تغيير حدود الشريحة عن شرائح المسافة المعتمدة.' });
+    }
+    try {
+      const row = await this.repo.updateDistanceTier(id, fields);
+      if (!row) {
+        throw new NotFoundException({ code: ErrorCode.NotFound, message: 'Distance tier not found' });
+      }
+      return row;
+    } catch (error) {
+      const e = error as { code?: string };
+      if (e.code === '23514' || e.code === '23505') {
+        throw new BadRequestException({
+          code: ErrorCode.ValidationFailed,
+          message: 'تعديل الشريحة يسبب تداخلاً مع شريحة نشطة أخرى.',
+        });
+      }
+      throw error;
+    }
+  }
+
+  async deactivateDistanceTier(id: string): Promise<{ status: string }> {
+    const row = await this.repo.updateDistanceTier(id, { isActive: false });
+    if (!row) {
+      throw new NotFoundException({ code: ErrorCode.NotFound, message: 'Distance tier not found' });
+    }
+    return { status: 'ok' };
   }
 
   async listZones(): Promise<ZoneResponseDto[]> {
@@ -188,7 +414,9 @@ export class PricingService {
   }
 
   async getZone(id: string): Promise<ZoneResponseDto> {
-    const z = await this.repo.getZoneById(id);
+    // This route is customer-readable. Keep full legacy records on the
+    // permission-protected admin list only; never reveal unverified fee fields.
+    const z = await this.repo.getActiveVerifiedZoneById(id);
     if (!z) {
       throw new NotFoundException({
         code: ErrorCode.NotFound,
@@ -210,6 +438,22 @@ export class PricingService {
       isActive?: boolean;
     },
   ): Promise<ZoneResponseDto> {
+    if (dto.isActive === true) {
+      if (!(await this.repo.isZoneVerifiedForDelivery(id))) {
+        throw new BadRequestException({ code: ErrorCode.ValidationFailed,
+          message: 'لا يمكن تفعيل المنطقة قبل اعتماد حدود التغطية الجغرافية.' });
+      }
+      const activeTiers = await this.repo.listActiveDistanceTiers(id);
+      if (activeTiers.length === 0) {
+        throw new BadRequestException({ code: ErrorCode.ValidationFailed,
+          message: 'لا يمكن تفعيل المنطقة قبل إعداد شريحة رسوم نشطة واحدة على الأقل.' });
+      }
+      const routingStatus = this.getRoutingProviderStatus();
+      if (!routingStatus.configured) {
+        throw new BadRequestException({ code: ErrorCode.ValidationFailed,
+          message: 'لا يمكن تفعيل التوصيل قبل إعداد عنوان HTTPS صالح وآمن لمزود مسافة الطريق.' });
+      }
+    }
     const z = await this.repo.updateZone(id, dto);
     if (!z) {
       throw new NotFoundException({
@@ -218,6 +462,21 @@ export class PricingService {
       });
     }
     return this.toZoneResponse(z);
+  }
+
+  getRoutingProviderStatus(): { provider: 'openrouteservice'; configured: boolean; protocol: 'https' | 'missing_or_invalid' } {
+    const endpoint = process.env.ROUTING_API_URL?.trim();
+    const apiKey = process.env.ROUTING_API_KEY?.trim();
+    try {
+      const parsed = new URL(endpoint ?? '');
+      const configured = parsed.origin === 'https://api.heigit.org'
+        && parsed.pathname === '/openrouteservice/v2/directions/driving-car/json'
+        && !parsed.username && !parsed.password && !parsed.search && !parsed.hash
+        && Boolean(apiKey);
+      return { provider: 'openrouteservice', configured, protocol: configured ? 'https' : 'missing_or_invalid' };
+    } catch {
+      return { provider: 'openrouteservice', configured: false, protocol: 'missing_or_invalid' };
+    }
   }
 
   async getSettings(): Promise<Record<string, number>> {
@@ -236,6 +495,8 @@ export class PricingService {
     return {
       id: z.id,
       city: z.city,
+      cityId: z.city_id ?? null,
+      districtId: z.district_id ?? null,
       nameAr: z.name_ar,
       nameEn: z.name_en,
       baseDeliveryFee: Number(z.base_delivery_fee),

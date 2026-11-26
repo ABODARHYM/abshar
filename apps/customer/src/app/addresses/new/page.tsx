@@ -19,6 +19,7 @@ const MapPicker = dynamic(() => import('@/components/MapPicker'), {
 
 const API = '/api/v1';
 
+interface Governorate { id: string; nameAr: string; }
 interface City { id: string; nameAr: string; }
 interface District { id: string; nameAr: string; }
 interface Area { id: string; nameAr: string; }
@@ -32,41 +33,74 @@ function NewAddressContent() {
   const [floor, setFloor] = useState('');
   const [apartment, setApartment] = useState('');
   const [landmark, setLandmark] = useState('');
+  const [governorateId, setGovernorateId] = useState('');
   const [cityId, setCityId] = useState('');
   const [districtId, setDistrictId] = useState('');
   const [areaId, setAreaId] = useState('');
   const [isDefault, setIsDefault] = useState(true);
+  const [locationConfirmed, setLocationConfirmed] = useState(false);
 
   const [lat, setLat] = useState(15.4633);
   const [lng, setLng] = useState(45.3256);
 
+  const [governorates, setGovernorates] = useState<Governorate[]>([]);
   const [cities, setCities] = useState<City[]>([]);
+  const [citiesLoading, setCitiesLoading] = useState(false);
   const [districts, setDistricts] = useState<District[]>([]);
   const [areas, setAreas] = useState<Area[]>([]);
 
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
-  const [debugLog, setDebugLog] = useState<string[]>([]);
-
-  // تسجيل تشخيصي
-  const log = (msg: string) => {
-    console.log('[Address]', msg);
-    setDebugLog((prev) => [...prev, msg]);
-  };
-
+  const [notice, setNotice] = useState('');
   useEffect(() => {
-    fetch(`${API}/geography/cities`)
+    let cancelled = false;
+    fetch(`${API}/geography/governorates`)
       .then((r) => (r.ok ? r.json() : []))
       .then((d) => {
+        if (cancelled) return;
         const list = Array.isArray(d) ? d : [];
-        log(`Cities: ${list.length}`);
+        setGovernorates(list);
+        if (list.length === 1) setGovernorateId(list[0].id);
+      })
+      .catch(() => {
+        if (!cancelled) setGovernorates([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    setCities([]);
+    setCityId('');
+    setDistricts([]);
+    setDistrictId('');
+    setAreas([]);
+    setAreaId('');
+    if (!governorateId) {
+      setCitiesLoading(false);
+      return;
+    }
+    setCitiesLoading(true);
+    fetch(`${API}/geography/governorates/${governorateId}/cities`)
+      .then((r) => (r.ok ? r.json() : []))
+      .then((d) => {
+        if (cancelled) return;
+        const list = Array.isArray(d) ? d : [];
         setCities(list);
         if (list.length === 1) setCityId(list[0].id);
       })
-      .catch((e) => log(`Cities failed: ${e.message}`))
-      .finally(() => setLoading(false));
-  }, []);
+      .catch(() => {
+        if (!cancelled) setCities([]);
+      })
+      .finally(() => {
+        if (!cancelled) setCitiesLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [governorateId]);
 
   useEffect(() => {
     setDistricts([]); setDistrictId(''); setAreas([]); setAreaId('');
@@ -75,7 +109,6 @@ function NewAddressContent() {
       .then((r) => (r.ok ? r.json() : []))
       .then((d) => {
         const list = Array.isArray(d) ? d : [];
-        log(`Districts: ${list.length}`);
         setDistricts(list);
       })
       .catch(() => {});
@@ -88,7 +121,6 @@ function NewAddressContent() {
       .then((r) => (r.ok ? r.json() : []))
       .then((d) => {
         const list = Array.isArray(d) ? d : [];
-        log(`Areas: ${list.length}`);
         setAreas(list);
       })
       .catch(() => {});
@@ -96,27 +128,25 @@ function NewAddressContent() {
 
   const submit = async () => {
     setError('');
-    log('=== Submit pressed ===');
 
     // Validations
     if (!label.trim()) {
       setError('اسم العنوان مطلوب');
-      log('❌ label empty');
       return;
     }
     if (!addressLine.trim()) {
       setError('وصف العنوان مطلوب');
-      log('❌ addressLine empty');
       return;
     }
-
+    if (!locationConfirmed) {
+      setError('حدد موقع العنوان من الخريطة أو اضغط «استخدم موقعي الحالي» قبل الحفظ.');
+      return;
+    }
     // Token check
     const token = localStorage.getItem('accessToken');
-    log(`Token: ${token ? 'PRESENT (hidden)' : 'MISSING'}`);
 
     if (!token) {
       setError('يجب تسجيل الدخول أولاً');
-      log('❌ No token — redirecting to login');
       setTimeout(() => router.push('/login?redirect=/addresses/new'), 1500);
       return;
     }
@@ -127,18 +157,13 @@ function NewAddressContent() {
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      log(`Auth check: ${authRes.status}`);
 
       if (!authRes.ok) {
-        const authBody = await authRes.text();
-        log(`Auth response: ${authBody.slice(0, 160)}`);
         setError('تعذر التحقق من تسجيل الدخول. سجّل الخروج ثم الدخول مجددًا.');
         return;
       }
 
-      log('Auth check: token accepted');
     } catch (e) {
-      log(`Auth check failed: ${e instanceof Error ? e.message : 'network error'}`);
       setError('تعذر الاتصال بخدمة التحقق من تسجيل الدخول.');
       return;
     }
@@ -163,20 +188,10 @@ function NewAddressContent() {
     if (areaId && areaId.length > 10) rawPayload.areaId = areaId;
 
     const payload = rawPayload;
-    console.log('[Address Debug]', {
-      lat,
-      latType: typeof lat,
-      lng,
-      lngType: typeof lng,
-      payloadLatitude: rawPayload.latitude,
-      payloadLongitude: rawPayload.longitude,
-    });
 
-    log(`Payload: ${JSON.stringify(payload).slice(0, 200)}`);
 
     try {
       const url = `${API}/addresses`;
-      log(`POST ${url}`);
 
       const res = await fetch(url, {
         method: 'POST',
@@ -187,12 +202,10 @@ function NewAddressContent() {
         body: JSON.stringify(payload),
       });
 
-      log(`Response: ${res.status}`);
 
       let data: any = {};
       try {
         data = await res.json();
-        log(`Body: ${JSON.stringify(data).slice(0, 200)}`);
       } catch {}
 
       if (!res.ok) {
@@ -201,11 +214,14 @@ function NewAddressContent() {
         return;
       }
 
-      log('✅ Success!');
+      if (!data.zoneId) {
+        setNotice('تم حفظ العنوان، لكن موقعه خارج نطاقات التوصيل المعتمدة حالياً أو لم يُحدد له نطاق وحيد. يمكنك الاحتفاظ به، لكن لن يمكن إنشاء طلب توصيل منه حتى تعتمد الإدارة نطاقاً يغطي موقعك.');
+        setSubmitting(false);
+        return;
+      }
       router.push('/addresses');
     } catch (e) {
       const msg = (e as Error).message;
-      log(`❌ Exception: ${msg}`);
       setError('خطأ في الاتصال: ' + msg);
       setSubmitting(false);
     }
@@ -227,20 +243,16 @@ function NewAddressContent() {
       <TopBar title="عنوان جديد" showBack />
 
       <main className="container-app py-4 space-y-4">
+        {notice && (
+          <div role="status" className="card border-r-4 border-r-amber-500">
+            <p className="text-sm font-bold text-amber-600">{notice}</p>
+            <button type="button" className="btn btn-primary mt-3" onClick={() => router.push('/addresses')}>العودة إلى العناوين</button>
+          </div>
+        )}
         {error && (
           <div className="card border-r-4 border-r-[var(--danger)]">
             <p className="text-sm font-bold text-[var(--danger)]">⚠️ {error}</p>
           </div>
-        )}
-
-        {/* Debug Log (temporary) */}
-        {debugLog.length > 0 && (
-          <details className="card bg-[var(--bg-elevated)] text-xs">
-            <summary className="font-bold cursor-pointer">🔍 تشخيص ({debugLog.length})</summary>
-            <pre className="mt-2 text-[10px] text-[var(--text-muted)] whitespace-pre-wrap max-h-40 overflow-auto" dir="ltr">
-              {debugLog.join('\n')}
-            </pre>
-          </details>
         )}
 
         <div className="card">
@@ -262,6 +274,7 @@ function NewAddressContent() {
             initialLat={lat}
             initialLng={lng}
             onLocationChange={(newLat, newLng, addr) => {
+              setLocationConfirmed(true);
               setLat(newLat);
               setLng(newLng);
               if (addr && !addressLine) {
@@ -269,6 +282,7 @@ function NewAddressContent() {
               }
             }}
           />
+          <p className="mt-2 text-xs text-[var(--text-muted)]">اختر موقعك فعلياً بالنقر على الخريطة أو باستخدام GPS؛ مركز الخريطة الظاهر مبدئي وليس عنوانك.</p>
           <div className="mt-3 grid grid-cols-2 gap-2 text-xs" dir="ltr">
             <div className="bg-[var(--bg-elevated)] p-2 rounded-lg">
               <span className="text-[var(--text-muted)]">Lat:</span>{' '}
@@ -295,11 +309,36 @@ function NewAddressContent() {
         </div>
 
         <div className="card">
+          <label className="block text-sm font-bold mb-2">المحافظة</label>
+          <select
+            value={governorateId}
+            onChange={(e) => setGovernorateId(e.target.value)}
+            className="input"
+          >
+            <option value="">— اختر المحافظة —</option>
+            {governorates.map((g) => <option key={g.id} value={g.id}>{g.nameAr}</option>)}
+          </select>
+          {governorates.length === 0 && (
+            <p className="mt-2 text-xs text-amber-600">
+              لا توجد محافظات موثقة للاختيار حالياً. يمكنك حفظ وصف العنوان وموقع الخريطة دون اختيار بيانات إدارية.
+            </p>
+          )}
+        </div>
+
+        <div className="card">
           <label className="block text-sm font-bold mb-2">المدينة</label>
-          <select value={cityId} onChange={(e) => setCityId(e.target.value)} className="input">
-            <option value="">— اختر —</option>
+          <select
+            value={cityId}
+            onChange={(e) => setCityId(e.target.value)}
+            className="input"
+            disabled={!governorateId || citiesLoading || cities.length === 0}
+          >
+            <option value="">— اختر المدينة —</option>
             {cities.map((c) => <option key={c.id} value={c.id}>{c.nameAr}</option>)}
           </select>
+          {governorateId && !citiesLoading && cities.length === 0 && (
+            <p className="mt-2 text-xs text-[var(--text-muted)]">لا توجد مدن موثقة تابعة لهذه المحافظة حتى الآن.</p>
+          )}
         </div>
 
         {cityId && districts.length > 0 && (
@@ -321,6 +360,11 @@ function NewAddressContent() {
             </select>
           </div>
         )}
+
+        <div className="card border border-[var(--bg-border)]">
+          <p className="text-sm font-bold">تأكيد نطاق التوصيل والرسوم</p>
+          <p className="text-xs text-[var(--text-muted)] mt-2">سيتم التحقق من تغطية العنوان واحتساب رسوم الطريق عند طلب التوصيل. لا تُعرض مناطق غير موثقة ولا تُفترض رسوم مسبقة.</p>
+        </div>
 
         <div className="card">
           <label className="block text-sm font-bold mb-2">أقرب معلم</label>
@@ -354,7 +398,7 @@ function NewAddressContent() {
           <button
             type="button"
             onClick={submit}
-            disabled={submitting}
+            disabled={submitting || Boolean(notice)}
             className="btn btn-primary btn-lg flex-1"
           >
             {submitting ? '⏳ جاري...' : '💾 حفظ'}

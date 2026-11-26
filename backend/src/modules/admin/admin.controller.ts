@@ -27,6 +27,7 @@ import { StoreResponse } from '../stores/stores.service';
 import { ProductResponse } from '../products/products.service';
 import { ProductQueryDto } from '../products/dto/product-query.dto';
 import { AdminUserQueryDto } from './dto/admin-user-query.dto';
+import { CreateAdminDriverDto } from './dto/create-admin-driver.dto';
 import { AdminOrderQueryDto } from './dto/admin-order-query.dto';
 import {
   AssignRoleDto,
@@ -160,11 +161,37 @@ export class AdminController {
 
   // ───── Drivers ─────
 
+  @Get('delivery-zones')
+  @RequirePermission('drivers.manage')
+  @ApiOperation({ summary: 'List active delivery zones for driver assignment' })
+  listDeliveryZones(): Promise<Array<{ id: string; city: string; nameAr: string }>> {
+    return this.service.listDeliveryZones();
+  }
+
   @Get('drivers')
   @RequirePermission('drivers.read')
   @ApiOperation({ summary: 'List all drivers' })
   listDrivers(@Query() query: AdminUserQueryDto): Promise<Paginated<AdminDriverListItemDto>> {
     return this.service.listDrivers(query);
+  }
+
+  @Post('drivers')
+  @RequirePermission('drivers.manage')
+  @ApiOperation({ summary: 'Create driver account and profile' })
+  createDriver(
+    @CurrentUser() actor: AuthUser,
+    @Body() dto: CreateAdminDriverDto,
+  ): Promise<{
+    userId: string;
+    fullName: string;
+    phone: string;
+    email: string | null;
+    username: string;
+    initialPassword: string;
+    status: 'pending';
+    vehicleType: string;
+  }> {
+    return this.service.createDriver(actor.id, actor.roles, dto);
   }
 
   @Patch('drivers/:id/status')

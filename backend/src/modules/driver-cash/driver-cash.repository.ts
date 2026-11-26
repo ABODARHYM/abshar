@@ -1,5 +1,5 @@
-import { Injectable } from '@nestjs/common';
-import { PoolClient } from 'pg';
+import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
+import type { PoolClient, QueryResult, QueryResultRow } from 'pg';
 import { DatabaseService } from '../../database/database.service';
 import { toOffset } from '../../common/pagination.dto';
 
@@ -35,20 +35,30 @@ export interface OutstandingDriverRow {
 export class DriverCashRepository {
   constructor(private readonly db: DatabaseService) {}
 
+  /** Keep transaction and pool queries behind one compatible signature. */
+  private queryWithClient<T extends QueryResultRow = QueryResultRow>(
+    client: PoolClient | undefined,
+    text: string,
+    params: unknown[] = [],
+  ): Promise<QueryResult<T>> {
+    if (client) return client.query<T>(text, params);
+    return this.db.query<T>(text, params);
+  }
+
   /**
    * ملخص العهدة للمندوب.
    */
-  async getSummary(driverId: string): Promise<CashSummaryRow> {
+  async getSummary(driverId: string, currency: string): Promise<CashSummaryRow> {
     const r = await this.db.query<CashSummaryRow>(
       `
       SELECT
         COALESCE(SUM(CASE WHEN type = 'cod_collection' AND direction = 'credit' THEN amount ELSE 0 END), 0)::text AS total_collected,
-        COALESCE(SUM(CASE WHEN type = 'settlement_payout' AND direction = 'debit' THEN amount ELSE 0 END), 0)::text AS total_submitted,
+        COALESCE(SUM(CASE WHEN direction = 'debit' AND (type = 'cash_remittance' OR (type = 'settlement_payout' AND settlement_id IS NULL)) THEN amount ELSE 0 END), 0)::text AS total_submitted,
         COALESCE(SUM(CASE WHEN type = 'driver_earning' AND direction = 'credit' THEN amount ELSE 0 END), 0)::text AS total_earnings
       FROM transactions
-      WHERE account_type = 'driver' AND account_id = $1
+      WHERE account_type = 'driver' AND account_id = $1 AND currency = $2
       `,
-      [driverId],
+      [driverId, currency],
     );
     return r.rows[0];
   }
@@ -103,7 +113,7 @@ export class DriverCashRepository {
    * يستدعيه DriverService.
    */
   async recordCashCollection(
-    _client: PoolClient | undefined,
+    client: PoolClient | undefined,
     params: {
       driverId: string;
       orderId: string;
@@ -111,17 +121,46 @@ export class DriverCashRepository {
       currency: string;
     },
   ): Promise<void> {
-    await this.db.query(
-      `
-      INSERT INTO transactions (
-        order_id, account_type, account_id, type, direction, amount, currency, description
-      )
-      VALUES ($1, 'driver', $2, 'cod_collection', 'credit', $3, $4, 'Cash on delivery collected')
-      `,
-      [params.orderId, params.driverId, params.amount, params.currency],
+    const existing = await this.queryWithClient<{
+      account_type: string;
+      account_id: string | null;
+      direction: string;
+      amount: string;
+      amount_matches: boolean;
+      currency: string;
+    }>(
+      client,
+      `SELECT account_type, account_id, direction, amount::text,
+              amount = $2::numeric AS amount_matches, currency
+       FROM transactions WHERE order_id = $1 AND type = 'cod_collection' LIMIT 1`,
+      [params.orderId, params.amount],
     );
+    if (existing.rows.length > 0) {
+      const collection = existing.rows[0];
+      if (
+        collection.account_type !== 'driver' ||
+        collection.account_id !== params.driverId ||
+        collection.direction !== 'credit' ||
+        !collection.amount_matches ||
+        collection.currency?.trim() !== params.currency.trim()
+      ) {
+        throw new ConflictException('An existing COD collection conflicts with the delivered order');
+      }
+    } else {
+      await this.queryWithClient(
+        client,
+        `
+        INSERT INTO transactions (
+          order_id, account_type, account_id, type, direction, amount, currency, description, created_by, idempotency_key
+        )
+        VALUES ($1, 'driver', $2, 'cod_collection', 'credit', $3, $4, 'Cash on delivery collected', $2, $5)
+        `,
+        [params.orderId, params.driverId, params.amount, params.currency, `order:${params.orderId}:driver:cod_collection:credit`],
+      );
+    }
 
-    await this.db.query(
+    await this.queryWithClient(
+      client,
       `
       UPDATE orders
       SET cash_collected_amount = $1, cash_collected_at = now()
@@ -135,7 +174,7 @@ export class DriverCashRepository {
    * سجّل driver_earning (عند التسليم).
    */
   async recordDriverEarning(
-    _client: PoolClient | undefined,
+    client: PoolClient | undefined,
     params: {
       driverId: string;
       orderId: string;
@@ -143,12 +182,42 @@ export class DriverCashRepository {
       currency: string;
     },
   ): Promise<void> {
-    await this.db.query(
+    const existing = await this.queryWithClient<{
+      account_type: string;
+      account_id: string | null;
+      direction: string;
+      amount: string;
+      amount_matches: boolean;
+      currency: string;
+    }>(
+      client,
+      `SELECT account_type, account_id, direction, amount::text,
+              amount = $2::numeric AS amount_matches, currency
+       FROM transactions WHERE order_id = $1 AND type = 'driver_earning' LIMIT 1`,
+      [params.orderId, params.amount],
+    );
+    if (existing.rows.length > 0) {
+      const earning = existing.rows[0];
+      if (
+        earning.account_type !== 'driver' ||
+        earning.account_id !== params.driverId ||
+        earning.direction !== 'credit' ||
+        !earning.amount_matches ||
+        earning.currency?.trim() !== params.currency.trim()
+      ) {
+        throw new ConflictException('An existing driver earning conflicts with the delivered order');
+      }
+      return;
+    }
+
+    await this.queryWithClient(
+      client,
       `
       INSERT INTO transactions (
-        order_id, account_type, account_id, type, direction, amount, currency, description
+        order_id, account_type, account_id, type, direction, amount, currency, description, created_by, idempotency_key
       )
-      VALUES ($1, 'driver', $2, 'driver_earning', 'credit', $3, $4, 'Driver earning')
+      VALUES ($1, 'driver', $2, 'driver_earning', 'credit', $3, $4, 'Driver earning', $2,
+        'order:' || $1::text || ':driver:driver_earning:credit')
       `,
       [params.orderId, params.driverId, params.amount, params.currency],
     );
@@ -163,17 +232,55 @@ export class DriverCashRepository {
     note: string | null,
     currency: string,
   ): Promise<{ transactionId: string }> {
-    const r = await this.db.query<{ id: string }>(
-      `
-      INSERT INTO transactions (
-        account_type, account_id, type, direction, amount, currency, description
-      )
-      VALUES ('driver', $1, 'settlement_payout', 'debit', $2, $3, $4)
-      RETURNING id::text
-      `,
-      [driverId, amount, currency, note ?? 'Cash submission'],
-    );
-    return { transactionId: r.rows[0].id };
+    return this.db.transaction(async (client: PoolClient) => {
+      // Serialize handovers for this driver so concurrent requests cannot over-submit.
+      const driver = await client.query(
+        `SELECT user_id FROM drivers WHERE user_id = $1 FOR UPDATE`,
+        [driverId],
+      );
+      if (driver.rowCount === 0) {
+        throw new BadRequestException('Driver account was not found');
+      }
+
+      const balance = await client.query<{ outstanding: string; within_balance: boolean }>(
+        `
+        SELECT
+          COALESCE(SUM(CASE
+            WHEN type = 'cod_collection' AND direction = 'credit' THEN amount
+            WHEN type = 'cash_remittance' AND direction = 'debit' THEN -amount
+            WHEN type = 'settlement_payout' AND direction = 'debit' AND settlement_id IS NULL THEN -amount
+            ELSE 0
+          END), 0)::text AS outstanding,
+          $2::numeric <= COALESCE(SUM(CASE
+            WHEN type = 'cod_collection' AND direction = 'credit' THEN amount
+            WHEN type = 'cash_remittance' AND direction = 'debit' THEN -amount
+            WHEN type = 'settlement_payout' AND direction = 'debit' AND settlement_id IS NULL THEN -amount
+            ELSE 0
+          END), 0) AS within_balance
+        FROM transactions
+        WHERE account_type = 'driver' AND account_id = $1 AND currency = $3
+        `,
+        [driverId, amount, currency],
+      );
+      const outstanding = balance.rows[0]?.outstanding ?? '0';
+      if (!Number.isFinite(amount) || amount <= 0 || !balance.rows[0]?.within_balance) {
+        throw new BadRequestException(
+          `Cash submission exceeds the current outstanding balance (${outstanding})`,
+        );
+      }
+
+      const result = await client.query<{ id: string }>(
+        `
+        INSERT INTO transactions (
+          account_type, account_id, type, direction, amount, currency, description, created_by
+        )
+        VALUES ('driver', $1, 'cash_remittance', 'debit', $2, $3, $4, $1)
+        RETURNING id::text
+        `,
+        [driverId, amount, currency, note ?? 'Cash submission'],
+      );
+      return { transactionId: result.rows[0].id };
+    });
   }
 
   /**
@@ -208,7 +315,7 @@ export class DriverCashRepository {
   async listOutstandingDrivers(query: {
     page: number;
     limit: number;
-  }): Promise<{ rows: OutstandingDriverRow[]; total: number }> {
+  }, currency: string): Promise<{ rows: OutstandingDriverRow[]; total: number }> {
     const countRes = await this.db.query<{ count: string }>(
       `SELECT COUNT(DISTINCT d.user_id)::text AS count FROM drivers d WHERE d.status = 'active'`,
     );
@@ -223,7 +330,8 @@ export class DriverCashRepository {
         u.phone,
         COALESCE(SUM(CASE
           WHEN t.type = 'cod_collection' AND t.direction = 'credit' THEN t.amount
-          WHEN t.type = 'settlement_payout' AND t.direction = 'debit' THEN -t.amount
+          WHEN t.type = 'cash_remittance' AND t.direction = 'debit' THEN -t.amount
+          WHEN t.type = 'settlement_payout' AND t.direction = 'debit' AND t.settlement_id IS NULL THEN -t.amount
           ELSE 0
         END), 0)::text AS outstanding_cash,
         COALESCE(SUM(CASE
@@ -233,13 +341,13 @@ export class DriverCashRepository {
         MAX(CASE WHEN t.type = 'cod_collection' THEN t.created_at END) AS last_collection_at
       FROM drivers d
       JOIN users u ON u.id = d.user_id
-      LEFT JOIN transactions t ON t.account_type = 'driver' AND t.account_id = d.user_id
+      LEFT JOIN transactions t ON t.account_type = 'driver' AND t.account_id = d.user_id AND t.currency = $3
       WHERE d.status = 'active'
       GROUP BY d.user_id, u.full_name, u.phone
       ORDER BY outstanding_cash DESC
       LIMIT $1 OFFSET $2
       `,
-      [query.limit, offset],
+      [query.limit, offset, currency],
     );
 
     return { rows: rowsRes.rows, total };

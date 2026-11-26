@@ -33,6 +33,14 @@ interface Address {
   isDefault: boolean;
 }
 
+interface DeliveryQuote {
+  deliveryFee: number;
+  distanceKm: number;
+  currency: string;
+  zoneName: string;
+  isFreeDelivery: boolean;
+}
+
 function loadCart(): CartItem[] {
   try {
     const raw = localStorage.getItem('absher_cart');
@@ -53,8 +61,11 @@ export default function CheckoutPage() {
   const [selectedAddressId, setSelectedAddressId] = useState<string>('');
   const [notes, setNotes] = useState('');
   const [couponCode, setCouponCode] = useState('');
-  const [appliedCoupon, setAppliedCoupon] = useState<any>(null);
+  const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; discountAmount: number; freeDelivery: boolean } | null>(null);
   const [couponError, setCouponError] = useState('');
+  const [deliveryQuote, setDeliveryQuote] = useState<DeliveryQuote | null>(null);
+  const [quoteLoading, setQuoteLoading] = useState(false);
+  const [quoteError, setQuoteError] = useState('');
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -85,9 +96,47 @@ export default function CheckoutPage() {
   }, []);
 
   const subtotal = items.reduce((s, i) => s + i.price * i.quantity, 0);
-  const deliveryFee = store?.deliveryFee || 0;
+  const currencyNames: Record<string, string> = { YER: 'ر.ي', SAR: 'ر.س', USD: 'دولار أمريكي' };
+  const currencyLabel = currencyNames[deliveryQuote?.currency || ''] || deliveryQuote?.currency || 'العملة';
+  const deliveryFee = appliedCoupon?.freeDelivery ? 0 : (deliveryQuote?.deliveryFee ?? 0);
   const discount = appliedCoupon?.discountAmount || 0;
   const total = Math.max(0, subtotal + deliveryFee - discount);
+
+  // Preview the exact server-side distance tier for the selected saved address.
+  // The order endpoint recalculates this quote again before creating the order.
+  useEffect(() => {
+    if (!store?.id || !selectedAddressId) {
+      setDeliveryQuote(null);
+      setQuoteError('');
+      setQuoteLoading(false);
+      return;
+    }
+
+    let active = true;
+    setDeliveryQuote(null);
+    setQuoteError('');
+    setQuoteLoading(true);
+    const params = new URLSearchParams({
+      storeId: store.id,
+      addressId: selectedAddressId,
+      subtotal: String(subtotal),
+    });
+
+    authFetch(`/api/v1/pricing/quote?${params.toString()}`)
+      .then(async (res) => {
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || 'تعذر احتساب رسوم التوصيل');
+        if (active) setDeliveryQuote(data as DeliveryQuote);
+      })
+      .catch((err) => {
+        if (active) setQuoteError((err as Error).message || 'تعذر احتساب رسوم التوصيل');
+      })
+      .finally(() => {
+        if (active) setQuoteLoading(false);
+      });
+
+    return () => { active = false; };
+  }, [store?.id, selectedAddressId, subtotal]);
 
   const applyCoupon = async () => {
     if (!couponCode.trim()) return;
@@ -100,26 +149,23 @@ export default function CheckoutPage() {
           code: couponCode.trim().toUpperCase(),
           storeId: store?.id,
           subtotal,
+          items: items.map((item) => ({ productId: item.productId, quantity: item.quantity })),
         }),
       });
 
       const data = await res.json();
 
-      if (!res.ok) {
+      if (!res.ok || !data.valid) {
         setCouponError(data.message || 'كود غير صالح');
+        setAppliedCoupon(null);
         return;
       }
 
-      let discountAmount = 0;
-      if (data.discountType === 'percent') {
-        discountAmount = Math.round((subtotal * Number(data.discountValue)) / 100);
-      } else if (data.discountType === 'fixed') {
-        discountAmount = Number(data.discountValue);
-      }
-
+      // Use the backend's validated discount amount and canonical coupon type.
       setAppliedCoupon({
         code: couponCode.trim().toUpperCase(),
-        discountAmount,
+        discountAmount: Number(data.discountAmount || 0),
+        freeDelivery: data.type === 'free_delivery',
       });
     } catch {
       setCouponError('خطأ في التحقق');
@@ -131,8 +177,12 @@ export default function CheckoutPage() {
       setError('اختر عنوان التوصيل');
       return;
     }
+    if (quoteLoading || !deliveryQuote) {
+      setError(quoteError || 'انتظر احتساب رسوم التوصيل حسب المسافة قبل تأكيد الطلب.');
+      return;
+    }
     if (store.minOrderAmount && subtotal < store.minOrderAmount) {
-      setError(`الحد الأدنى ${store.minOrderAmount} ر.ي`);
+      setError(`الحد الأدنى ${store.minOrderAmount} ${currencyLabel}`);
       return;
     }
 
@@ -234,7 +284,7 @@ export default function CheckoutPage() {
             <div className="flex items-center justify-between p-3 rounded-xl bg-success/10 border border-success/30">
               <div>
                 <p className="font-black text-sm text-success">{appliedCoupon.code}</p>
-                <p className="text-xs text-muted">خصم {appliedCoupon.discountAmount} ر.ي</p>
+                <p className="text-xs text-muted">{appliedCoupon.freeDelivery ? 'توصيل مجاني' : `خصم ${appliedCoupon.discountAmount} ${currencyLabel}`}</p>
               </div>
               <button onClick={() => { setAppliedCoupon(null); setCouponCode(''); }} className="text-red-400 text-xs font-bold">
                 إزالة
@@ -298,11 +348,12 @@ export default function CheckoutPage() {
         <div className="card">
           <h3 className="font-black mb-3">ملخص الفاتورة</h3>
           <div className="space-y-2 text-sm">
-            <div className="flex justify-between"><span className="text-muted">المجموع الفرعي</span><span className="font-bold">{subtotal.toFixed(0)} ر.ي</span></div>
-            <div className="flex justify-between"><span className="text-muted">التوصيل</span><span className="font-bold">{deliveryFee.toFixed(0)} ر.ي</span></div>
-            {discount > 0 && <div className="flex justify-between text-success"><span>الخصم</span><span className="font-bold">-{discount.toFixed(0)} ر.ي</span></div>}
+            <div className="flex justify-between"><span className="text-muted">المجموع الفرعي</span><span className="font-bold">{subtotal.toFixed(0)} {currencyLabel}</span></div>
+            <div className="flex justify-between"><span className="text-muted">التوصيل {deliveryQuote ? `(${deliveryQuote.distanceKm.toFixed(2)} كم)` : ''}</span><span className="font-bold">{quoteLoading ? 'جارٍ الاحتساب...' : deliveryQuote ? (deliveryFee > 0 ? `${deliveryFee.toFixed(0)} ${currencyLabel}` : 'مجاني') : 'غير متاح'}</span></div>
+            {quoteError && <p className="text-xs text-red-400">{quoteError}</p>}
+            {discount > 0 && <div className="flex justify-between text-success"><span>الخصم</span><span className="font-bold">-{discount.toFixed(0)} {currencyLabel}</span></div>}
             <div className="divider !my-2" />
-            <div className="flex justify-between text-base"><span className="font-black">الإجمالي</span><span className="font-black text-accent text-lg">{total.toFixed(0)} ر.ي</span></div>
+            <div className="flex justify-between text-base"><span className="font-black">الإجمالي</span><span className="font-black text-accent text-lg">{total.toFixed(0)} {currencyLabel}</span></div>
           </div>
         </div>
       </main>
@@ -311,10 +362,10 @@ export default function CheckoutPage() {
         <div className="sticky-bottom-inner">
           <button
             onClick={submitOrder}
-            disabled={submitting || !selectedAddressId}
+            disabled={submitting || !selectedAddressId || quoteLoading || !deliveryQuote}
             className="btn btn-primary btn-lg btn-full"
           >
-            {submitting ? '⏳ جاري الإنشاء...' : `تنفيذ الطلب — ${total.toFixed(0)} ر.ي`}
+            {submitting ? '⏳ جاري الإنشاء...' : quoteLoading ? '⏳ احتساب رسوم التوصيل...' : deliveryQuote ? `تنفيذ الطلب — ${total.toFixed(0)} ${currencyLabel}` : 'تعذر احتساب رسوم التوصيل'}
           </button>
         </div>
       </div>

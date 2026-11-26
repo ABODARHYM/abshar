@@ -1,3 +1,4 @@
+import { PoolClient } from 'pg';
 import {
   BadRequestException,
   Injectable,
@@ -21,17 +22,37 @@ export class FinanceService {
 
   async getStoreEarnings(storeId: string): Promise<StoreEarningsDto> {
     const e = await this.repo.getStoreEarnings(storeId);
+    const breakdown = e.currency_breakdown.map((row) => ({
+      currency: row.currency,
+      todayEarnings: Number(row.today_earnings),
+      weekEarnings: Number(row.week_earnings),
+      monthEarnings: Number(row.month_earnings),
+      totalEarnings: Number(row.total_earnings),
+      todayOrders: Number(row.today_orders),
+      weekOrders: Number(row.week_orders),
+      monthOrders: Number(row.month_orders),
+      totalOrders: Number(row.total_orders),
+      pendingSettlement: Number(row.pending_settlement),
+      lastSettlementAt: row.last_settlement_at ? row.last_settlement_at.toISOString() : null,
+    }));
+    const singleCurrency = breakdown.length === 1 ? breakdown[0] : null;
     return {
-      todayEarnings: Number(e.today_earnings),
-      weekEarnings: Number(e.week_earnings),
-      monthEarnings: Number(e.month_earnings),
-      totalEarnings: Number(e.total_earnings),
-      todayOrders: Number(e.today_orders),
-      weekOrders: Number(e.week_orders),
-      monthOrders: Number(e.month_orders),
-      totalOrders: Number(e.total_orders),
-      pendingSettlement: Number(e.pending_settlement),
-      lastSettlementAt: e.last_settlement_at ? e.last_settlement_at.toISOString() : null,
+      // Legacy scalar money fields are populated only when a single currency exists.
+      todayEarnings: singleCurrency?.todayEarnings ?? 0,
+      weekEarnings: singleCurrency?.weekEarnings ?? 0,
+      monthEarnings: singleCurrency?.monthEarnings ?? 0,
+      totalEarnings: singleCurrency?.totalEarnings ?? 0,
+      todayOrders: breakdown.reduce((sum, row) => sum + row.todayOrders, 0),
+      weekOrders: breakdown.reduce((sum, row) => sum + row.weekOrders, 0),
+      monthOrders: breakdown.reduce((sum, row) => sum + row.monthOrders, 0),
+      totalOrders: breakdown.reduce((sum, row) => sum + row.totalOrders, 0),
+      pendingSettlement: singleCurrency?.pendingSettlement ?? 0,
+      lastSettlementAt: breakdown
+        .map((row) => row.lastSettlementAt)
+        .filter((value): value is string => value !== null)
+        .sort()
+        .at(-1) ?? null,
+      currencyBreakdown: breakdown,
     };
   }
 
@@ -45,6 +66,32 @@ export class FinanceService {
   }): Promise<Paginated<SettlementDto>> {
     const { rows, total } = await this.repo.listSettlements(query);
     return buildPage(rows.map(this.toSettlement), total, query);
+  }
+
+  async verifyOriginalDeliveryFee(params: { orderId: string; amount: number; reason: string; actorId: string; actorRole: string | null }) {
+    const result = await this.repo.verifyOriginalDeliveryFee(params);
+    if (!result) {
+      throw new NotFoundException({ code: ErrorCode.NotFound, message: 'Delivered order for financial review was not found' });
+    }
+    return result;
+  }
+
+  async listUnverifiedDeliveryFees(query: { page: number; limit: number }) {
+    const { rows, total } = await this.repo.listUnverifiedDeliveryFees(query);
+    return buildPage(rows.map((row) => ({
+      orderId: row.order_id,
+      orderNumber: row.order_number,
+      driverId: row.driver_id,
+      driverName: row.driver_name,
+      storeId: row.store_id,
+      storeName: row.store_name,
+      customerDeliveryFee: row.delivery_fee === null ? null : Number(row.delivery_fee),
+      originalDeliveryFee: row.original_delivery_fee === null ? null : Number(row.original_delivery_fee),
+      currency: row.currency,
+      deliveredAt: row.delivered_at ? row.delivered_at.toISOString() : null,
+      hasFinancialHistory: Boolean(row.has_financial_history),
+      reviewStatus: row.has_financial_history ? 'manual_reconciliation_required' : 'pending_review',
+    })), total, query);
   }
 
   async getSettlement(id: string): Promise<SettlementDto> {
@@ -66,24 +113,13 @@ export class FinanceService {
       periodStart: string;
       periodEnd: string;
       notes?: string;
+      actorRole?: string | null;
     },
   ): Promise<SettlementDto> {
-    // حساب المستحقات من commissions
-    const totals = await this.repo.getUnsettledCommissions(
-      params.partyType,
-      params.partyId,
-      params.periodStart,
-      params.periodEnd,
-    );
-
-    const gross = Number(totals.gross);
-    const commission = Number(totals.commission);
-    const net = Number(totals.net);
-
-    if (gross === 0) {
+    if (params.periodEnd < params.periodStart) {
       throw new BadRequestException({
         code: ErrorCode.ValidationFailed,
-        message: 'No unsettled commissions in this period',
+        message: 'Settlement period end must not be before its start',
       });
     }
 
@@ -92,18 +128,23 @@ export class FinanceService {
       partyId: params.partyId,
       periodStart: params.periodStart,
       periodEnd: params.periodEnd,
-      grossAmount: gross,
-      commissionAmount: commission,
-      netAmount: net,
       notes: params.notes,
       createdBy: actorId,
+      actorRole: params.actorRole ?? null,
     });
+
+    if (!settlement) {
+      throw new BadRequestException({
+        code: ErrorCode.ValidationFailed,
+        message: 'No unsettled commissions are available in this period',
+      });
+    }
 
     return this.toSettlement(settlement);
   }
 
-  async approveSettlement(actorId: string, id: string): Promise<SettlementDto> {
-    const s = await this.repo.updateSettlementStatus(id, 'approved', actorId);
+  async approveSettlement(actorId: string, actorRole: string | null, id: string): Promise<SettlementDto> {
+    const s = await this.repo.updateSettlementStatus(id, 'approved', actorId, actorRole);
     if (!s) {
       throw new NotFoundException({
         code: ErrorCode.NotFound,
@@ -113,8 +154,8 @@ export class FinanceService {
     return this.toSettlement(s);
   }
 
-  async markSettlementPaid(actorId: string, id: string): Promise<SettlementDto> {
-    const s = await this.repo.updateSettlementStatus(id, 'paid', actorId);
+  async markSettlementPaid(actorId: string, actorRole: string | null, id: string): Promise<SettlementDto> {
+    const s = await this.repo.updateSettlementStatus(id, 'paid', actorId, actorRole);
     if (!s) {
       throw new NotFoundException({
         code: ErrorCode.NotFound,
@@ -124,8 +165,8 @@ export class FinanceService {
     return this.toSettlement(s);
   }
 
-  async cancelSettlement(actorId: string, id: string): Promise<SettlementDto> {
-    const s = await this.repo.updateSettlementStatus(id, 'cancelled', actorId);
+  async cancelSettlement(actorId: string, actorRole: string | null, id: string): Promise<SettlementDto> {
+    const s = await this.repo.updateSettlementStatus(id, 'cancelled', actorId, actorRole);
     if (!s) {
       throw new NotFoundException({
         code: ErrorCode.NotFound,
@@ -146,8 +187,8 @@ export class FinanceService {
     return buildPage(rows.map(this.toCommission), total, query);
   }
 
-  async computeCommissionForOrder(orderId: string): Promise<any> {
-    return this.repo.computeCommissionForOrder(orderId);
+  async computeCommissionForOrder(orderId: string, transactionClient?: PoolClient): Promise<any> {
+    return this.repo.computeCommissionForOrder(orderId, transactionClient);
   }
 
   // ═══════════════ Ledger ═══════════════
@@ -189,6 +230,7 @@ export class FinanceService {
       grossAmount: Number(s.gross_amount),
       commissionAmount: Number(s.commission_amount),
       netAmount: Number(s.net_amount),
+      currency: s.currency?.trim?.() ?? null,
       status: s.status,
       notes: s.notes,
       settledAt: s.settled_at ? s.settled_at.toISOString() : null,
@@ -201,11 +243,13 @@ export class FinanceService {
       id: c.id,
       orderId: c.order_id,
       orderNumber: c.order_number,
+      currency: c.currency,
       storeId: c.store_id,
       storeName: c.store_name,
       ratePercent: Number(c.rate_percent),
       orderAmount: Number(c.order_amount),
       deliveryFee: Number(c.delivery_fee),
+      originalDeliveryFee: c.original_delivery_fee === null ? null : Number(c.original_delivery_fee),
       discountAmount: Number(c.discount_amount),
       commissionAmount: Number(c.commission_amount),
       storeAmount: Number(c.store_amount),

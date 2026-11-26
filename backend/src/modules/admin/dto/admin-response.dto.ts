@@ -1,5 +1,11 @@
 import { ApiProperty } from '@nestjs/swagger';
 
+export class AdminCurrencyRevenueDto {
+  @ApiProperty() currency!: string;
+  @ApiProperty() totalRevenue!: number;
+  @ApiProperty() todayRevenue!: number;
+}
+
 export class AdminDashboardDto {
   @ApiProperty() totalUsers!: number;
   @ApiProperty() activeUsers!: number;
@@ -14,6 +20,7 @@ export class AdminDashboardDto {
   @ApiProperty() totalRevenue!: number;
   @ApiProperty() todayOrders!: number;
   @ApiProperty() todayRevenue!: number;
+  @ApiProperty({ type: [AdminCurrencyRevenueDto] }) revenueByCurrency!: AdminCurrencyRevenueDto[];
 }
 
 export class AdminUserListItemDto {
@@ -51,6 +58,7 @@ export class AdminDriverListItemDto {
   @ApiProperty({ nullable: true }) email!: string | null;
   @ApiProperty({ nullable: true }) phone!: string | null;
   @ApiProperty({ nullable: true }) vehicleType!: string | null;
+  @ApiProperty({ nullable: true }) zoneName!: string | null;
   @ApiProperty() status!: string;
   @ApiProperty() availability!: string;
   @ApiProperty() ratingAvg!: number;
@@ -76,7 +84,12 @@ export class AdminAuditLogDto {
   @ApiProperty() action!: string;
   @ApiProperty() entityType!: string;
   @ApiProperty({ nullable: true }) entityId!: string | null;
+  @ApiProperty({ nullable: true }) oldValue!: unknown | null;
+  @ApiProperty({ nullable: true }) newValue!: unknown | null;
   @ApiProperty({ nullable: true }) ipAddress!: string | null;
+  @ApiProperty({ nullable: true }) userAgent!: string | null;
+  @ApiProperty({ nullable: true }) deviceInfo!: string | null;
+  @ApiProperty({ nullable: true }) requestId!: string | null;
   @ApiProperty() createdAt!: string;
 }
 

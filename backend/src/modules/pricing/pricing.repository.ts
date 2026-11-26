@@ -1,11 +1,44 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
 import { DatabaseService } from '../../database/database.service';
+
+function pricingPointInCoverage(value: unknown, longitude: number, latitude: number): boolean {
+  const geometry = value as { type?: unknown; coordinates?: unknown };
+  if (!geometry || (geometry.type !== 'Polygon' && geometry.type !== 'MultiPolygon')) return false;
+  const polygons: any[] = geometry.type === 'Polygon' ? [geometry.coordinates]
+    : (Array.isArray(geometry.coordinates) ? geometry.coordinates : []);
+  const insideRing = (ring: number[][]): boolean => {
+    let inside = false;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const [xi, yi] = ring[i]; const [xj, yj] = ring[j];
+      const cross = (longitude - xi) * (yj - yi) - (latitude - yi) * (xj - xi);
+      if (Math.abs(cross) < 1e-10 && longitude >= Math.min(xi, xj) - 1e-10
+        && longitude <= Math.max(xi, xj) + 1e-10 && latitude >= Math.min(yi, yj) - 1e-10
+        && latitude <= Math.max(yi, yj) + 1e-10) return true;
+      if (((yi > latitude) !== (yj > latitude))
+        && longitude < ((xj - xi) * (latitude - yi)) / (yj - yi) + xi) inside = !inside;
+    }
+    return inside;
+  };
+  return polygons.some((polygon) => Array.isArray(polygon) && Array.isArray(polygon[0])
+    && insideRing(polygon[0]) && !polygon.slice(1).some((hole: number[][]) => insideRing(hole)));
+}
+
+export interface DistanceTierRow {
+  id: string;
+  zone_id: string;
+  min_distance_km: string | number;
+  max_distance_km: string | number | null;
+  delivery_fee: string | number;
+  is_active: boolean;
+}
 
 export interface ZoneRow {
   id: string;
   city: string;
   name_ar: string;
   name_en: string;
+  city_id?: string | null;
+  district_id?: string | null;
   base_delivery_fee: string | number;
   fee_per_km: string | number;
   min_order_amount: string | number;
@@ -13,12 +46,36 @@ export interface ZoneRow {
   surge_multiplier: string | number;
   fuel_surcharge: string | number;
   is_active: boolean;
+  coverage_geojson?: unknown | null;
+  coverage_status?: 'unverified' | 'verified' | 'rejected';
+  coverage_verified_at?: Date | null;
+  district_source_status?: string | null;
 }
 
 @Injectable()
 export class PricingRepository {
+  private readonly logger = new Logger(PricingRepository.name);
+
   constructor(private readonly db: DatabaseService) {}
 
+  async getStoreQuoteDetails(storeId: string): Promise<{
+    id: string; latitude: string | number; longitude: string | number;
+    delivery_fee: string | number; min_order_amount: string | number; currency: string;
+  } | null> {
+    const store = await this.db.query<{
+      id: string; latitude: string | number; longitude: string | number;
+      delivery_fee: string | number; min_order_amount: string | number;
+    }>(
+      `SELECT id, latitude, longitude, delivery_fee, min_order_amount
+       FROM stores WHERE id = $1 AND deleted_at IS NULL LIMIT 1`,
+      [storeId],
+    );
+    if (!store.rows[0]) return null;
+    const currency = await this.db.query<{ value: unknown }>(
+      `SELECT value FROM settings WHERE key = 'currency' LIMIT 1`,
+    );
+    return { ...store.rows[0], currency: String(currency.rows[0]?.value ?? 'USD').replace(/"/g, '') };
+  }
   /**
    * ابحث عن zone مناسق حسب إحداثيات (اختياري: city).
    * حالياً: نختار zone يطابق city (لو متوفر)، وإلا نختار أول zone نشط.
@@ -28,35 +85,187 @@ export class PricingRepository {
     latitude?: number;
     longitude?: number;
   }): Promise<ZoneRow | null> {
-    if (params.city) {
-      const r = await this.db.query<ZoneRow>(
-        `
-        SELECT id, city, name_ar, name_en,
-               base_delivery_fee, fee_per_km, min_order_amount,
-               free_delivery_threshold, surge_multiplier, fuel_surcharge,
-               is_active
-        FROM delivery_zones
-        WHERE is_active = true AND city = $1
-        ORDER BY base_delivery_fee ASC
-        LIMIT 1
-        `,
-        [params.city],
-      );
-      if (r.rows[0]) return r.rows[0];
-    }
+    if (!Number.isFinite(params.latitude) || !Number.isFinite(params.longitude)) return null;
+    const r = await this.db.query<ZoneRow & { coverage_geojson: unknown }>(
+      `SELECT z.id, z.city, z.name_ar, z.name_en, z.city_id, z.district_id,
+              z.base_delivery_fee, z.fee_per_km, z.min_order_amount,
+              z.free_delivery_threshold, z.surge_multiplier, z.fuel_surcharge,
+              z.is_active, z.coverage_geojson
+       FROM delivery_zones z
+       WHERE z.is_active = true AND z.coverage_status = 'verified'
+         AND z.coverage_geojson IS NOT NULL AND z.coverage_verified_at IS NOT NULL
+         AND z.coverage_verified_by IS NOT NULL
+         AND length(trim(coalesce(z.coverage_verification_note, ''))) >= 8
+         AND ($1::text IS NULL OR z.city = $1)
+       ORDER BY z.city ASC, z.name_ar ASC`,
+      [params.city ?? null],
+    );
+    const matches = r.rows.filter((zone) => pricingPointInCoverage(
+      zone.coverage_geojson, params.longitude!, params.latitude!,
+    ));
+    return matches.length === 1 ? matches[0] : null;
+  }
 
-    // Fallback: أول zone نشط
+  async findAddressForUser(addressId: string, userId: string): Promise<{
+    zone_id: string | null;
+    latitude: string | number;
+    longitude: string | number;
+  } | null> {
+    const r = await this.db.query<{
+      zone_id: string | null;
+      latitude: string | number;
+      longitude: string | number;
+    }>(
+      `SELECT zone_id, latitude, longitude
+       FROM addresses
+       WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL
+       LIMIT 1`,
+      [addressId, userId],
+    );
+    return r.rows[0] ?? null;
+  }
+  async getZoneCoverage(zoneId: string): Promise<unknown | null> {
+    const r = await this.db.query<{ coverage_geojson: unknown | null }>(
+      `SELECT coverage_geojson FROM delivery_zones
+       WHERE id = $1 AND is_active = true AND coverage_status = 'verified'
+       LIMIT 1`, [zoneId],
+    );
+    return r.rows[0]?.coverage_geojson ?? null;
+  }
+
+  async isZoneVerifiedForDelivery(zoneId: string): Promise<boolean> {
+    const r = await this.db.query<{ eligible: boolean }>(
+      `SELECT EXISTS (
+         SELECT 1 FROM delivery_zones z
+         WHERE z.id = $1
+           AND z.coverage_status = 'verified' AND z.coverage_geojson IS NOT NULL
+           AND z.coverage_verified_at IS NOT NULL AND z.coverage_verified_by IS NOT NULL
+           AND length(trim(coalesce(z.coverage_verification_note, ''))) >= 8
+       ) AS eligible`, [zoneId],
+    );
+    return r.rows[0]?.eligible === true;
+  }
+
+  async updateZoneCoverage(input: {
+    zoneId: string; geojson: Record<string, unknown> | null;
+    status: 'unverified' | 'verified' | 'rejected'; actorId: string; note: string;
+  }): Promise<boolean> {
+    const r = await this.db.query<{ id: string }>(
+      `UPDATE delivery_zones SET
+         coverage_geojson = $2::jsonb,
+         coverage_status = $3::text,
+         coverage_verified_at = CASE WHEN $3::text = 'verified' THEN now() ELSE NULL END,
+         coverage_verified_by = CASE WHEN $3::text = 'verified' THEN $4::uuid ELSE NULL END,
+         coverage_verification_note = $5,
+         is_active = CASE WHEN $3::text <> 'verified' THEN false ELSE is_active END,
+         updated_at = now()
+       WHERE id = $1 RETURNING id`,
+      [input.zoneId, input.geojson ? JSON.stringify(input.geojson) : null, input.status, input.actorId, input.note],
+    );
+    return r.rows.length > 0;
+  }
+
+  async listDistanceTiers(zoneId: string): Promise<DistanceTierRow[]> {
+    const r = await this.db.query<DistanceTierRow>(
+      `SELECT id, zone_id, min_distance_km, max_distance_km, delivery_fee, is_active
+       FROM delivery_zone_distance_tiers
+       WHERE zone_id = $1
+       ORDER BY min_distance_km ASC, created_at ASC`,
+      [zoneId],
+    );
+    return r.rows;
+  }
+
+  async listActiveDistanceTiers(zoneId: string): Promise<DistanceTierRow[]> {
+    const r = await this.db.query<DistanceTierRow>(
+      `SELECT id, zone_id, min_distance_km, max_distance_km, delivery_fee, is_active
+       FROM delivery_zone_distance_tiers
+       WHERE zone_id = $1 AND is_active = true
+       ORDER BY min_distance_km ASC`,
+      [zoneId],
+    );
+    return r.rows;
+  }
+
+  async getDistanceTierById(id: string): Promise<DistanceTierRow | null> {
+    const r = await this.db.query<DistanceTierRow>(
+      `SELECT id, zone_id, min_distance_km, max_distance_km, delivery_fee, is_active
+       FROM delivery_zone_distance_tiers WHERE id = $1 LIMIT 1`, [id],
+    );
+    return r.rows[0] ?? null;
+  }
+
+  async createDistanceTier(input: {
+    zoneId: string; minDistanceKm: number; maxDistanceKm: number | null; deliveryFee: number;
+  }): Promise<DistanceTierRow> {
+    const r = await this.db.query<DistanceTierRow>(
+      `INSERT INTO delivery_zone_distance_tiers
+       (zone_id, min_distance_km, max_distance_km, delivery_fee)
+       VALUES ($1, $2, $3, $4)
+       RETURNING id, zone_id, min_distance_km, max_distance_km, delivery_fee, is_active`,
+      [input.zoneId, input.minDistanceKm, input.maxDistanceKm, input.deliveryFee],
+    );
+    return r.rows[0];
+  }
+
+  async updateDistanceTier(id: string, fields: {
+    minDistanceKm?: number; maxDistanceKm?: number | null; deliveryFee?: number; isActive?: boolean;
+  }): Promise<DistanceTierRow | null> {
+    const columns: Array<[string, unknown]> = [
+      ['min_distance_km', fields.minDistanceKm],
+      ['max_distance_km', fields.maxDistanceKm],
+      ['delivery_fee', fields.deliveryFee],
+      ['is_active', fields.isActive],
+    ];
+    const sets: string[] = [];
+    const values: unknown[] = [];
+    for (const [column, value] of columns) {
+      if (value !== undefined) { values.push(value); sets.push(`${column} = ${values.length}`); }
+    }
+    if (!sets.length) {
+      const current = await this.db.query<DistanceTierRow>(
+        `SELECT id, zone_id, min_distance_km, max_distance_km, delivery_fee, is_active
+         FROM delivery_zone_distance_tiers WHERE id = $1 LIMIT 1`, [id]);
+      return current.rows[0] ?? null;
+    }
+    values.push(id);
+    const r = await this.db.query<DistanceTierRow>(
+      `UPDATE delivery_zone_distance_tiers SET ${sets.join(', ')}, updated_at = now()
+       WHERE id = ${values.length}
+       RETURNING id, zone_id, min_distance_km, max_distance_km, delivery_fee, is_active`,
+      values,
+    );
+    return r.rows[0] ?? null;
+  }
+
+  async listZonesForAdmin(): Promise<ZoneRow[]> {
     const r = await this.db.query<ZoneRow>(
-      `
-      SELECT id, city, name_ar, name_en,
-             base_delivery_fee, fee_per_km, min_order_amount,
-             free_delivery_threshold, surge_multiplier, fuel_surcharge,
-             is_active
-      FROM delivery_zones
-      WHERE is_active = true
-      ORDER BY city ASC, base_delivery_fee ASC
-      LIMIT 1
-      `,
+      `SELECT z.id, z.city, z.name_ar, z.name_en, z.city_id, z.district_id,
+              z.base_delivery_fee, z.fee_per_km, z.min_order_amount,
+              z.free_delivery_threshold, z.surge_multiplier, z.fuel_surcharge,
+              z.is_active, z.coverage_status, z.coverage_verified_at,
+              d.source_status AS district_source_status
+       FROM delivery_zones z
+       LEFT JOIN districts d ON d.id = z.district_id
+       ORDER BY z.city ASC, z.name_ar ASC`,
+    );
+    return r.rows;
+  }
+
+  async createZone(input: { cityId: string; nameAr: string; nameEn: string }): Promise<ZoneRow | null> {
+    const r = await this.db.query<ZoneRow>(
+      `INSERT INTO delivery_zones (
+         city, name_ar, name_en, city_id, district_id,
+         base_delivery_fee, fee_per_km, min_order_amount, free_delivery_threshold,
+         surge_multiplier, fuel_surcharge, is_active
+       )
+       SELECT c.name_ar, $2, $3, c.id, NULL,
+              0, 0, 0, NULL, 1, 0, false
+       FROM cities c WHERE c.id = $1 AND c.is_active = true
+       RETURNING id, city, name_ar, name_en, city_id, district_id,
+                 base_delivery_fee, fee_per_km, min_order_amount,
+                 free_delivery_threshold, surge_multiplier, fuel_surcharge, is_active`,
+      [input.cityId, input.nameAr.trim(), input.nameEn.trim()],
     );
     return r.rows[0] ?? null;
   }
@@ -64,14 +273,38 @@ export class PricingRepository {
   async getZoneById(id: string): Promise<ZoneRow | null> {
     const r = await this.db.query<ZoneRow>(
       `
-      SELECT id, city, name_ar, name_en,
-             base_delivery_fee, fee_per_km, min_order_amount,
-             free_delivery_threshold, surge_multiplier, fuel_surcharge,
-             is_active
-      FROM delivery_zones
-      WHERE id = $1
+      SELECT z.id, z.city, z.name_ar, z.name_en, z.city_id, z.district_id,
+             z.base_delivery_fee, z.fee_per_km, z.min_order_amount,
+             z.free_delivery_threshold, z.surge_multiplier, z.fuel_surcharge,
+             z.is_active, z.coverage_status, z.coverage_verified_at,
+             d.source_status AS district_source_status
+      FROM delivery_zones z
+      LEFT JOIN districts d ON d.id = z.district_id
+      WHERE z.id = $1
       LIMIT 1
       `,
+      [id],
+    );
+    return r.rows[0] ?? null;
+  }
+
+  /**
+   * Public single-zone lookup mirrors listActiveZones: inactive and legacy
+   * unverified rows must never expose old base/per-km values as customer fees.
+   * Admin workflows continue to use getZoneById for the full legacy record.
+   */
+  async getActiveVerifiedZoneById(id: string): Promise<ZoneRow | null> {
+    const r = await this.db.query<ZoneRow>(
+      `SELECT z.id, z.city, z.name_ar, z.name_en, z.city_id, z.district_id,
+              z.base_delivery_fee, z.fee_per_km, z.min_order_amount,
+              z.free_delivery_threshold, z.surge_multiplier, z.fuel_surcharge,
+              z.is_active, z.coverage_status, z.coverage_verified_at
+       FROM delivery_zones z
+       WHERE z.id = $1 AND z.is_active = true AND z.coverage_status = 'verified'
+         AND z.coverage_geojson IS NOT NULL
+         AND z.coverage_verified_at IS NOT NULL AND z.coverage_verified_by IS NOT NULL
+         AND length(trim(coalesce(z.coverage_verification_note, ''))) >= 8
+       LIMIT 1`,
       [id],
     );
     return r.rows[0] ?? null;
@@ -80,16 +313,89 @@ export class PricingRepository {
   async listActiveZones(): Promise<ZoneRow[]> {
     const r = await this.db.query<ZoneRow>(
       `
-      SELECT id, city, name_ar, name_en,
+      SELECT id, city, name_ar, name_en, city_id, district_id,
              base_delivery_fee, fee_per_km, min_order_amount,
              free_delivery_threshold, surge_multiplier, fuel_surcharge,
              is_active
-      FROM delivery_zones
-      WHERE is_active = true
+      FROM delivery_zones z
+      WHERE z.is_active = true AND z.coverage_status = 'verified'
+        AND z.coverage_geojson IS NOT NULL
+        AND z.coverage_verified_at IS NOT NULL AND z.coverage_verified_by IS NOT NULL
+        AND length(trim(coalesce(z.coverage_verification_note, ''))) >= 8
       ORDER BY city ASC, name_ar ASC
       `,
     );
     return r.rows;
+  }
+
+  /**
+   * Road distance from the configured routing provider.
+   * ROUTING_API_URL must be the HeiGIT ORS driving-car JSON directions endpoint.
+   * Sends [longitude, latitude] coordinates and reads routes[0].summary.distance in meters.
+   * No straight-line fallback is permitted for charging.
+   */
+  async calculateRouteDistanceKm(
+    originLat: number, originLng: number, destinationLat: number, destinationLng: number,
+  ): Promise<number> {
+    const endpoint = process.env.ROUTING_API_URL?.trim();
+    if (!endpoint) {
+      throw new ServiceUnavailableException({
+        code: 'ROUTING_NOT_CONFIGURED',
+        message: 'خدمة حساب مسافة الطريق غير مهيأة؛ لا يمكن تأكيد رسوم التوصيل حالياً.',
+      });
+    }
+    let url: URL;
+    try { url = new URL(endpoint); } catch {
+      throw new ServiceUnavailableException({ code: 'ROUTING_CONFIG_INVALID', message: 'إعداد خدمة التوجيه غير صالح.' });
+    }
+    const apiKey = process.env.ROUTING_API_KEY?.trim();
+    if (url.origin !== 'https://api.heigit.org'
+        || url.pathname !== '/openrouteservice/v2/directions/driving-car/json'
+        || url.username || url.password || url.search || url.hash || !apiKey) {
+      throw new ServiceUnavailableException({
+        code: 'ROUTING_CONFIG_INVALID',
+        message: 'يجب إعداد عنوان ORS الرسمي ومفتاح API صالحين عبر إعدادات الخدمة.',
+      });
+    }
+    let providerStatus: number | null = null;
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          authorization: apiKey,
+        },
+        body: JSON.stringify({
+          coordinates: [
+            [originLng, originLat],
+            [destinationLng, destinationLat],
+          ],
+          units: 'm',
+        }),
+        redirect: 'error',
+        signal: AbortSignal.timeout(10000),
+      });
+      providerStatus = response.status;
+      if (!response.ok) throw new Error('ORS_REQUEST_FAILED');
+      const data = await response.json() as {
+        routes?: Array<{ summary?: { distance?: unknown } }>;
+      };
+      const meters = data?.routes?.[0]?.summary?.distance;
+      const distance = typeof meters === 'number' ? meters / 1000 : Number.NaN;
+      if (!Number.isFinite(distance) || distance < 0 || distance > 500) {
+        throw new Error('ORS returned an invalid or missing route distance');
+      }
+      return distance;
+    } catch (error) {
+      const errorType = error instanceof Error ? error.name : 'UnknownError';
+      this.logger.warn(
+        `ORS directions request failed${providerStatus === null ? '' : ` (HTTP ${providerStatus})`}; ${errorType}`,
+      );
+      throw new ServiceUnavailableException({
+        code: 'ROUTING_UNAVAILABLE',
+        message: 'تعذر حساب مسافة الطريق من مزود التوجيه؛ لم يتم استخدام مسافة خط مستقيم أو رسوم بديلة.',
+      });
+    }
   }
 
   /**
@@ -174,7 +480,7 @@ export class PricingRepository {
       UPDATE delivery_zones
       SET ${sets.join(', ')}, updated_at = now()
       WHERE id = $${i}
-      RETURNING id, city, name_ar, name_en,
+      RETURNING id, city, name_ar, name_en, city_id, district_id,
                 base_delivery_fee, fee_per_km, min_order_amount,
                 free_delivery_threshold, surge_multiplier, fuel_surcharge,
                 is_active

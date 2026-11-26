@@ -60,7 +60,8 @@ export class DriverOrderResponseDto {
   items?: DriverOrderItemDto[];
 }
 
-export class DriverEarningsResponseDto {
+export class DriverCurrencyEarningsDto {
+  @ApiProperty() currency!: string;
   @ApiProperty() totalEarnings!: number;
   @ApiProperty() totalDeliveries!: number;
   @ApiProperty() todayEarnings!: number;
@@ -69,4 +70,16 @@ export class DriverEarningsResponseDto {
   @ApiProperty() weekDeliveries!: number;
   @ApiProperty() monthEarnings!: number;
   @ApiProperty() monthDeliveries!: number;
+}
+
+export class DriverEarningsResponseDto {
+  @ApiProperty({ description: 'Legacy totals are zero when multiple currencies are present.' }) totalEarnings!: number;
+  @ApiProperty() totalDeliveries!: number;
+  @ApiProperty() todayEarnings!: number;
+  @ApiProperty() todayDeliveries!: number;
+  @ApiProperty() weekEarnings!: number;
+  @ApiProperty() weekDeliveries!: number;
+  @ApiProperty() monthEarnings!: number;
+  @ApiProperty() monthDeliveries!: number;
+  @ApiProperty({ type: [DriverCurrencyEarningsDto] }) currencyBreakdown!: DriverCurrencyEarningsDto[];
 }

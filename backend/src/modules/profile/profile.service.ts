@@ -89,10 +89,20 @@ export class ProfileService {
     }
 
     const newHash = await bcrypt.hash(dto.newPassword, BCRYPT_ROUNDS);
-    await this.repo.updatePassword(userId, newHash);
-
-    // إبطال كل الجلسات بعد تغيير كلمة المرور
-    const revoked = await this.repo.revokeAllRefreshTokens(userId);
+    // Change the password and revoke every refresh session in one transaction.
+    // A compare-and-swap protects against concurrent password-change requests.
+    const revoked = await this.repo.changePasswordAndRevokeAllRefreshTokens(
+      userId,
+      currentHash,
+      newHash,
+    );
+    if (revoked === null) {
+      throw new BadRequestException({
+        code: ErrorCode.ValidationFailed,
+        message: 'Password changed concurrently; please retry with your current password',
+        details: [{ field: 'currentPassword', constraints: ['changed concurrently'] }],
+      });
+    }
 
     return { status: 'ok', revokedSessions: revoked };
   }

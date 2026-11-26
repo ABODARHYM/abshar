@@ -11,6 +11,7 @@ import { DispatchService } from '../dispatch/dispatch.service';
 import { DriverCashService } from '../driver-cash/driver-cash.service';
 import { DriverCashRepository } from '../driver-cash/driver-cash.repository';
 import { LoyaltyService } from '../loyalty/loyalty.service';
+import { ReferralService } from '../referral/referral.service';
 import {
   OrderStatus,
   CancellationReason,
@@ -44,6 +45,7 @@ export class DriverService {
     private readonly driverCash: DriverCashService,
     private readonly driverCashRepo: DriverCashRepository,
     private readonly loyalty: LoyaltyService,
+    private readonly referrals: ReferralService,
   ) {}
 
   // ───── Profile ─────
@@ -329,6 +331,7 @@ export class DriverService {
             order.order_number,
             note ?? reasonCode,
           );
+          await this.notifications.notifyStoreOrderCancelled(order.store_id, order.order_number, note ?? reasonCode);
         } catch (err) {
           console.warn('[driver] notify cancel failed:', (err as Error).message);
         }
@@ -353,15 +356,29 @@ export class DriverService {
   async getEarnings(userId: string): Promise<DriverEarningsResponseDto> {
     await this.requireDriver(userId);
     const e = await this.repo.getEarnings(userId);
+    const breakdown = e.currency_breakdown.map((row) => ({
+      currency: row.currency,
+      totalEarnings: Number(row.total_earnings),
+      totalDeliveries: Number(row.total_deliveries),
+      todayEarnings: Number(row.today_earnings),
+      todayDeliveries: Number(row.today_deliveries),
+      weekEarnings: Number(row.week_earnings),
+      weekDeliveries: Number(row.week_deliveries),
+      monthEarnings: Number(row.month_earnings),
+      monthDeliveries: Number(row.month_deliveries),
+    }));
+    const singleCurrency = breakdown.length === 1 ? breakdown[0] : null;
     return {
-      totalEarnings: Number(e.total_earnings),
-      totalDeliveries: Number(e.total_deliveries),
-      todayEarnings: Number(e.today_earnings),
-      todayDeliveries: Number(e.today_deliveries),
-      weekEarnings: Number(e.week_earnings),
-      weekDeliveries: Number(e.week_deliveries),
-      monthEarnings: Number(e.month_earnings),
-      monthDeliveries: Number(e.month_deliveries),
+      // Legacy scalar money fields are populated only when they represent one currency.
+      totalEarnings: singleCurrency?.totalEarnings ?? 0,
+      totalDeliveries: breakdown.reduce((sum, row) => sum + row.totalDeliveries, 0),
+      todayEarnings: singleCurrency?.todayEarnings ?? 0,
+      todayDeliveries: breakdown.reduce((sum, row) => sum + row.todayDeliveries, 0),
+      weekEarnings: singleCurrency?.weekEarnings ?? 0,
+      weekDeliveries: breakdown.reduce((sum, row) => sum + row.weekDeliveries, 0),
+      monthEarnings: singleCurrency?.monthEarnings ?? 0,
+      monthDeliveries: breakdown.reduce((sum, row) => sum + row.monthDeliveries, 0),
+      currencyBreakdown: breakdown,
     };
   }
 
@@ -377,7 +394,44 @@ export class DriverService {
     await this.requireDriver(userId);
     try {
       const updated = await this.repo.transitionOrderStatus(
-        orderId, userId, expectedFrom, toStatus, note,
+        orderId,
+        userId,
+        expectedFrom,
+        toStatus,
+        note,
+        undefined,
+        async (client, deliveredOrder) => {
+          // Commission and delivery-time ledger effects commit atomically
+          // with the delivered status and its history record.
+          await this.finance.computeCommissionForOrder(orderId, client);
+
+          // Loyalty points are part of the same transaction as delivery and finance.
+          // The repository's order-earn unique index makes retries idempotent.
+          await this.loyalty.earnFromOrderInTransaction(
+            client,
+            deliveredOrder.customer_id,
+            orderId,
+            Number(deliveredOrder.total),
+          );
+
+          // Pay both referral bonuses only on the referred customer's first
+          // successful delivery, atomically with the delivered order.
+          await this.referrals.rewardOnFirstDeliveredOrder(
+            client,
+            deliveredOrder.customer_id,
+            orderId,
+            userId,
+          );
+
+          if (deliveredOrder.payment_method === 'cash_on_delivery' && Number(deliveredOrder.total) > 0) {
+            await this.driverCashRepo.recordCashCollection(client, {
+              driverId: userId,
+              orderId,
+              amount: Number(deliveredOrder.total),
+              currency: deliveredOrder.currency || 'YER',
+            });
+          }
+        },
       );
       if (!updated) {
         throw new NotFoundException({
@@ -387,70 +441,54 @@ export class DriverService {
       const full = await this.repo.findOrderForDriver(orderId, userId);
       const items = await this.repo.listOrderItems(orderId);
 
-      // احسب العمولة عند التسليم
+      if (full && toStatus !== 'delivered') {
+        const statusMessages: Record<string, { title: string; body: string }> = {
+          pickedUp: { title: 'تم استلام طلبك', body: `استلم المندوب طلبك ${full.order_number} من المتجر` },
+          driverGoingToCustomer: { title: 'المندوب في الطريق إليك', body: `طلبك ${full.order_number} في طريقه إليك الآن` },
+          driverArrivedCustomer: { title: 'وصل المندوب', body: `وصل المندوب لتسليم طلبك ${full.order_number}` },
+        };
+        const storeStatusMessages: Record<string, { title: string; body: string }> = {
+          pickedUp: { title: 'تم استلام الطلب من متجرك', body: `استلم المندوب الطلب ${full.order_number} من متجرك` },
+          driverGoingToCustomer: { title: 'المندوب في طريقه للعميل', body: `بدأ المندوب توصيل الطلب ${full.order_number} إلى العميل` },
+          driverArrivedCustomer: { title: 'وصل المندوب للعميل', body: `وصل المندوب لتسليم الطلب ${full.order_number}` },
+        };
+        const message = statusMessages[toStatus];
+        if (message) {
+          try {
+            await this.notifications.notifyOrderStatusChanged(full.customer_id, full.order_number, message.title, message.body);
+          } catch (err) {
+            console.warn('[driver] notify customer status failed:', (err as Error).message);
+          }
+        }
+        const storeMessage = storeStatusMessages[toStatus];
+        if (storeMessage) {
+          try {
+            await this.notifications.notifyStoreOrderStatusChanged(full.store_id, full.order_number, storeMessage.title, storeMessage.body);
+          } catch (err) {
+            console.warn('[driver] notify store status failed:', (err as Error).message);
+          }
+        }
+      }
       if (toStatus === 'delivered') {
-        try {
-          await this.finance.computeCommissionForOrder(orderId);
-        } catch (err) {
-          console.warn('[driver] commission compute failed:', (err as Error).message);
-        }
-
-        // ═══ Driver Cash — تسجيل الأرباح + COD ═══
-        if (full) {
-          try {
-            const currency = full.currency || 'YER';
-            const deliveryFee = Number(full.delivery_fee);
-            const total = Number(full.total);
-            const paymentMethod = full.payment_method;
-
-            // 1) driver_earning (من delivery_fee)
-            if (deliveryFee > 0) {
-              await this.driverCashRepo.recordDriverEarning(
-                undefined as any,  // لا نحتاج transaction خارجي
-                { driverId: userId, orderId, amount: deliveryFee, currency },
-              );
-            }
-
-            // 2) cod_collection (إذا COD)
-            if (paymentMethod === 'cash_on_delivery' && total > 0) {
-              await this.driverCashRepo.recordCashCollection(
-                undefined as any,
-                { driverId: userId, orderId, amount: total, currency },
-              );
-            }
-
-            console.log(
-              `[driver] cash recorded: earning=${deliveryFee} cod=${paymentMethod === 'cash_on_delivery' ? total : 0} currency=${currency}`,
-            );
-          } catch (err) {
-            console.warn('[driver] cash record failed:', (err as Error).message);
-          }
-
-          // ═══ Loyalty — كسب نقاط للعميل ═══
-          try {
-            await this.loyalty.earnFromOrder(
-              full.customer_id,
-              orderId,
-              Number(full.total),
-              full.currency || 'YER',
-            );
-            console.log(`[driver] loyalty points earned for customer ${full.customer_id}`);
-          } catch (err) {
-            console.warn('[driver] loyalty earn failed:', (err as Error).message);
-          }
-        }
+        // Delivery, finance ledger, cash collection and loyalty points committed atomically.
 
         // إشعار العميل
         if (full) {
           try {
             await this.notifications.notifyOrderDelivered(full.customer_id, full.order_number);
+            try {
+              await this.notifications.notifyStoreOrderStatusChanged(full.store_id, full.order_number, 'تم تسليم الطلب', `تم تسليم الطلب ${full.order_number} بنجاح`);
+            } catch (storeError) {
+              console.warn('[driver] notify store delivered failed:', (storeError as Error).message);
+            }
 
             // 🆕 إشعار أرباح للمندوب
             try {
               await this.notifications.notifyEarningsAdded(
                 full.driver_id!,
                 full.order_number,
-                Number((full as any).driver_earnings ?? (full as any).delivery_fee ?? 0),
+                Number(full.original_delivery_fee ?? full.delivery_fee ?? 0),
+                full.currency || 'UNKNOWN',
               );
             } catch {}
 
@@ -506,7 +544,7 @@ export class DriverService {
     items?: DriverOrderItemRow[],
   ): DriverOrderResponseDto {
     // أرباح السائق = رسوم التوصيل
-    const driverEarning = Number(row.delivery_fee);
+    const driverEarning = Number(row.original_delivery_fee ?? row.delivery_fee);
     const res: DriverOrderResponseDto = {
       id: row.id,
       orderNumber: row.order_number,

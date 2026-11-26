@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { PoolClient } from 'pg';
 import { ErrorCode } from '../../common/error-codes';
 import { buildPage, Paginated } from '../../common/pagination.dto';
 import { LoyaltyRepository, RewardRow } from './loyalty.repository';
@@ -63,15 +64,16 @@ export class LoyaltyService {
 
     try {
       const result = await this.repo.redeem(customerId, reward, await this.repo.getCurrency());
+      const updatedReward = await this.repo.findRewardById(rewardId);
       return {
         success: true,
-        pointsSpent: reward.points_cost,
+        pointsSpent: result.pointsSpent,
         remainingPoints: result.newBalance,
-        reward: this.toReward(reward),
+        reward: this.toReward(updatedReward ?? reward),
       };
     } catch (e) {
-      if ((e as Error).message === 'INSUFFICIENT_POINTS') {
-        throw new BadRequestException({ code: ErrorCode.ValidationFailed, message: 'رصيدك غير كافٍ' });
+      if (['INSUFFICIENT_POINTS', 'REWARD_OUT_OF_STOCK', 'REWARD_UNAVAILABLE'].includes((e as Error).message)) {
+        throw new BadRequestException({ code: ErrorCode.ValidationFailed, message: (e as Error).message === 'INSUFFICIENT_POINTS' ? 'رصيدك غير كافٍ' : 'المكافأة لم تعد متاحة أو نفدت كميتها' });
       }
       throw e;
     }
@@ -107,6 +109,32 @@ export class LoyaltyService {
     const expiresAt = new Date(Date.now() + expiryDays * 86400000);
 
     await this.repo.addPoints(null, {
+      customerId,
+      type: 'earn',
+      points,
+      orderId,
+      description: `Earned from order (${points} pts)`,
+      expiresAt,
+    });
+  }
+
+  /**
+   * Earn order points using the caller's transaction so delivery and reward
+   * points either commit together or roll back together.
+   */
+  async earnFromOrderInTransaction(
+    client: PoolClient,
+    customerId: string,
+    orderId: string,
+    total: number,
+  ): Promise<void> {
+    const points = Math.floor(total * 0.01);
+    if (points <= 0) return;
+
+    const expiryDays = 365;
+    const expiresAt = new Date(Date.now() + expiryDays * 86400000);
+
+    await this.repo.addPoints(client, {
       customerId,
       type: 'earn',
       points,

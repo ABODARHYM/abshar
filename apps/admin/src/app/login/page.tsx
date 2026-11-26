@@ -22,15 +22,39 @@ export default function AdminLogin() {
         body: JSON.stringify({ identifier, password }),
       });
 
-      const data = await res.json();
+      const rawResponse = await res.text();
+      let data: Record<string, unknown>;
 
-      if (!res.ok) {
-        setError(data.message || 'فشل تسجيل الدخول');
+      try {
+        const parsed: unknown = rawResponse ? JSON.parse(rawResponse) : {};
+        if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+          throw new Error('Invalid API response shape');
+        }
+        data = parsed as Record<string, unknown>;
+      } catch {
+        const contentType = res.headers.get('content-type') || 'غير محدد';
+        const requestId = res.headers.get('x-request-id');
+        const isHtml = /^\s*<(?:!doctype\s+html|html|head|body)\b/i.test(rawResponse);
+        const reason = isHtml
+          ? 'وصلت صفحة HTML بدلاً من استجابة API بصيغة JSON'
+          : 'وصل رد من الخادم بتنسيق غير صالح';
+        setError(
+          `${reason} (HTTP ${res.status}). Content-Type: ${contentType}.${requestId ? ` Request ID: ${requestId}.` : ''} تحقق من اتصال لوحة الإدارة بخادم API ثم أعد المحاولة.`,
+        );
         setLoading(false);
         return;
       }
 
-      const roles = data.user?.roles || [];
+      if (!res.ok) {
+        setError(typeof data.message === 'string' ? data.message : 'فشل تسجيل الدخول');
+        setLoading(false);
+        return;
+      }
+
+      const user = data.user as { roles?: unknown } | undefined;
+      const roles = Array.isArray(user?.roles)
+        ? user.roles.filter((role): role is string => typeof role === 'string')
+        : [];
       const allowedRoles = ['admin', 'superAdmin', 'super_admin', 'support', 'finance'];
       const isAdmin = roles.some((r: string) => allowedRoles.includes(r));
 
@@ -40,9 +64,16 @@ export default function AdminLogin() {
         return;
       }
 
-      localStorage.setItem('accessToken', data.tokens.accessToken);
-      localStorage.setItem('refreshToken', data.tokens.refreshToken);
-      localStorage.setItem('user', JSON.stringify(data.user));
+      const tokens = data.tokens as { accessToken?: unknown; refreshToken?: unknown } | undefined;
+      if (typeof tokens?.accessToken !== 'string' || typeof tokens.refreshToken !== 'string' || !user) {
+        setError('استجابة تسجيل الدخول ناقصة: بيانات المستخدم أو الرموز غير مكتملة');
+        setLoading(false);
+        return;
+      }
+
+      localStorage.setItem('accessToken', tokens.accessToken);
+      localStorage.setItem('refreshToken', tokens.refreshToken);
+      localStorage.setItem('user', JSON.stringify(user));
 
       router.push('/');
     } catch (err) {

@@ -1,6 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 
-export class StoreEarningsDto {
+export class StoreCurrencyEarningsDto {
+  @ApiProperty() currency!: string;
   @ApiProperty() todayEarnings!: number;
   @ApiProperty() weekEarnings!: number;
   @ApiProperty() monthEarnings!: number;
@@ -13,6 +14,20 @@ export class StoreEarningsDto {
   @ApiProperty() lastSettlementAt!: string | null;
 }
 
+export class StoreEarningsDto {
+  @ApiProperty({ description: 'Legacy scalar money fields are zero when multiple currencies are present.' }) todayEarnings!: number;
+  @ApiProperty() weekEarnings!: number;
+  @ApiProperty() monthEarnings!: number;
+  @ApiProperty() totalEarnings!: number;
+  @ApiProperty() todayOrders!: number;
+  @ApiProperty() weekOrders!: number;
+  @ApiProperty() monthOrders!: number;
+  @ApiProperty() totalOrders!: number;
+  @ApiProperty() pendingSettlement!: number;
+  @ApiProperty() lastSettlementAt!: string | null;
+  @ApiProperty({ type: [StoreCurrencyEarningsDto] }) currencyBreakdown!: StoreCurrencyEarningsDto[];
+}
+
 export class SettlementDto {
   @ApiProperty() id!: string;
   @ApiProperty() partyType!: string;
@@ -23,6 +38,7 @@ export class SettlementDto {
   @ApiProperty() grossAmount!: number;
   @ApiProperty() commissionAmount!: number;
   @ApiProperty() netAmount!: number;
+  @ApiProperty({ nullable: true }) currency!: string | null;
   @ApiProperty() status!: string;
   @ApiProperty({ nullable: true }) notes!: string | null;
   @ApiProperty({ nullable: true }) settledAt!: string | null;
@@ -33,11 +49,13 @@ export class CommissionDto {
   @ApiProperty() id!: string;
   @ApiProperty() orderId!: string;
   @ApiProperty() orderNumber!: string;
+  @ApiProperty() currency!: string;
   @ApiProperty() storeId!: string;
   @ApiProperty() storeName!: string;
   @ApiProperty() ratePercent!: number;
   @ApiProperty() orderAmount!: number;
   @ApiProperty() deliveryFee!: number;
+  @ApiProperty({ nullable: true }) originalDeliveryFee!: number | null;
   @ApiProperty() discountAmount!: number;
   @ApiProperty() commissionAmount!: number;
   @ApiProperty() storeAmount!: number;

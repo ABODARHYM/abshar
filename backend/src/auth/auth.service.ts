@@ -139,6 +139,7 @@ export class AuthService {
 
   async login(dto: LoginDto, meta: RequestMeta = {}): Promise<AuthResponse> {
     const identifier = dto.identifier.trim();
+    const phoneCandidates = this.buildPhoneLoginCandidates(identifier);
 
     const result = await this.db.query<{
       id: string;
@@ -164,11 +165,11 @@ export class AuthService {
       WHERE deleted_at IS NULL
         AND (
           email = $1::citext
-          OR phone = $1::varchar
+          OR phone = ANY($2::varchar[])
         )
       LIMIT 1
       `,
-      [identifier],
+      [identifier, phoneCandidates],
     );
 
     if (result.rows.length === 0) {
@@ -191,20 +192,29 @@ export class AuthService {
     );
 
     if (!validPassword) {
-      await this.recordFailedLogin(user.id, user.failed_login_attempts);
+      await this.recordFailedLogin(user.id);
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    await this.db.query(
+    const unlocked = await this.db.query<{ id: string }>(
       `
       UPDATE users
       SET failed_login_attempts = 0,
           locked_until = NULL,
           last_login_at = now()
       WHERE id = $1
+        AND status = 'active'
+        AND (locked_until IS NULL OR locked_until <= now())
+      RETURNING id
       `,
       [user.id],
     );
+
+    // A concurrent failed-login request may have locked the account while
+    // bcrypt was checking this password. Never clear that newly applied lock.
+    if (unlocked.rows.length === 0) {
+      throw new UnauthorizedException('Account is temporarily locked');
+    }
 
     const authUser = await this.loadAuthUser(user.id);
     const tokens = await this.issueTokens(authUser, meta, randomUUID());
@@ -262,11 +272,42 @@ export class AuthService {
           `,
           [stored.family_id],
         );
-        throw new UnauthorizedException('Refresh token reuse detected');
+        // Return a sentinel so the family revocation commits before we reject reuse.
+        return { reuseDetected: true as const };
       }
 
       if (stored.expires_at.getTime() <= Date.now()) {
         throw new UnauthorizedException('Refresh token expired');
+      }
+
+      // A refresh token must not create a new session for a disabled or deleted
+      // account. Revoke the whole family and return a sentinel so that revocation
+      // commits before the request is rejected outside the transaction.
+      const accountResult = await client.query<{
+        status: string;
+        deleted_at: Date | null;
+      }>(
+        `
+        SELECT status, deleted_at
+        FROM users
+        WHERE id = $1
+        LIMIT 1
+        `,
+        [stored.user_id],
+      );
+
+      const account = accountResult.rows[0];
+      if (!account || account.status !== 'active' || account.deleted_at) {
+        await client.query(
+          `
+          UPDATE refresh_tokens
+          SET revoked_at = COALESCE(revoked_at, now())
+          WHERE family_id = $1
+            AND revoked_at IS NULL
+          `,
+          [stored.family_id],
+        );
+        return { inactiveAccount: true as const };
       }
 
       const newRawRefresh = this.generateRefreshToken();
@@ -318,10 +359,19 @@ export class AuthService {
       );
 
       return {
+        reuseDetected: false as const,
         userId: stored.user_id,
         newRawRefresh,
       };
     });
+
+    if (rotated.reuseDetected) {
+      throw new UnauthorizedException('Refresh token reuse detected');
+    }
+
+    if ('inactiveAccount' in rotated && rotated.inactiveAccount) {
+      throw new UnauthorizedException('Account is not active');
+    }
 
     const user = await this.loadAuthUser(rotated.userId);
     const accessToken = await this.signAccessToken(user.id);
@@ -436,6 +486,7 @@ export class AuthService {
       LEFT JOIN role_permissions rp ON rp.role_id = r.id
       LEFT JOIN permissions p ON p.id = rp.permission_id
       WHERE u.id = $1
+        AND u.status = 'active'
         AND u.deleted_at IS NULL
       GROUP BY
         u.id,
@@ -464,32 +515,55 @@ export class AuthService {
     };
   }
 
-  private async recordFailedLogin(
-    userId: string,
-    currentAttempts: number,
-  ): Promise<void> {
-    const nextAttempts = currentAttempts + 1;
+  /**
+   * Accept Yemen phone numbers stored locally or with the +967 country code.
+   * Email identifiers remain unchanged and continue to use the email lookup.
+   */
+  private buildPhoneLoginCandidates(identifier: string): string[] {
+    const candidates = new Set<string>([identifier]);
+    const digits = identifier.replace(/\D/g, '');
 
-    if (nextAttempts >= 5) {
-      await this.db.query(
-        `
-        UPDATE users
-        SET failed_login_attempts = 0,
-            locked_until = now() + interval '15 minutes'
-        WHERE id = $1
-        `,
-        [userId],
-      );
-      return;
+    if (!digits) return [...candidates];
+
+    candidates.add(digits);
+    candidates.add('+' + digits);
+
+    let local = digits;
+    if (digits.startsWith('967') && digits.length === 12) {
+      local = digits.slice(3);
+    } else if (digits.startsWith('0') && digits.length === 10) {
+      local = digits.slice(1);
     }
 
+    if (/^7\d{8}$/.test(local)) {
+      candidates.add(local);
+      candidates.add('0' + local);
+      candidates.add('967' + local);
+      candidates.add('+967' + local);
+    }
+
+    return [...candidates];
+  }
+
+  private async recordFailedLogin(userId: string): Promise<void> {
+    // Increment from the current database value so concurrent failures cannot
+    // overwrite one another with the same stale count read during login.
     await this.db.query(
       `
       UPDATE users
-      SET failed_login_attempts = $1
-      WHERE id = $2
+      SET failed_login_attempts = CASE
+            WHEN failed_login_attempts + 1 >= 5 THEN 0
+            ELSE failed_login_attempts + 1
+          END,
+          locked_until = CASE
+            WHEN failed_login_attempts + 1 >= 5
+              THEN now() + interval '15 minutes'
+            ELSE locked_until
+          END
+      WHERE id = $1
+        AND deleted_at IS NULL
       `,
-      [nextAttempts, userId],
+      [userId],
     );
   }
 

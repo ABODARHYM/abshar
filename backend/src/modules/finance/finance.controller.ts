@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -16,7 +17,7 @@ import {
   ApiPropertyOptional,
   ApiTags,
 } from '@nestjs/swagger';
-import { IsIn, IsISO8601, IsOptional, IsString, IsUUID } from 'class-validator';
+import { IsIn, IsISO8601, IsNumber, IsOptional, IsString, IsUUID, MaxLength, Min, MinLength } from 'class-validator';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../../auth/guards/permissions.guard';
 import { RequirePermission } from '../../auth/decorators/require-permission.decorator';
@@ -56,6 +57,19 @@ class LedgerQueryDto extends PaginationQueryDto {
   @IsOptional()
   @IsUUID()
   accountId?: string;
+}
+
+class VerifyOriginalDeliveryFeeDto {
+  @ApiProperty({ minimum: 0, description: 'Verified original delivery fee in the order currency' })
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  amount!: number;
+
+  @ApiProperty({ minLength: 8, maxLength: 500 })
+  @IsString()
+  @MinLength(8)
+  @MaxLength(500)
+  reason!: string;
 }
 
 class CreateSettlementDto {
@@ -115,6 +129,35 @@ export class FinanceController {
     });
   }
 
+  // ═══ Admin: Financial review queue ═══
+
+  @Get('review/unverified-delivery-fees')
+  @RequirePermission('finance.read')
+  @ApiOperation({ summary: 'List delivered orders with unverified original delivery fees' })
+  listUnverifiedDeliveryFees(@Query() query: PaginationQueryDto) {
+    return this.service.listUnverifiedDeliveryFees({ page: query.page, limit: query.limit });
+  }
+
+  @Post('review/orders/:id/verify-delivery-fee')
+  @RequirePermission('settlements.manage')
+  @ApiOperation({ summary: 'Verify an original delivery fee with an immutable audit record' })
+  verifyOriginalDeliveryFee(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: VerifyOriginalDeliveryFeeDto,
+  ) {
+    if (dto.reason.trim().length < 8) {
+      throw new BadRequestException('A meaningful review reason is required');
+    }
+    return this.service.verifyOriginalDeliveryFee({
+      orderId: id,
+      amount: dto.amount,
+      reason: dto.reason.trim(),
+      actorId: user.id,
+      actorRole: user.roles[0] ?? null,
+    });
+  }
+
   // ═══ Admin: Settlements ═══
 
   @Get('settlements')
@@ -138,28 +181,28 @@ export class FinanceController {
     @CurrentUser() user: AuthUser,
     @Body() dto: CreateSettlementDto,
   ) {
-    return this.service.createSettlement(user.id, dto);
+    return this.service.createSettlement(user.id, { ...dto, actorRole: user.roles[0] ?? null });
   }
 
   @Patch('settlements/:id/approve')
   @RequirePermission('settlements.manage')
   @ApiOperation({ summary: 'Approve settlement (admin)' })
   approve(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
-    return this.service.approveSettlement(user.id, id);
+    return this.service.approveSettlement(user.id, user.roles[0] ?? null, id);
   }
 
   @Patch('settlements/:id/paid')
   @RequirePermission('settlements.manage')
   @ApiOperation({ summary: 'Mark settlement as paid (admin)' })
   markPaid(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
-    return this.service.markSettlementPaid(user.id, id);
+    return this.service.markSettlementPaid(user.id, user.roles[0] ?? null, id);
   }
 
   @Patch('settlements/:id/cancel')
   @RequirePermission('settlements.manage')
   @ApiOperation({ summary: 'Cancel settlement (admin)' })
   cancel(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
-    return this.service.cancelSettlement(user.id, id);
+    return this.service.cancelSettlement(user.id, user.roles[0] ?? null, id);
   }
 
   // ═══ Admin: Commissions ═══

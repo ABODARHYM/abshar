@@ -176,28 +176,24 @@ export class OrdersService {
     // 7) العملة
     const currency = await this.repo.getCurrency();
 
-    // 8) ═══ حساب delivery fee من Pricing Engine ═══
-    let deliveryFee = Number(store.delivery_fee); // fallback
-    try {
-      const pricing = await this.pricing.calculate({
-        storeId: store.id,
-        storeLat: Number(store.latitude ?? 0),
-        storeLng: Number(store.longitude ?? 0),
-        storeDeliveryFee: Number(store.delivery_fee),
-        storeMinOrderAmount: Number(store.min_order_amount),
-        addressLat: Number(address.latitude),
-        addressLng: Number(address.longitude),
-        subtotal,
-        currency,
-      });
-      deliveryFee = pricing.deliveryFee;
-
-      console.log(
-        `[orders] pricing: source=${pricing.source} distance=${pricing.distanceKm}km fee=${pricing.deliveryFee}`,
-      );
-    } catch (err) {
-      console.warn('[orders] pricing failed, using store default:', (err as Error).message);
-    }
+    // 8) احسب رسوم التوصيل من شريحة المنطقة المرتبطة بعنوان العميل.
+    // لا يوجد fallback إلى رسوم المتجر أو السعر العام عند غياب التعرفة.
+    const pricing = await this.pricing.calculate({
+      storeId: store.id,
+      zoneId: address.zone_id,
+      storeLat: Number(store.latitude),
+      storeLng: Number(store.longitude),
+      storeDeliveryFee: Number(store.delivery_fee),
+      storeMinOrderAmount: Number(store.min_order_amount),
+      addressLat: Number(address.latitude),
+      addressLng: Number(address.longitude),
+      subtotal,
+      currency,
+    });
+    const deliveryFee = pricing.deliveryFee;
+    console.log(
+      `[orders] pricing: zone=${pricing.zoneId} tier=${pricing.distanceTierId} distance=${pricing.distanceKm}km fee=${pricing.deliveryFee}`,
+    );
 
     // 8.5) ═══ تطبيق الكوبون (إن وُجد) ═══
     let discountTotal = 0;
@@ -211,6 +207,7 @@ export class OrdersService {
           dto.couponCode,
           subtotal,
           store.id,
+          items.map((item) => ({ productId: item.productId, lineTotal: item.lineTotal })),
         );
 
         discountTotal = couponResult.discountAmount;
@@ -248,10 +245,27 @@ export class OrdersService {
 
     // 9) أنشئ الطلب
     const idempotencyKey = dto.idempotencyKey ?? randomUUID();
-    const order = await this.repo.create(customerId, {
+    let order: OrderRow;
+    try {
+      order = await this.repo.create(customerId, {
       storeId: store.id,
       currency,
       deliveryFee: finalDeliveryFee,
+      originalDeliveryFee: pricing.originalDeliveryFee,
+      deliveryPricingSnapshot: {
+        distanceKm: pricing.distanceKm,
+        zoneId: pricing.zoneId!,
+        zoneName: pricing.zoneName,
+        distanceTierId: pricing.distanceTierId!,
+        distanceTierMinKm: pricing.distanceTierMinKm,
+        distanceTierMaxKm: pricing.distanceTierMaxKm,
+        distanceTierFee: pricing.distanceTierFee,
+        distanceSource: pricing.distanceSource,
+        pricingVersion: 1,
+        currency,
+        originalDeliveryFee: pricing.originalDeliveryFee,
+        customerDeliveryFee: finalDeliveryFee,
+      },
       subtotal,
       discountTotal,
       total,
@@ -267,21 +281,15 @@ export class OrdersService {
       customerNotes: dto.customerNotes,
       idempotencyKey,
       items,
-    });
-
-    // 8.6) ═══ تسجيل استخدام الكوبون ═══
-    if (couponId) {
-      try {
-        await this.coupons.recordUsage(
-          customerId,
-          couponId,
-          order.id,
-          discountTotal,
-        );
-        console.log(`[orders] coupon usage recorded: couponId=${couponId} discount=${discountTotal}`);
-      } catch (err) {
-        console.warn('[orders] coupon usage record failed:', (err as Error).message);
+      });
+    } catch (err) {
+      if (['COUPON_USAGE_LIMIT_REACHED', 'COUPON_TERMS_CHANGED'].includes((err as Error).message)) {
+        throw new BadRequestException({
+          code: ErrorCode.ValidationFailed,
+          message: 'تغيّرت شروط الكوبون أو انتهى حد استخدامه؛ يرجى إعادة المحاولة بكوبون صالح',
+        });
       }
+      throw err;
     }
 
     const savedItems = await this.repo.listItems(order.id);
@@ -382,16 +390,13 @@ export class OrdersService {
 
     const items = await this.repo.listItems(updated.id);
 
-    // إشعار المتجر (إن وُجد owner)
+    // Notify the store owner using the store ID; the notification service resolves the owner account.
     try {
-      const ownerUserId = await this.repo.getStoreOwnerId(updated.store_id);
-      if (ownerUserId) {
-        await this.notifications.notifyOrderCancelled(
-          ownerUserId,
-          updated.order_number,
-          note ?? reasonCode,
-        );
-      }
+      await this.notifications.notifyStoreOrderCancelled(
+        updated.store_id,
+        updated.order_number,
+        note ?? reasonCode,
+      );
     } catch (err) {
       console.warn('[orders] cancel notification failed:', (err as Error).message);
     }

@@ -14,12 +14,15 @@ export class DeliveryQuoteDto {
   @ApiProperty({ nullable: true }) source!: string | null;
   @ApiProperty({ nullable: true }) zoneId!: string | null;
   @ApiProperty({ nullable: true }) zoneName!: string | null;
+  @ApiProperty({ nullable: true }) distanceTierId!: string | null;
   @ApiProperty() currency!: string;
 }
 
 export class ZoneResponseDto {
   @ApiProperty() id!: string;
   @ApiProperty() city!: string;
+  @ApiProperty({ nullable: true }) cityId!: string | null;
+  @ApiProperty({ nullable: true }) districtId!: string | null;
   @ApiProperty() nameAr!: string;
   @ApiProperty() nameEn!: string;
   @ApiProperty() baseDeliveryFee!: number;
