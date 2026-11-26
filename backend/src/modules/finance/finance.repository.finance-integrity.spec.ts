@@ -116,7 +116,7 @@ describe('FinanceRepository shared delivery transaction', () => {
 
     expect(result).toBeNull();
     const sql = String(client.query.mock.calls[0][0]);
-    expect(sql).toContain("o.original_delivery_fee IS NOT NULL");
+    expect(sql).toContain("o.original_delivery_fee_verified IS TRUE");
     expect(sql).toContain("$4 <> 'driver'");
     expect(client.query.mock.calls[0][1]).toEqual(['driver-1', '2026-11-01', '2026-11-07', 'driver']);
   });
@@ -145,7 +145,7 @@ describe('FinanceRepository shared delivery transaction', () => {
     await repo.getUnsettledCommissions('driver', 'driver-1', '2026-11-01', '2026-11-07');
 
     const sql = String(db.query.mock.calls[0][0]);
-    expect(sql).toContain("o.original_delivery_fee IS NOT NULL");
+    expect(sql).toContain("o.original_delivery_fee_verified IS TRUE");
     expect(sql).toContain("$4 <> 'driver'");
     expect(db.query.mock.calls[0][1]).toEqual(['driver-1', '2026-11-01', '2026-11-07', 'driver']);
   });
@@ -289,7 +289,7 @@ describe('FinanceRepository shared delivery transaction', () => {
       query: jest.fn()
         .mockResolvedValueOnce({ rows: [{
           id: 'order-review', status: 'delivered', driver_id: 'driver-1',
-          delivery_fee: '5.00', original_delivery_fee: null, verified: false,
+          delivery_fee: '5.00', original_delivery_fee: '12.00', original_delivery_fee_verified: false, verified: false,
         }], rowCount: 1 })
         .mockResolvedValueOnce({ rows: [{ has_commission: false, has_settlement_item: false }], rowCount: 1 })
         .mockResolvedValueOnce({ rows: [{ id: 'order-review' }], rowCount: 1 })
@@ -303,8 +303,8 @@ describe('FinanceRepository shared delivery transaction', () => {
     });
     expect(result).toEqual({ orderId: 'order-review', originalDeliveryFee: 12.5, verified: true });
     expect(String(client.query.mock.calls[1][0])).toContain('has_commission');
-    expect(String(client.query.mock.calls[2][0])).toContain('UPDATE orders SET original_delivery_fee = $1');
-    expect(String(client.query.mock.calls[2][0])).not.toContain('original_delivery_fee_verified');
+    expect(String(client.query.mock.calls[2][0])).toContain('UPDATE orders SET original_delivery_fee = $1, original_delivery_fee_verified = TRUE');
+    expect(client.query.mock.calls[2][1]).toEqual([12.5, 'order-review']);
     expect(String(client.query.mock.calls[3][0])).toContain('INSERT INTO audit_logs');
     expect(client.query.mock.calls[3][1][0]).toBe('admin-1');
     expect(db.transaction).toHaveBeenCalledTimes(1);
@@ -324,6 +324,30 @@ describe('FinanceRepository shared delivery transaction', () => {
       actorId: 'admin-1', actorRole: 'admin',
     })).rejects.toThrow('cannot be lower');
     expect(client.query).toHaveBeenCalledTimes(1);
+  });
+
+  it('treats a non-null legacy fee as unverified when its provenance flag is false', async () => {
+    const historicalCommission = {
+      id: 'legacy-commission-fee', store_id: 'store-1', order_amount: '100.00',
+      delivery_fee: '0.00', original_delivery_fee: '25.00', discount_amount: '0.00',
+      store_amount: '90.00', platform_amount: '10.00', driver_amount: '25.00',
+    };
+    const client = {
+      query: jest.fn()
+        .mockResolvedValueOnce({ rows: [{
+          id: 'legacy-order-fee', store_id: 'store-1', driver_id: 'driver-1',
+          subtotal: '100.00', delivery_fee: '0.00', original_delivery_fee: '25.00',
+          original_delivery_fee_verified: false, discount_total: '0.00', total: '100.00', currency: 'YER',
+        }], rowCount: 1 })
+        .mockResolvedValueOnce({ rows: [historicalCommission], rowCount: 1 })
+        .mockResolvedValueOnce({ rows: [{ account_type: 'store', account_id: 'store-1', direction: 'credit', amount: '90.00', currency: 'YER' }], rowCount: 1 })
+        .mockResolvedValueOnce({ rows: [{ account_type: 'platform', account_id: null, direction: 'credit', amount: '10.00', currency: 'YER' }], rowCount: 1 })
+        .mockResolvedValueOnce({ rows: [], rowCount: 0 }),
+    };
+    const repo = new FinanceRepository({} as any);
+    await repo.computeCommissionForOrder('legacy-order-fee', client as any);
+    expect(client.query).toHaveBeenCalledTimes(5);
+    expect(client.query.mock.calls.some(([sql]) => String(sql).includes("'driver_earning'"))).toBe(false);
   });
 
   it('refuses to invent a driver fee for historical free-delivery orders with unknown originals', async () => {
