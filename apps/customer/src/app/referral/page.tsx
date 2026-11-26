@@ -87,7 +87,7 @@ export default function ReferralPage() {
     if (!codeData) return;
     const text = `انضم إلى ABSHER BI — منصة التوصيل اليمنية!
 استخدم كود الإحالة: ${codeData.referralCode}
-واحصل على ${codeData.rewardOnSignup} نقطة هدية 🎁
+واحصل أنت وصديقك على ${codeData.rewardOnSignup} نقطة عند التسجيل، و${codeData.rewardOnFirstOrder} نقطة إضافية لكل منكما بعد تسليم أول طلب بنجاح 🎁
 ${codeData.shareUrl}`;
 
     if (navigator.share) {
@@ -201,7 +201,7 @@ ${codeData.shareUrl}`;
               { n: '1', icon: '📤', text: 'شارك كودك مع أصدقائك' },
               { n: '2', icon: '🎉', text: 'يسجّل صديقك بالكود' },
               { n: '3', icon: '💰', text: 'تحصلان على 100 نقطة فوراً' },
-              { n: '4', icon: '🎁', text: '+200 نقطة إضافية عند أول طلب' },
+              { n: '4', icon: '🎁', text: '+200 نقطة إضافية لكل منكما بعد تسليم أول طلب للصديق بنجاح' },
             ].map((step) => (
               <div key={step.n} className="flex items-center gap-3">
                 <div className="w-9 h-9 rounded-full bg-[var(--brand-red)]/10 flex items-center justify-center flex-shrink-0 font-black text-sm text-[var(--brand-red-light)]">
