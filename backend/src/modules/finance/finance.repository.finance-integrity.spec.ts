@@ -347,7 +347,8 @@ describe('FinanceRepository shared delivery transaction', () => {
     const repo = new FinanceRepository({} as any);
     await repo.computeCommissionForOrder('legacy-order-fee', client as any);
     expect(client.query).toHaveBeenCalledTimes(5);
-    expect(client.query.mock.calls.some(([sql]) => String(sql).includes("'driver_earning'"))).toBe(false);
+    expect(client.query.mock.calls.some(([sql]) => String(sql).includes("INSERT INTO transactions") && String(sql).includes("'driver_earning'"))).toBe(false);
+    expect(client.query.mock.calls.some(([sql]) => String(sql).includes("SELECT account_type") && String(sql).includes("'driver_earning'"))).toBe(true);
   });
 
   it('refuses to invent a driver fee for historical free-delivery orders with unknown originals', async () => {
