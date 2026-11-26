@@ -156,7 +156,7 @@ export class FinanceRepository {
     return this.db.transaction(async (client: PoolClient) => {
       const current = await client.query(
         `SELECT id, status, driver_id, delivery_fee, original_delivery_fee,
-                (original_delivery_fee IS NOT NULL) AS verified
+                original_delivery_fee_verified AS verified
          FROM orders WHERE id = $1 FOR UPDATE`,
         [params.orderId],
       );
@@ -179,10 +179,13 @@ export class FinanceRepository {
       if (financialHistory.rows[0]?.has_commission || financialHistory.rows[0]?.has_settlement_item || financialHistory.rows[0]?.has_ledger_transaction) {
         throw new ConflictException('Order has historical commission or settlement records; manual balanced reconciliation is required before fee verification');
       }
-      await client.query(
-        `UPDATE orders SET original_delivery_fee = $1 WHERE id = $2 AND original_delivery_fee IS NULL`,
+      const updated = await client.query(
+        `UPDATE orders SET original_delivery_fee = $1, original_delivery_fee_verified = TRUE WHERE id = $2 AND original_delivery_fee_verified IS NOT TRUE`,
         [params.amount, params.orderId],
       );
+      if (updated.rowCount !== 1) {
+        throw new ConflictException('Original delivery fee verification changed concurrently; reload the order and retry');
+      }
       await client.query(
         `INSERT INTO audit_logs
           (actor_user_id, actor_role, action, entity_type, entity_id, old_value, new_value)
@@ -201,7 +204,7 @@ export class FinanceRepository {
        FROM orders o
        WHERE o.status = 'delivered'
          AND o.driver_id IS NOT NULL
-         AND o.original_delivery_fee IS NULL`,
+         AND o.original_delivery_fee_verified IS NOT TRUE`,
     );
     const total = Number.parseInt(count.rows[0]?.count ?? '0', 10);
     const offset = toOffset(query);
@@ -272,7 +275,7 @@ export class FinanceRepository {
           AND o.delivered_at >= ($2::date::timestamp AT TIME ZONE 'Asia/Aden')
           AND o.delivered_at < (($3::date + 1)::timestamp AT TIME ZONE 'Asia/Aden')
           AND ${amountColumn} > 0
-          AND ($4 <> 'driver' OR o.original_delivery_fee IS NOT NULL)
+          AND ($4 <> 'driver' OR o.original_delivery_fee_verified IS TRUE)
           AND NOT EXISTS (
             SELECT 1 FROM settlement_commission_items sci
             WHERE sci.commission_id = c.id
@@ -525,13 +528,14 @@ export class FinanceRepository {
         subtotal: string;
         delivery_fee: string;
         original_delivery_fee: string | null;
+        original_delivery_fee_verified: boolean;
         discount_total: string;
         total: string;
         currency: string;
       }>(
         `
         SELECT id, store_id, driver_id, subtotal, delivery_fee, original_delivery_fee,
-               (original_delivery_fee IS NOT NULL) AS original_delivery_fee_verified,
+               original_delivery_fee_verified,
                discount_total, total, currency
         FROM orders
         WHERE id = $1 AND status = 'delivered'
@@ -550,7 +554,7 @@ export class FinanceRepository {
       );
       let commissionRow = existingRes.rows[0];
       const originalDeliveryFeeVerified =
-        order.original_delivery_fee !== null;
+        order.original_delivery_fee_verified === true;
       if (!originalDeliveryFeeVerified && !commissionRow) {
         throw new ConflictException('Original delivery fee is unknown or unverified for this order; commission requires manual financial review');
       }
@@ -604,7 +608,7 @@ export class FinanceRepository {
 
       if (!commissionRow) return null;
 
-      const originalDeliveryFee = order.original_delivery_fee ?? commissionRow.original_delivery_fee ?? null;
+      const originalDeliveryFee = originalDeliveryFeeVerified ? order.original_delivery_fee : null;
       if (
         commissionRow.store_id !== order.store_id ||
         String(commissionRow.order_amount) !== String(order.subtotal) ||
