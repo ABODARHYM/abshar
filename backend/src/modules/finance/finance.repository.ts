@@ -156,7 +156,7 @@ export class FinanceRepository {
     return this.db.transaction(async (client: PoolClient) => {
       const current = await client.query(
         `SELECT id, status, driver_id, delivery_fee, original_delivery_fee,
-                COALESCE((to_jsonb(orders)->>'original_delivery_fee_verified')::boolean, FALSE) AS verified
+                (original_delivery_fee IS NOT NULL) AS verified
          FROM orders WHERE id = $1 FOR UPDATE`,
         [params.orderId],
       );
@@ -180,7 +180,7 @@ export class FinanceRepository {
         throw new ConflictException('Order has historical commission or settlement records; manual balanced reconciliation is required before fee verification');
       }
       await client.query(
-        `UPDATE orders SET original_delivery_fee = $1, original_delivery_fee_verified = TRUE WHERE id = $2`,
+        `UPDATE orders SET original_delivery_fee = $1 WHERE id = $2 AND original_delivery_fee IS NULL`,
         [params.amount, params.orderId],
       );
       await client.query(
@@ -201,7 +201,7 @@ export class FinanceRepository {
        FROM orders o
        WHERE o.status = 'delivered'
          AND o.driver_id IS NOT NULL
-         AND COALESCE((to_jsonb(o)->>'original_delivery_fee_verified')::boolean, FALSE) = FALSE`,
+         AND o.original_delivery_fee IS NULL`,
     );
     const total = Number.parseInt(count.rows[0]?.count ?? '0', 10);
     const offset = toOffset(query);
@@ -272,7 +272,7 @@ export class FinanceRepository {
           AND o.delivered_at >= ($2::date::timestamp AT TIME ZONE 'Asia/Aden')
           AND o.delivered_at < (($3::date + 1)::timestamp AT TIME ZONE 'Asia/Aden')
           AND ${amountColumn} > 0
-          AND ($4 <> 'driver' OR COALESCE((to_jsonb(o)->>'original_delivery_fee_verified')::boolean, FALSE) = TRUE)
+          AND ($4 <> 'driver' OR o.original_delivery_fee IS NOT NULL)
           AND NOT EXISTS (
             SELECT 1 FROM settlement_commission_items sci
             WHERE sci.commission_id = c.id
@@ -525,14 +525,13 @@ export class FinanceRepository {
         subtotal: string;
         delivery_fee: string;
         original_delivery_fee: string | null;
-        original_delivery_fee_verified: boolean;
         discount_total: string;
         total: string;
         currency: string;
       }>(
         `
         SELECT id, store_id, driver_id, subtotal, delivery_fee, original_delivery_fee,
-               COALESCE((to_jsonb(orders)->>'original_delivery_fee_verified')::boolean, FALSE) AS original_delivery_fee_verified,
+               (original_delivery_fee IS NOT NULL) AS original_delivery_fee_verified,
                discount_total, total, currency
         FROM orders
         WHERE id = $1 AND status = 'delivered'
@@ -551,7 +550,7 @@ export class FinanceRepository {
       );
       let commissionRow = existingRes.rows[0];
       const originalDeliveryFeeVerified =
-        order.original_delivery_fee_verified && order.original_delivery_fee !== null;
+        order.original_delivery_fee !== null;
       if (!originalDeliveryFeeVerified && !commissionRow) {
         throw new ConflictException('Original delivery fee is unknown or unverified for this order; commission requires manual financial review');
       }
