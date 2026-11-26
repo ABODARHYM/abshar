@@ -207,6 +207,7 @@ export class OrdersService {
           dto.couponCode,
           subtotal,
           store.id,
+          items.map((item) => ({ productId: item.productId, lineTotal: item.lineTotal })),
         );
 
         discountTotal = couponResult.discountAmount;
@@ -244,7 +245,9 @@ export class OrdersService {
 
     // 9) أنشئ الطلب
     const idempotencyKey = dto.idempotencyKey ?? randomUUID();
-    const order = await this.repo.create(customerId, {
+    let order: OrderRow;
+    try {
+      order = await this.repo.create(customerId, {
       storeId: store.id,
       currency,
       deliveryFee: finalDeliveryFee,
@@ -278,21 +281,15 @@ export class OrdersService {
       customerNotes: dto.customerNotes,
       idempotencyKey,
       items,
-    });
-
-    // 8.6) ═══ تسجيل استخدام الكوبون ═══
-    if (couponId) {
-      try {
-        await this.coupons.recordUsage(
-          customerId,
-          couponId,
-          order.id,
-          discountTotal,
-        );
-        console.log(`[orders] coupon usage recorded: couponId=${couponId} discount=${discountTotal}`);
-      } catch (err) {
-        console.warn('[orders] coupon usage record failed:', (err as Error).message);
+      });
+    } catch (err) {
+      if (['COUPON_USAGE_LIMIT_REACHED', 'COUPON_TERMS_CHANGED'].includes((err as Error).message)) {
+        throw new BadRequestException({
+          code: ErrorCode.ValidationFailed,
+          message: 'تغيّرت شروط الكوبون أو انتهى حد استخدامه؛ يرجى إعادة المحاولة بكوبون صالح',
+        });
       }
+      throw err;
     }
 
     const savedItems = await this.repo.listItems(order.id);

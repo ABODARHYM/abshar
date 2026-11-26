@@ -47,7 +47,6 @@ describe('planMigrations', () => {
   });
 });
 
-
 describe('stripOuterTransactionStatements', () => {
   it('removes a legacy outer wrapper so the runner owns the atomic transaction', () => {
     const sql = '-- legacy migration\n\nBEGIN;\nCREATE TABLE example (id integer);\nCOMMIT;\n';
@@ -64,10 +63,11 @@ describe('real migration files', () => {
   const dir = join(__dirname, 'migrations');
   const names = orderMigrationNames(readdirSync(dir));
 
-  it('preserves applied migration 031 and appends forward-only finance, notification, delivery-fee, distance-tier, verified geography, route snapshot, and delivery coverage migrations', () => {
+  it('preserves applied migration 031 and appends forward-only finance, notification, delivery-fee, distance-tier, verified geography, route snapshot, delivery coverage, and coupon targeting migrations', () => {
     const numbers = names.map((name) => Number(name.slice(0, 3)));
     expect(numbers.slice(0, 26)).toEqual(Array.from({ length: 26 }, (_, i) => i + 1));
-    expect(numbers.slice(26)).toEqual([31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46]);
+    // Forward-only migrations include loyalty, product coupons, and fee provenance.
+    expect(numbers.slice(26)).toEqual([31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49]);
   });
 
   it('plans finance migrations after an already-applied 031 without out-of-order work', () => {
@@ -81,6 +81,23 @@ describe('real migration files', () => {
       .toEqual(forward.map((migration) => migration.name));
   });
 
+  it('keeps historical original delivery fees explicitly unverified', () => {
+    const sql = readFileSync(join(dir, '049_original_delivery_fee_provenance.sql'), 'utf8');
+    expect(sql).toContain('original_delivery_fee_verified boolean NOT NULL DEFAULT FALSE');
+    expect(sql).toContain('ADD COLUMN IF NOT EXISTS');
+    expect(sql).not.toMatch(/UPDATE\s+orders/i);
+  });
+
+  it('preflights duplicate order-based loyalty earns without mutating historical ledger rows', () => {
+    const sql = readFileSync(join(dir, '047_loyalty_order_earn_idempotency.sql'), 'utf8');
+    expect(sql).toContain('GROUP BY order_id');
+    expect(sql).toContain('HAVING COUNT(*) > 1');
+    expect(sql).toContain('RAISE EXCEPTION');
+    expect(sql).toContain('CREATE UNIQUE INDEX IF NOT EXISTS loyalty_transactions_order_earn_unique');
+    expect(sql).not.toMatch(/DELETE\s+FROM\s+loyalty_transactions/i);
+    expect(sql).not.toMatch(/UPDATE\s+loyalty_transactions/i);
+  });
+
   it('normalizes the legacy 031 wrapper for execution without changing its source checksum', () => {
     const sql = readFileSync(join(dir, '031_store_applications.sql'), 'utf8');
     const normalized = stripOuterTransactionStatements(sql);
@@ -88,7 +105,6 @@ describe('real migration files', () => {
     expect(normalized).not.toMatch(/^\s*COMMIT\s*;\s*$/m);
     expect(checksumOf(sql)).not.toBe(checksumOf(normalized));
   });
-
 
   it('reconciles only active commission links for non-cancelled settlements', () => {
     const sql = readFileSync(join(dir, '040_settlement_yemen_business_timezone.sql'), 'utf8');
@@ -112,7 +128,7 @@ describe('real migration files', () => {
     expect(reconciliation).not.toContain("s.status = 'paid'");
   });
 
-  it('contain every table required by the spec', () => {
+  it('contains every table required by the spec', () => {
     const all = names.map((n) => readFileSync(join(dir, n), 'utf8')).join('\n');
     const required = [
       'users', 'roles', 'permissions', 'user_roles', 'customers', 'drivers', 'stores', 'store_staff',
@@ -127,7 +143,7 @@ describe('real migration files', () => {
     }
   });
 
-  it('define all 13 order states', () => {
+  it('defines all 13 order states', () => {
     const sql = readFileSync(join(dir, '001_extensions_and_types.sql'), 'utf8');
     const states = [
       'pending', 'accepted', 'rejected', 'preparing', 'ready', 'driverAssigned', 'driverGoingToStore',

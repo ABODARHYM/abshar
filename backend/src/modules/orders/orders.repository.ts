@@ -87,6 +87,92 @@ export class OrdersRepository {
     },
   ): Promise<OrderRow> {
     return this.db.transaction(async (client: PoolClient) => {
+      // Coupon validation and consumption are atomic with order creation.
+      // The coupon row lock serializes usage-limit checks and coupon edits.
+      if (payload.couponId) {
+        const locked = await client.query<{
+          is_active: boolean;
+          starts_at: Date | null;
+          expires_at: Date | null;
+          usage_limit: number | null;
+          per_user_limit: number | null;
+          used_count: number;
+          store_id: string | null;
+          min_order_amount: number | string;
+          type: string;
+          value: number | string;
+          max_discount_amount: number | string | null;
+          scope: 'general' | 'products';
+        }>(
+          `SELECT is_active, starts_at, expires_at, usage_limit, per_user_limit,
+                  used_count, store_id, min_order_amount, type, value,
+                  max_discount_amount, scope
+           FROM coupons WHERE id = $1 FOR UPDATE`,
+          [payload.couponId],
+        );
+        const coupon = locked.rows[0];
+        const now = new Date();
+        if (!coupon || !coupon.is_active ||
+            (coupon.starts_at && coupon.starts_at > now) ||
+            (coupon.expires_at && coupon.expires_at <= now) ||
+            (coupon.store_id && coupon.store_id !== payload.storeId) ||
+            (coupon.usage_limit !== null && coupon.used_count >= coupon.usage_limit)) {
+          throw new Error('COUPON_USAGE_LIMIT_REACHED');
+        }
+
+        let eligibleSubtotal = payload.subtotal;
+        if (coupon.scope === 'products') {
+          const selectedProducts = await client.query<{ product_id: string }>(
+            'SELECT product_id FROM coupon_products WHERE coupon_id = $1',
+            [payload.couponId],
+          );
+          const selectedIds = new Set(selectedProducts.rows.map((row) => row.product_id));
+          eligibleSubtotal = payload.items.reduce(
+            (sum, item) => sum + (selectedIds.has(item.productId) ? item.lineTotal : 0),
+            0,
+          );
+          if (eligibleSubtotal <= 0) {
+            throw new Error('COUPON_TERMS_CHANGED');
+          }
+        }
+        if (eligibleSubtotal < Number(coupon.min_order_amount)) {
+          throw new Error('COUPON_TERMS_CHANGED');
+        }
+
+        let expectedDiscount = 0;
+        if (coupon.type === 'free_delivery') {
+          if (payload.discountTotal !== 0 || payload.deliveryFee !== 0) {
+            throw new Error('COUPON_TERMS_CHANGED');
+          }
+        } else if (coupon.type === 'percentage') {
+          expectedDiscount = eligibleSubtotal * Number(coupon.value) / 100;
+          if (coupon.max_discount_amount !== null) {
+            expectedDiscount = Math.min(expectedDiscount, Number(coupon.max_discount_amount));
+          }
+        } else if (coupon.type === 'fixed') {
+          expectedDiscount = Math.min(Number(coupon.value), eligibleSubtotal);
+        } else {
+          throw new Error('COUPON_TERMS_CHANGED');
+        }
+        expectedDiscount = Math.min(expectedDiscount, eligibleSubtotal);
+        if (coupon.type !== 'free_delivery' &&
+            (Math.abs(expectedDiscount - payload.discountTotal) > 0.01 ||
+             payload.deliveryFee !== payload.originalDeliveryFee)) {
+          throw new Error('COUPON_TERMS_CHANGED');
+        }
+
+        if (coupon.per_user_limit !== null) {
+          const usage = await client.query<{ count: string }>(
+            `SELECT COUNT(*)::text AS count
+             FROM coupon_usage WHERE coupon_id = $1 AND user_id = $2`,
+            [payload.couponId, customerId],
+          );
+          if (Number(usage.rows[0]?.count ?? 0) >= coupon.per_user_limit) {
+            throw new Error('COUPON_USAGE_LIMIT_REACHED');
+          }
+        }
+      }
+
       // 1) إنشاء الطلب
       const orderRes = await client.query<OrderRow>(
         `
@@ -97,7 +183,8 @@ export class OrdersRepository {
           delivery_latitude, delivery_longitude,
           recipient_name, recipient_phone, idempotency_key, coupon_id,
           delivery_distance_km, delivery_zone_id, delivery_distance_tier_id,
-          delivery_distance_source, delivery_pricing_version, delivery_pricing_snapshot
+          delivery_distance_source, delivery_pricing_version, delivery_pricing_snapshot,
+          original_delivery_fee_verified
         )
         VALUES (
           $1, $2, 'pending', 'cash_on_delivery', 'pending',
@@ -105,7 +192,7 @@ export class OrdersRepository {
           $9, $10, $11,
           $12, $13,
           $14, $15, $16, $17,
-          $18, $19, $20, $21, $22, $23::jsonb
+          $18, $19, $20, $21, $22, $23::jsonb, TRUE
         )
         RETURNING *
         `,
@@ -169,6 +256,20 @@ export class OrdersRepository {
         `,
         [order.id, customerId],
       );
+
+      // Record coupon consumption before commit; any failure rolls back the order too.
+      if (payload.couponId) {
+        await client.query(
+          `INSERT INTO coupon_usage (coupon_id, user_id, order_id, discount_amount)
+           VALUES ($1, $2, $3, $4)`,
+          [payload.couponId, customerId, order.id, payload.discountTotal],
+        );
+        await client.query(
+          `UPDATE coupons SET used_count = used_count + 1, updated_at = now()
+           WHERE id = $1`,
+          [payload.couponId],
+        );
+      }
 
       return order;
     });
