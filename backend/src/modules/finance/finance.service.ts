@@ -89,7 +89,8 @@ export class FinanceService {
       originalDeliveryFee: row.original_delivery_fee === null ? null : Number(row.original_delivery_fee),
       currency: row.currency,
       deliveredAt: row.delivered_at ? row.delivered_at.toISOString() : null,
-      reviewStatus: 'pending_review',
+      hasFinancialHistory: Boolean(row.has_financial_history),
+      reviewStatus: row.has_financial_history ? 'manual_reconciliation_required' : 'pending_review',
     })), total, query);
   }
 
