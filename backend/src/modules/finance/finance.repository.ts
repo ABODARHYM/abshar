@@ -553,6 +553,7 @@ export class FinanceRepository {
         [orderId],
       );
       let commissionRow = existingRes.rows[0];
+      // The provenance flag is authoritative; a non-null legacy backfill alone is not proof.
       const originalDeliveryFeeVerified =
         order.original_delivery_fee_verified === true;
       if (!originalDeliveryFeeVerified && !commissionRow) {
