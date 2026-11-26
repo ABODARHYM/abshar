@@ -208,7 +208,9 @@ export class FinanceRepository {
     const rows = await this.db.query(
       `SELECT o.id AS order_id, o.order_number, o.driver_id,
               u.full_name AS driver_name, o.store_id, s.name_ar AS store_name,
-              o.delivery_fee, o.original_delivery_fee, o.currency, o.delivered_at
+              o.delivery_fee, o.original_delivery_fee, o.currency, o.delivered_at,
+              (EXISTS (SELECT 1 FROM commissions c WHERE c.order_id = o.id)
+               OR EXISTS (SELECT 1 FROM transactions t WHERE t.order_id = o.id)) AS has_financial_history
        FROM orders o
        LEFT JOIN users u ON u.id = o.driver_id
        LEFT JOIN stores s ON s.id = o.store_id
@@ -540,16 +542,19 @@ export class FinanceRepository {
       );
       const order = orderRes.rows[0];
       if (!order) return null;
-      if (!order.original_delivery_fee_verified || order.original_delivery_fee === null) {
-        throw new ConflictException('Original delivery fee is unknown or unverified for this order; commission requires manual financial review');
-      }
-
-      // Read the existing commission only after the authoritative fee is verified.
+      // Read historical commission before the fee gate. Existing records may be
+      // validated and non-delivery ledger rows repaired, but unknown delivery fees
+      // must never create a new commission or a new driver earning.
       const existingRes = await client.query(
         `SELECT * FROM commissions WHERE order_id = $1 LIMIT 1`,
         [orderId],
       );
       let commissionRow = existingRes.rows[0];
+      const originalDeliveryFeeVerified =
+        order.original_delivery_fee_verified && order.original_delivery_fee !== null;
+      if (!originalDeliveryFeeVerified && !commissionRow) {
+        throw new ConflictException('Original delivery fee is unknown or unverified for this order; commission requires manual financial review');
+      }
 
       if (!commissionRow) {
         const storeRes = await client.query<{ commission_rate: string | null }>(
@@ -754,7 +759,7 @@ export class FinanceRepository {
           ) {
             throw new ConflictException('An existing driver earning conflicts with the delivered commission');
           }
-        } else {
+        } else if (originalDeliveryFeeVerified) {
           await client.query(
             `
             INSERT INTO transactions (
@@ -776,7 +781,7 @@ export class FinanceRepository {
       );
 
       // Free delivery is also platform-funded. The driver still earns the original fee.
-      if (originalDeliveryFee !== null) {
+      if (originalDeliveryFeeVerified && originalDeliveryFee !== null) {
         const waivedResult = await client.query<{ is_valid: boolean; amount: string }>(
           `SELECT
              $1::numeric >= $2::numeric AS is_valid,
