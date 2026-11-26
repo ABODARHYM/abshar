@@ -1,9 +1,11 @@
 name: Staging Integrity CI
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - fix/staging-integrity-completion-20261120
+      - integration/staging-safe-consolidation-20261126
       - fix/store-push-loading-finally-20261125
   pull_request:
     branches:
