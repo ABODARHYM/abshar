@@ -356,8 +356,8 @@ describe('FinanceRepository shared delivery transaction', () => {
     const repo = new FinanceRepository({} as any);
 
     await expect(repo.computeCommissionForOrder('legacy-order', client as any))
-      .rejects.toThrow('Original delivery fee is unknown');
-    expect(client.query).toHaveBeenCalledTimes(1);
+      .rejects.toThrow('unknown or unverified');
+    expect(client.query).toHaveBeenCalledTimes(2);
   });
 
   it('blocks fee verification when standalone historical ledger transactions exist', async () => {
