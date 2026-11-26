@@ -116,7 +116,7 @@ describe('FinanceRepository shared delivery transaction', () => {
 
     expect(result).toBeNull();
     const sql = String(client.query.mock.calls[0][0]);
-    expect(sql).toContain("to_jsonb(o)->>'original_delivery_fee_verified'");
+    expect(sql).toContain("o.original_delivery_fee IS NOT NULL");
     expect(sql).toContain("$4 <> 'driver'");
     expect(client.query.mock.calls[0][1]).toEqual(['driver-1', '2026-11-01', '2026-11-07', 'driver']);
   });
@@ -145,7 +145,7 @@ describe('FinanceRepository shared delivery transaction', () => {
     await repo.getUnsettledCommissions('driver', 'driver-1', '2026-11-01', '2026-11-07');
 
     const sql = String(db.query.mock.calls[0][0]);
-    expect(sql).toContain("to_jsonb(o)->>'original_delivery_fee_verified'");
+    expect(sql).toContain("o.original_delivery_fee IS NOT NULL");
     expect(sql).toContain("$4 <> 'driver'");
     expect(db.query.mock.calls[0][1]).toEqual(['driver-1', '2026-11-01', '2026-11-07', 'driver']);
   });
@@ -245,24 +245,6 @@ describe('FinanceRepository shared delivery transaction', () => {
     ]);
   });
 
-  it('blocks commission creation when a non-null historical original fee is not verified', async () => {
-    const client = {
-      query: jest.fn()
-        .mockResolvedValueOnce({ rows: [{
-          id: 'legacy-unverified-order', store_id: 'store-1', driver_id: 'driver-1',
-          subtotal: '100.00', delivery_fee: '0.00', original_delivery_fee: '25.00',
-          original_delivery_fee_verified: false,
-          discount_total: '0.00', total: '100.00', currency: 'YER',
-        }], rowCount: 1 })
-        .mockResolvedValueOnce({ rows: [], rowCount: 0 }),
-    };
-    const repo = new FinanceRepository({} as any);
-
-    await expect(repo.computeCommissionForOrder('legacy-unverified-order', client as any))
-      .rejects.toThrow('unknown or unverified');
-    expect(client.query).toHaveBeenCalledTimes(2);
-  });
-
   it('allows validation of an existing unverified historical commission without creating a driver earning', async () => {
     const historicalCommission = {
       id: 'legacy-commission', store_id: 'store-1',
@@ -321,7 +303,8 @@ describe('FinanceRepository shared delivery transaction', () => {
     });
     expect(result).toEqual({ orderId: 'order-review', originalDeliveryFee: 12.5, verified: true });
     expect(String(client.query.mock.calls[1][0])).toContain('has_commission');
-    expect(String(client.query.mock.calls[2][0])).toContain('original_delivery_fee_verified = TRUE');
+    expect(String(client.query.mock.calls[2][0])).toContain('UPDATE orders SET original_delivery_fee = $1');
+    expect(String(client.query.mock.calls[2][0])).not.toContain('original_delivery_fee_verified');
     expect(String(client.query.mock.calls[3][0])).toContain('INSERT INTO audit_logs');
     expect(client.query.mock.calls[3][1][0]).toBe('admin-1');
     expect(db.transaction).toHaveBeenCalledTimes(1);
