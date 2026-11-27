@@ -12,6 +12,13 @@ function urlBase64ToUint8Array(b64: string): Uint8Array {
   return arr;
 }
 
+function sameVapidKey(sub: PushSubscription, key: Uint8Array): boolean {
+  const current = sub.options?.applicationServerKey;
+  if (!current) return false;
+  const bytes = new Uint8Array(current);
+  return bytes.length === key.length && bytes.every((value, index) => value === key[index]);
+}
+
 export default function PushSetup() {
   const [supported, setSupported] = useState(false);
   const [subscribed, setSubscribed] = useState(false);
@@ -91,10 +98,17 @@ export default function PushSetup() {
       if (!kRes.ok) { setError('فشل جلب مفتاح الإشعارات'); setLoading(false); return; }
       const { publicKey, enabled } = await kRes.json();
       if (!enabled || !publicKey) { setError('الإشعارات غير مفعلة على الخادم'); setLoading(false); return; }
-      const sub = await reg.pushManager.subscribe({
+      const applicationServerKey = urlBase64ToUint8Array(publicKey);
+      let sub = await reg.pushManager.getSubscription();
+      if (sub && !sameVapidKey(sub, applicationServerKey)) {
+        // Existing browser subscriptions are bound to the previous VAPID key.
+        await sub.unsubscribe();
+        sub = null;
+      }
+      sub = sub ?? (await reg.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(publicKey) as any,
-      });
+        applicationServerKey: applicationServerKey as any,
+      }));
       const json = sub.toJSON();
       const sRes = await authFetch('/api/v1/notifications/push/subscribe', {
         method: 'POST',
