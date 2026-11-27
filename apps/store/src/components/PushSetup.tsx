@@ -42,6 +42,16 @@ export default function PushSetup() {
           if (!disposed) setSubscribed(false);
           return;
         }
+        const keyResponse = await authFetch('/api/v1/notifications/push/public-key');
+        if (!keyResponse.ok) {
+          if (!disposed) setSubscribed(false);
+          return;
+        }
+        const { publicKey, enabled } = await keyResponse.json();
+        if (!enabled || !publicKey || !sameVapidKey(sub, urlBase64ToUint8Array(publicKey))) {
+          if (!disposed) setSubscribed(false);
+          return;
+        }
         const json = sub.toJSON();
         if (!json.endpoint || !json.keys?.p256dh || !json.keys?.auth) {
           if (!disposed) setError('اشتراك الإشعارات على هذا الجهاز غير مكتمل. أعد تفعيله.');
